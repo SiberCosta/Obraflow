@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Planta de Obra</title>
+<title>CostaPlan · Gestão de obra</title>
 <meta name="description" content="Gestão de obra: plantas, equipamentos, IDs, ensaios e entrega.">
 <meta name="theme-color" content="#1d2421">
 <link rel="manifest" href="manifest.webmanifest">
@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Planta de Obra">
+<meta name="apple-mobile-web-app-title" content="CostaPlan">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -20,7 +20,7 @@
 <body>
 <div id="auth" class="auth" hidden></div>
 <header class="top">
-  <div class="brand"><h1>Planta de Obra</h1><span class="proj" id="projName"></span></div>
+  <div class="brand"><h1>CostaPlan</h1><span class="proj" id="projName"></span></div>
   <div class="tabs" role="tablist">
     <button id="tabObra" role="tab" aria-selected="true">Obra</button>
     <button id="tabCoord" role="tab" aria-selected="false">Coordenação</button>
@@ -102,10 +102,17 @@
     <input id="dpFile" type="file" accept="image/*" multiple hidden>
     <label for="dpCam">Tirar foto<small>Fotografa a etiqueta: o ID e o MAC são lidos automaticamente</small></label>
     <label for="dpFile">Carregar ficheiro<small>Escolhe da galeria ou do computador</small></label>
+    <button type="button" class="chbtn" id="dpShot">Captura de ecrã<small>Escolhe a janela (Fieldwire, email, PDF…) e recorta a etiqueta. Também podes colar com Ctrl+V</small></button>
   </div>
   <div class="acts"><button class="btn" id="dpSkip">Agora não</button></div>
 </div></dialog>
 
+<dialog id="dlgCrop" class="wide"><div class="dlg">
+  <h3 id="crTitle">Recortar a etiqueta</h3>
+  <p class="muted" style="margin:0;font-size:13px">Arrasta um retângulo à volta do ID (só a linha do código, ex.: «ID: 7D5F4E»). Quanto mais justo, melhor a leitura.</p>
+  <div class="crbox" id="crBox"><img id="crImg" alt="Captura de ecrã"><div class="crsel" id="crSel" hidden></div></div>
+  <div class="acts"><button class="btn" id="crCancel">Cancelar</button><button class="btn primary" id="crUse">Usar a captura toda</button></div>
+</div></dialog>
 <dialog id="dlgView"><div class="dlg">
   <h3 id="pvTitle">Foto</h3>
   <img id="pvImg" alt="Foto">

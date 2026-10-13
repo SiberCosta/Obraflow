@@ -1,4 +1,4 @@
-# Planta de Obra · app instalável
+# CostaPlan · gestão de obra (app instalável)
 
 App da obra para computador, Android e iPhone: plantas dos pisos, equipamentos marcados na planta, leitura do ID/MAC pela foto da etiqueta, etapas e checklists, anomalias, coordenação, relatórios e auto de entrega.
 
@@ -90,7 +90,7 @@ A segurança mantém-se: ninguém vê nada até a coordenação aprovar a conta 
 
 ## Passo 7 · Primeira entrada e trazer os dados atuais
 
-1. Abre o endereço da app e escolhe **Criar conta nova**. **A primeira conta criada fica como Coordenação** — cria a tua primeiro.
+1. Abre o endereço da app (vais ver o ecrã de entrada do **CostaPlan**) e escolhe **Criar conta nova**. **A primeira conta criada fica como Coordenação** — cria a tua primeiro.
 2. Na Planta de Obra do Claude (a página que já usas): separador **Coordenação** → **Exportar para a app própria** → **Exportar tudo (.zip)**. Guarda o ficheiro.
 3. Na app nova: **Coordenação** → **Dados da obra** → **Importar .zip…** e escolhe esse ficheiro.
    Os pisos, plantas, equipamentos, fotos, anomalias e histórico passam todos. Os nomes de quem fez cada coisa ficam no histórico. O envio para o servidor continua em segundo plano: o indicador no topo mostra *N por enviar* até chegar a *Sincronizado*. Mantém a app aberta até lá.
@@ -110,7 +110,7 @@ A segurança mantém-se: ninguém vê nada até a coordenação aprovar a conta 
 
 - **Android (Chrome):** abre o endereço → menu **⋮** → **Instalar app** (ou *Adicionar ao ecrã principal*).
 - **iPhone / iPad (Safari):** abre o endereço → botão **Partilhar** → **Adicionar ao ecrã principal**.
-- **Computador (Chrome ou Edge):** abre o endereço → ícone de instalar na barra de endereço (ou menu → *Instalar Planta de Obra*).
+- **Computador (Chrome ou Edge):** abre o endereço → ícone de instalar na barra de endereço (ou menu → *Instalar CostaPlan*).
 
 A app abre em ecrã inteiro, como as outras apps.
 
@@ -124,6 +124,15 @@ A app abre em ecrã inteiro, como as outras apps.
 ## Ler etiquetas
 
 Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e os códigos DataMatrix/QR e preenche o **ID** (ou o **MAC**, se não houver ID). Se não tiver a certeza, mostra as leituras possíveis para escolheres com um toque. Dicas: foto de perto, direita, com boa luz e sem reflexos. Na primeira leitura com rede a app descarrega o leitor (alguns MB); a partir daí funciona sem rede.
+
+## Leitura com IA (opcional, gratuita)
+
+O leitor do telemóvel funciona sem rede, mas falha com fotos desfocadas ou tiradas a um ecrã. Para leituras muito mais fiáveis quando há rede:
+
+1. Abre **aistudio.google.com/apikey** com uma conta Google e carrega em **Create API key**.
+2. Na app: **Coordenação → Leitura de etiquetas com IA** → cola a chave → **Guardar** → **Testar**.
+
+A partir daí, as fotos são lidas pela IA da Google (plano gratuito, com limite de pedidos por minuto e por dia). Sem rede, ou se a IA falhar, a app usa o leitor do telemóvel. Se a leitura falhar, usa **Recortar a zona do ID e ler de novo** e seleciona só a linha do código.
 
 ## Limites do plano gratuito (verificado em outubro de 2026)
 

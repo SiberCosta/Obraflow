@@ -1,6 +1,6 @@
 {
-  "name": "Planta de Obra",
-  "short_name": "Planta Obra",
+  "name": "CostaPlan · Gestão de obra",
+  "short_name": "CostaPlan",
   "description": "Gestão de obra: plantas, equipamentos, IDs, ensaios e entrega.",
   "lang": "pt-PT",
   "start_url": "./",

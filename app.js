@@ -207,7 +207,7 @@ let authMode="login";
 function showAuth(msg){const A=$("auth");A.hidden=false;document.body.classList.add("authing");
  const isUp=authMode==="signup",isReset=authMode==="reset";
  A.innerHTML=`<div class="authcard">
-  <div class="authbrand"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z" fill="var(--accent)"/><circle cx="12" cy="11.4" r="4.1" fill="var(--ink)"/></svg><h1>Planta de Obra</h1></div>
+  <div class="authbrand"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z" fill="var(--accent)"/><circle cx="12" cy="11.4" r="4.1" fill="var(--ink)"/></svg><div><h1>CostaPlan</h1><small class="muted">Gestão de obra · plantas, IDs e ensaios</small></div></div>
   <h2>${isUp?"Criar conta":isReset?"Recuperar palavra-passe":"Entrar"}</h2>
   <form id="authForm" novalidate>
    ${isUp?`<label class="f">Nome<input id="auName" autocomplete="name" required></label>`:""}
@@ -554,7 +554,7 @@ function renderSheet(){
  </div>
  <div class="sec"><h4><span>Identificação</span><span style="display:flex;gap:6px">
    ${sampleFn&&!ro?`<button class="btn sm dark" id="btnRead">Ler etiqueta</button>`:""}
-   ${ro?"":`<label class="btn sm" for="phCam">Tirar foto</label><label class="btn sm" for="phFile">Carregar</label>`}</span></h4>
+   ${ro?"":`<label class="btn sm" for="phCam">Tirar foto</label><label class="btn sm" for="phFile">Carregar</label><button type="button" class="btn sm" id="btnShot" title="Captura de ecrã (ex.: foto aberta no Fieldwire ou no email)">Captura</button>`}</span></h4>
   <div class="row">
    <label class="f">ID do equipamento<input id="ed_devId" class="mono" value="${esc(it.devId)}" autocomplete="off" ${ro?"readonly":""}></label>
    <label class="f">MAC<input id="ed_mac" class="mono" value="${esc(it.mac)}" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" ${ro?"readonly":""}></label>
@@ -610,6 +610,7 @@ function wireSheet(it){
  const dv=$("ed_devId");if(dv)dv.addEventListener("change",()=>{const v=dv.value.trim();const o=v&&findDup(it.id,"devId",v);if(o)toast(`ID ${v} repetido com ${o.code}. Ficou guardado e marcado a vermelho.`)});
  const mac=$("ed_mac");if(mac){mac.oninput=()=>{mac.classList.remove("auto");setField(it.id,"mac",mac.value.trim())};mac.onchange=()=>{const v=normMac(mac.value);mac.value=v;setField(it.id,"mac",v);const o=v&&findDup(it.id,"mac",v);if(o)toast(`MAC ${v} repetido com ${o.code}. Ficou guardado e marcado a vermelho.`)}}
  const br=$("btnRead");if(br)br.onclick=()=>readLabel(it.id,true);
+ const bs=$("btnShot");if(bs)bs.onclick=()=>screenShot();
  box("sheet").querySelectorAll("[data-pv]").forEach(im=>im.onclick=()=>openPhoto(null,im.dataset.pv));
  box("sheet").querySelectorAll("[data-resolve]").forEach(b=>b.onclick=()=>resolveIssue(b.dataset.resolve));
  const nt=$("niText");if(nt)nt.oninput=()=>{newIssue.text=nt.value};
@@ -686,8 +687,8 @@ const libP={};
 function loadScript(u){if(!libP[u])libP[u]=new Promise((res,rej)=>{const s=document.createElement("script");s.src=u;s.async=true;s.crossOrigin="anonymous";s.onload=res;
  s.onerror=()=>{delete libP[u];s.remove();rej(new Error(navigator.onLine?"não foi possível carregar o leitor de etiquetas":"o leitor de etiquetas ainda não foi guardado neste aparelho. Abre a app uma vez com rede e carrega em Coordenação → Preparar para usar sem rede"))};document.head.appendChild(s)});return libP[u]}
 let tessP=null;
-function tess(){if(!tessP)tessP=(async()=>{await loadScript(LIB.tess);const w=await Tesseract.createWorker("eng",1);
-  await w.setParameters({tessedit_pageseg_mode:"11",tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:-./# ",preserve_interword_spaces:"1"});return w})().catch(e=>{tessP=null;throw e});return tessP}
+const T_NORMAL={tessedit_pageseg_mode:"11",tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:-./# ",preserve_interword_spaces:"1"};
+function tess(){if(!tessP)tessP=(async()=>{await loadScript(LIB.tess);const w=await Tesseract.createWorker("eng",1);await w.setParameters(T_NORMAL);return w})().catch(e=>{tessP=null;throw e});return tessP}
 async function prepareReader(){await tess();try{await loadScript(LIB.zx)}catch(e){}}
 function initSample(){}
 /* prepara a imagem: tamanho adequado, tons de cinzento e contraste */
@@ -731,10 +732,68 @@ function candsFrom(text,codes){const C=[];
   add("id",v,letters?(v.length===6?5:4):2)});
  return C.sort((a,b)=>b.s-a.s).slice(0,6)}
 async function readOne(blob,onStep){const codes=await readCodes(blob);
- const w=await tess();let text="",cands=[];
+ const w=await tess();await w.setParameters(T_NORMAL);let text="",cands=[];
  for(const rot of[0,90,270]){onStep&&onStep(rot);const cv=await prepCanvas(blob,rot);const r=await w.recognize(cv);text+="\n"+(r&&r.data&&r.data.text||"");
   cands=candsFrom(text,codes);if(cands.length&&cands[0].s>=8)break}
  return{cands,codes,text}}
+/* zona recortada (só a linha do ID): várias leituras com tamanhos e nitidez diferentes, e votação */
+function lineCanvas(bm,Ht,soft){const s=Ht/bm.height;const w=Math.max(8,Math.round(bm.width*s));const cv=document.createElement("canvas");cv.width=w;cv.height=Ht;
+ const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,w,Ht);cx.imageSmoothingQuality="high";
+ if(soft>1){const t=document.createElement("canvas");t.width=Math.max(4,Math.round(w/soft));t.height=Math.max(4,Math.round(Ht/soft));t.getContext("2d").drawImage(bm,0,0,t.width,t.height);cx.drawImage(t,0,0,w,Ht)}else cx.drawImage(bm,0,0,w,Ht);
+ const im=cx.getImageData(0,0,w,Ht),d=im.data;const g=new Uint8ClampedArray(d.length/4);const hist=new Array(256).fill(0);
+ for(let i=0,j=0;i<d.length;i+=4,j++){const v=(d[i]*.299+d[i+1]*.587+d[i+2]*.114)|0;g[j]=v;hist[v]++}
+ let acc=0,lo=0,hi=255;const n=g.length;for(let v=0;v<256;v++){acc+=hist[v];if(acc>n*.01){lo=v;break}}acc=0;for(let v=255;v>=0;v--){acc+=hist[v];if(acc>n*.01){hi=v;break}}
+ const span=Math.max(30,hi-lo);for(let i=0,j=0;i<d.length;i+=4,j++){const v=Math.max(0,Math.min(255,(g[j]-lo)*255/span));d[i]=d[i+1]=d[i+2]=v}
+ cx.putImageData(im,0,0);return cv}
+async function readCrop(blob,onStep){const first=await readOne(blob);if(first.cands.length&&first.cands[0].s>=9)return first;
+ const w=await tess();const bm=await createImageBitmap(blob);const votes={};const add=(v,n)=>{votes[v]=(votes[v]||0)+n};let text=first.text,k=0;
+ try{for(const Ht of[60,90,130])for(const soft of[1,2]){k++;onStep&&onStep(k,6);const cv=lineCanvas(bm,Ht,soft);
+   await w.setParameters({tessedit_pageseg_mode:"7",tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789: "});
+   const t=((await w.recognize(cv)).data.text||"").toUpperCase();text+="\n"+t;
+   for(const m of t.matchAll(/[I1L|]?[D0O]?\s*[:.]\s*([0-9A-Z]{5,10})(?![0-9A-Z])/g)){if(/^[0-9A-FOIL]+$/.test(m[1]))add(hexFix(m[1]),2)}
+   await w.setParameters({tessedit_char_whitelist:"0123456789ABCDEF"});
+   let h=((await w.recognize(cv)).data.text||"").replace(/\s/g,"").toUpperCase();h=h.replace(/^1?D(?=[0-9A-F]{6})/,"");if(h.length>=5&&h.length<=10)add(h,1)}}
+ finally{await w.setParameters(T_NORMAL).catch(()=>{})}
+ // consenso letra a letra entre as leituras do comprimento mais frequente (6 ou mais)
+ const byLen={};for(const[v,n]of Object.entries(votes))if(v.length>=6)byLen[v.length]=(byLen[v.length]||0)+n;
+ const ml=+(Object.entries(byLen).sort((a,b)=>b[1]-a[1])[0]||[0])[0];
+ if(ml){let cons="";for(let i=0;i<ml;i++){const c={};for(const[v,n]of Object.entries(votes))if(v.length===ml)c[v[i]]=(c[v[i]]||0)+n;cons+=Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]}add(cons,1)}
+ const ranked=Object.entries(votes).map(([v,n])=>({v,n:n*(v.length>=6&&v.length<=8?2:1)})).sort((a,b)=>b.n-a.n);
+ const cands=[...first.cands];ranked.slice(0,5).forEach((r,i)=>{const strong=i===0&&r.n>=6&&(!ranked[1]||r.n>=ranked[1].n*1.5);if(!cands.some(c=>c.v===r.v))cands.push({k:"id",v:r.v,s:strong?8:6-i*.5})});
+ cands.sort((a,b)=>b.s-a.s);return{cands:cands.slice(0,6),codes:first.codes,text}}
+
+/* leitura com IA (Google Gemini, plano gratuito) — opcional, só com rede */
+const READ_PROMPT=`As imagens são fotografias da etiqueta ou placa de UM equipamento técnico instalado numa obra (podem ser fotografias de um ecrã). Copia apenas o identificador do equipamento.
+
+Responde só com um objeto JSON neste formato:
+{"id":string|null,"mac":string|null,"confianca":"alta"|"media"|"baixa","obs":string|null}
+
+Regras:
+- Copia os caracteres exatamente como estão impressos. Não inventes nem completes caracteres ilegíveis: se não tens a certeza, devolve null e explica em "obs". Atenção a confusões 0/O, 1/I, 5/S, 8/B, E/F.
+- "id": o identificador único do dispositivo, marcado "ID", "ID:", "ID-Nr.", "ID No." ou "Device ID" (devolve só o valor, sem o prefixo). Pode vir colado a outro código sem espaço: em "25/51ID:8B281B" o id é "8B281B". Muitos equipamentos mostram o ID sem prefixo: um código curto alfanumérico isolado (tipicamente 6 a 8 caracteres hexadecimais, ex.: 4EB655, 7D5F23, 95F4528), muitas vezes ao lado de um DataMatrix ou QR; nesse caso esse código é o id.
+- Não confundas o id com modelos, números de série, certificações (VdS G…, 0786-CPR-…, EN 54-…), datas, lotes ou referências de encomenda.
+- "mac": só se a etiqueta tiver um endereço MAC (12 dígitos hexadecimais); formato AA:BB:CC:DD:EE:FF. Caso contrário null.
+- Se aparecerem vários equipamentos, lê só o que está em primeiro plano ou na mão. Ignora texto da câmara (data, hora, coordenadas GPS).
+- "obs": uma frase curta em português só se houver algo a confirmar.`;
+function aiCfg(){const a=L.meta&&L.meta.ai;return a&&a.key?a:null}
+const AI_MODELS=["gemini-2.5-flash","gemini-flash-latest","gemini-2.0-flash"];
+async function aiRead(blobs,cfg){const ai=cfg||aiCfg();if(!ai||!navigator.onLine)return null;
+ const parts=[{text:READ_PROMPT}];for(const b of blobs.slice(-2)){const sm=await shrink(b,1600,.88);parts.push({inline_data:{mime_type:"image/jpeg",data:(await blobToDataUrl(sm)).split(",")[1]}})}
+ let lastErr=null;
+ for(const m of[...new Set([ai.model||AI_MODELS[0],...AI_MODELS])]){const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),35000);
+  try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(ai.key)}`,
+    {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts}],generationConfig:{temperature:0,responseMimeType:"application/json"}}),signal:ctl.signal});
+   const j=await r.json().catch(()=>({}));
+   if(r.status===404){lastErr=new Error("modelo de IA indisponível");continue}
+   if(!r.ok)throw new Error(r.status===429?"limite gratuito da IA atingido por agora":(r.status===400||r.status===403)&&/key|API_KEY|permission/i.test(JSON.stringify(j))?"chave da IA inválida ou sem permissão":(j.error&&j.error.message)||"erro "+r.status);
+   const txt=((((j.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||"").join("").replace(/^\s*```(?:json)?|```\s*$/g,"").trim();
+   if(!txt)throw new Error("a IA não devolveu resposta");const o=JSON.parse(txt);o.model=m;return o}
+  catch(e){lastErr=e.name==="AbortError"?new Error("a IA demorou demasiado a responder"):e;break}finally{clearTimeout(tm)}}
+ throw lastErr||new Error("IA indisponível")}
+/* recortar a zona do ID numa foto já guardada e ler só essa zona */
+async function cropFromPhoto(id){const it=S.items.find(i=>i.id===id);const ref=it&&(it.photos||[]).slice(-1)[0];if(!ref){toast("Tira primeiro uma foto da etiqueta.");return}
+ try{const b=await blobOf(ref);const bm=await createImageBitmap(b);const cv=document.createElement("canvas");cv.width=bm.width;cv.height=bm.height;cv.getContext("2d").drawImage(bm,0,0);openCrop(cv,id,"read")}
+ catch(e){toast("A foto não está disponível neste aparelho.")}}
 function normMac(v){const h=String(v||"").replace(/[^0-9a-f]/gi,"").toUpperCase();return h.length===12?h.match(/../g).join(":"):String(v||"").trim()}
 function dupes(it){const out=[];for(const o of S.items){if(o.id===it.id)continue;
  if(it.devId&&o.devId&&String(o.devId).toUpperCase()===String(it.devId).toUpperCase())out.push(`ID ${it.devId} já usado em ${o.code}`);
@@ -744,23 +803,33 @@ function renderReadMsg(it){const h=$("readMsg");if(!h)return;let m=readMsg&&read
  if(!m){const d=dupes(it);if(d.length){const o=findDup(it.id,"devId",it.devId||"")||findDup(it.id,"mac",it.mac||"");const fld=findDup(it.id,"devId",it.devId||"")?"devId":"mac";
   m={t:"Repetido: "+d.join("; ")+". Confirma a etiqueta.",cls:"err",action:o&&S.canWrite?{label:"Comparar e escolher a qual pertence",fn:()=>askDup(fld,it[fld],it.id,o.id)}:null}}else if(it.readNote)m={t:it.readNote,cls:it.readConf==="alta"?"ok":"warn"}}
  const alt=(it.readCands||[]).filter(c=>c.k==="id"?c.v!==String(it.devId||"").toUpperCase():c.v!==normMac(it.mac));
- if(!m&&!alt.length){h.innerHTML="";return}
+ const wantCrop=S.canWrite&&(it.photos||[]).length&&!(m&&m.cls==="busy")&&(it.readConf==="baixa"||it.readConf==="media"||alt.length||(!it.devId&&!it.mac&&it.readAt));
+ if(!m&&!alt.length&&!wantCrop){h.innerHTML="";return}
  h.innerHTML=`<div class="msg ${m?m.cls||"":""}"></div>`;const el=h.firstChild;el.textContent=m?m.t:"";
  if(m&&m.action){const b=document.createElement("button");b.className="btn sm dark";b.style.cssText="margin-top:8px;display:block";b.textContent=m.action.label;b.onclick=m.action.fn;el.appendChild(b)}
  if(alt.length&&S.canWrite&&!(m&&m.cls==="busy")){const w=document.createElement("div");w.className="cands";w.innerHTML=`<span>${it.devId||it.mac?"Outras leituras:":"Escolhe o ID certo:"}</span>`;
   alt.forEach(c=>{const b=document.createElement("button");b.type="button";b.className="cand";b.textContent=(c.k==="mac"?"MAC ":"ID ")+c.v;b.title="Usar este valor";
    b.onclick=()=>{const fld=c.k==="mac"?"mac":"devId";const cur0=S.items.find(i=>i.id===it.id)||it;const patch={[fld]:c.v,readConf:"alta",readNote:`${c.k==="mac"?"MAC":"ID"} ${c.v} escolhido da leitura.`,updatedAt:now(),updatedBy:S.meId};
     logPatch(cur0,patch,(c.k==="mac"?"MAC: ":"ID: ")+c.v);api.update("items",it.id,patch);readMsg=null;const o=findDup(it.id,fld,c.v);if(o)toast(`${c.k==="mac"?"MAC":"ID"} ${c.v} repetido com ${o.code}. Ficou guardado e marcado a vermelho.`);sheetFor=null;render()};w.appendChild(b)});
-  el.appendChild(w)}}
-async function readLabel(id,overwrite,blobsIn){const it0=S.items.find(i=>i.id===id);if(!it0||readingId)return;
+  el.appendChild(w)}
+ if(wantCrop){const b=document.createElement("button");b.type="button";b.className="btn sm";b.style.cssText="margin-top:8px;display:block";b.textContent="Recortar a zona do ID e ler de novo";b.onclick=()=>cropFromPhoto(it.id);el.appendChild(b)}}
+async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.items.find(i=>i.id===id);if(!it0||readingId)return;
  const refs=(it0.photos||[]).slice(-sampleMax);if(!refs.length&&!blobsIn){setReadMsgFor(id,"Tira primeiro uma foto da etiqueta.","warn");return}
  readingId=id;lastReadErr=null;const br=$("btnRead");if(br)br.disabled=true;setReadMsgFor(id,"A ler a etiqueta no aparelho…","busy");
+ let aiErr=null;
  try{let blobs=blobsIn&&blobsIn.length?blobsIn.slice(-sampleMax):[];
   if(!blobs.length)for(const r of refs){try{blobs.push(await blobOf(r))}catch(e){}}
   if(!blobs.length)throw new Error("a foto não está disponível neste aparelho");
-  if(!tessP)setReadMsgFor(id,navigator.onLine?"A preparar o leitor (só na primeira vez, pode demorar um pouco)…":"A preparar o leitor…","busy");
-  let all=[];for(let k=0;k<blobs.length;k++){const r=await readOne(blobs[k],rot=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?" · a rodar a imagem":""}…`,"busy"));
-   for(const c of r.cands){const o=all.find(x=>x.k===c.k&&x.v===c.v);if(o)o.s=Math.max(o.s,c.s)+1;else all.push({...c})}}
+  let all=[],src="local",aiObs="";aiErr=null;
+  if(aiCfg()&&navigator.onLine){setReadMsgFor(id,"A ler a etiqueta com IA…","busy");
+   try{const o=await aiRead(blobs);if(o){src="ai";const val=v=>typeof v==="string"&&v.trim()&&!/^null$/i.test(v.trim())?v.trim().toUpperCase():"";
+     const sc=o.confianca==="alta"?11:o.confianca==="baixa"?6:8.5;if(val(o.id))all.push({k:"id",v:val(o.id),s:sc});if(val(o.mac))all.push({k:"mac",v:normMac(val(o.mac)),s:sc});aiObs=typeof o.obs==="string"?o.obs.trim():""}}
+   catch(e){aiErr=e.message||"erro"}}
+  if(!all.length){src="local";
+   if(!tessP)setReadMsgFor(id,navigator.onLine?"A preparar o leitor (só na primeira vez, pode demorar um pouco)…":"A preparar o leitor…","busy");
+   for(let k=0;k<blobs.length;k++){const r=opts.crop?await readCrop(blobs[k],(a,n)=>setReadMsgFor(id,`A ler a zona recortada (${a} de ${n})…`,"busy"))
+     :await readOne(blobs[k],rot=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?" · a rodar a imagem":""}…`,"busy"));
+    for(const c of r.cands){const o=all.find(x=>x.k===c.k&&x.v===c.v);if(o)o.s=Math.max(o.s,c.s)+1;else all.push({...c})}}}
   all.sort((a,b)=>b.s-a.s);all=all.slice(0,6);
   const it=S.items.find(i=>i.id===id)||it0;
   const ids=all.filter(c=>c.k==="id"),macs=all.filter(c=>c.k==="mac");
@@ -773,15 +842,18 @@ async function readLabel(id,overwrite,blobsIn){const it0=S.items.find(i=>i.id===
   const conf=bestId&&bestId.s>=9||(!bestId&&bestMac)?"alta":"media";
   const txt=got.devId?"ID "+got.devId:got.mac?"MAC "+got.mac:"";
   patch.readCands=all.map(({k,v,s})=>({k,v,s}));patch.readAt=now();patch.readConf=txt?conf:"baixa";
-  patch.readNote=txt?`Lido no aparelho: ${txt}`+(conf!=="alta"?". Confirma com a etiqueta.":"."):all.length?"Não tenho a certeza de qual é o ID. Escolhe abaixo o valor certo, ou escreve-o.":"Não consegui ler o ID nesta foto. Tira outra mais perto, direita e com boa luz, ou escreve o ID.";
-  if(dup)patch.readNote=`Lido no aparelho: ${dup.field==="mac"?"MAC":"ID"} ${dup.value}. Atenção: está repetido com ${dup.other.code}.`;
+  const by=src==="ai"?"Lido pela IA":"Lido no aparelho";
+  patch.readNote=txt?`${by}: ${txt}`+(conf!=="alta"?". Confirma com a etiqueta.":"."):all.length?"Não tenho a certeza de qual é o ID. Escolhe abaixo o valor certo, ou escreve-o.":opts.crop?"Não consegui ler a zona recortada. Escreve o ID, ou tira outra foto mais nítida.":"Não consegui ler o ID nesta foto. Recorta a zona do ID, tira outra foto mais perto e nítida, ou escreve o ID.";
+  if(dup)patch.readNote=`${by}: ${dup.field==="mac"?"MAC":"ID"} ${dup.value}. Atenção: está repetido com ${dup.other.code}.`;
+  if(src==="ai"&&aiObs)patch.readNote+=" "+aiObs;
+  if(aiErr)patch.readNote+=` (Leitura com IA indisponível: ${aiErr}.)`;
   patch.updatedAt=now();patch.updatedBy=S.meId;
   if(patch.devId||patch.mac)logPatch(it,patch,"Lido da foto: "+(patch.devId?"ID "+patch.devId:"MAC "+patch.mac));
   if(!txt)lastReadErr="none";
   await api.update("items",id,patch);readMsg=null;
   if(dup)toast(`${dup.field==="mac"?"MAC":"ID"} ${dup.value} repetido com ${dup.other.code}. Ficou guardado e marcado a vermelho.`);
   if(S.sel===id){sheetFor=null;render();requestAnimationFrame(()=>requestAnimationFrame(()=>filled.forEach(k=>{const el=$("ed_"+k);if(el)el.classList.add("auto")})))}
- }catch(e){lastReadErr="error";setReadMsgFor(id,"Não foi possível ler a etiqueta: "+(e.message||"erro")+".","err")}
+ }catch(e){lastReadErr="error";setReadMsgFor(id,(aiErr?`A leitura com IA falhou (${aiErr}) e o leitor do telemóvel também: `:"Não foi possível ler a etiqueta: ")+(e.message||"erro")+". Escreve o ID ou tenta mais tarde.","err")}
  finally{readingId=null;const b2=$("btnRead");if(b2)b2.disabled=false}}
 async function askPermission(){}
 
@@ -1264,7 +1336,7 @@ function createFromGhost(i){const p=plan();if(!p||!p.fw||!p.fw.pins[i])return;co
 document.addEventListener("paste",e=>{const items=[...(e.clipboardData&&e.clipboardData.items||[])];const f=items.filter(i=>i.type&&i.type.startsWith("image/")).map(i=>i.getAsFile()).filter(Boolean);
  if(!f.length)return;if(!S.canWrite)return;e.preventDefault();
  if($("dlgFw").open&&fw.step===1){loadShot(f[0]);return}
- const it=cur();if(it&&S.view==="obra"){addPhotos(it,f);return}
+ const it=cur();if(it&&S.view==="obra"){if($("dlgPhoto").open)$("dlgPhoto").close();addPhotos(it,f);return}
  toast("Seleciona um equipamento (ou um círculo laranja) antes de colar a foto.")});
 
 /* =========================================================
@@ -1318,7 +1390,7 @@ function renderCoord(){
    <td style="white-space:nowrap">${it?`<button class="btn sm" data-goto="${esc(it.id)}">Ver</button>`:""} ${S.canWrite?`<button class="btn sm" data-resolve="${esc(x.id)}">Resolvida</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="6" class="muted">Sem anomalias abertas.</td></tr>`}
   </tbody></table></div>
  </section>
- ${teamSection()}${dataSection()}${offlineSection()}
+ ${teamSection()}${aiSection()}${dataSection()}${offlineSection()}
  <section class="block"><h2><span>Relatório para o cliente</span>
   <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="rpCsv">Descarregar CSV</button><button class="btn primary" id="rpHtml">Descarregar relatório</button></span></h2>
   <div class="rfilters">
@@ -1343,7 +1415,7 @@ function renderCoord(){
  W.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>openClose(b.dataset.close));
  wireCoordExtras(W);
  $("rfPlan").onchange=e=>{R.plan=e.target.value;render()};$("rfType").onchange=e=>{R.type=e.target.value;render()};$("rfStage").onchange=e=>{R.stage=e.target.value;render()};$("rfPhotos").onchange=e=>{R.photos=e.target.checked};
- wireTeam(W);wireData(W);
+ wireTeam(W);wireData(W);wireAi(W);
  $("rpCsv").onclick=()=>saveFile(`Equipamentos_${slug()}.csv`,"﻿"+reportCsv(rItems));
  $("rpHtml").onclick=async()=>{const b=$("rpHtml");b.disabled=true;b.textContent="A preparar…";try{await saveFile(`Relatorio_${slug()}.html`,await reportHtml(rItems))}finally{b.disabled=false;b.textContent="Descarregar relatório"}};
 }
@@ -1455,5 +1527,68 @@ async function saveBlob(name,blob){
   if(/iPhone|iPad|iPod/.test(navigator.userAgent)&&navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});return}}catch(e){if(e&&e.name==="AbortError")return}
  const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;a.rel="noopener";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);toast("Ficheiro descarregado: "+name)}
 async function saveFile(name,text){const t=/\.csv$/i.test(name)?"text/csv;charset=utf-8":/\.html?$/i.test(name)?"text/html;charset=utf-8":"text/plain;charset=utf-8";return saveBlob(name,new Blob([text],{type:t}))}
+
+/* =========================================================
+   Leitura de etiquetas com IA (Google Gemini, plano gratuito)
+   ========================================================= */
+let aiMsg="";
+function aiSection(){if(!S.isCoord)return"";const a=aiCfg();
+ return`<section class="block" id="aiSec"><h2><span>Leitura de etiquetas com IA</span><span class="pill" style="--c:${a?"var(--ok)":"var(--muted)"}">${a?"Ligada":"Desligada"}</span></h2>
+  <p class="muted" style="margin:0;font-size:13px">Opcional. Com uma chave gratuita da Google (Gemini), as fotos são lidas por IA quando há rede: lê muito melhor fotos desfocadas, de lado ou tiradas a um ecrã. Sem rede, ou se a IA falhar, a app usa o leitor do telemóvel. As fotos enviadas para leitura passam pelos servidores da Google.</p>
+  <ol class="muted" style="margin:0;font-size:13px;padding-left:18px"><li>Abre <b>aistudio.google.com/apikey</b> com a tua conta Google e carrega em <b>Create API key</b>.</li><li>Copia a chave (começa por <b>AIza…</b>) e cola-a aqui.</li><li>Carrega em <b>Guardar</b> e depois em <b>Testar</b>.</li></ol>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+   <input type="password" id="aiKey" autocomplete="off" placeholder="${a?"Chave guardada (…"+esc(a.key.slice(-4))+"). Cola outra para trocar":"Cola aqui a chave AIza…"}" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--panel)">
+   <select id="aiModel" aria-label="Modelo" style="border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel)">${AI_MODELS.map(m=>`<option${a&&a.model===m?" selected":""}>${m}</option>`).join("")}</select>
+   <button class="btn primary" id="aiSave">Guardar</button><button class="btn" id="aiTest"${a?"":" disabled"}>Testar</button>${a?`<button class="btn danger" id="aiDel">Desligar</button>`:""}</div>
+  <p id="aiMsg" class="muted" style="margin:0;font-size:13px">${esc(aiMsg)}</p>
+  <p class="muted" style="margin:0;font-size:12px">A chave fica guardada na base de dados da obra e só as contas aprovadas a recebem. Para mais segurança, no Google Cloud podes limitar a chave ao endereço da app.</p></section>`}
+function wireAi(W){const say=t=>{aiMsg=t;const m=$("aiMsg");if(m)m.textContent=t};
+ const sv=$("aiSave");if(sv)sv.onclick=async()=>{const k=$("aiKey").value.trim();const model=$("aiModel").value;const old=aiCfg();
+  if(!k&&!old){say("Cola primeiro a chave.");return}if(k&&!/^[A-Za-z0-9_\-]{20,}$/.test(k)){say("Esta chave não parece válida. Copia-a de novo do Google AI Studio.");return}
+  await api.set("meta","ai",{key:k||old.key,model,by:S.meId,at:now()});say("Guardado. Carrega em Testar para confirmar.");render()};
+ const ts=$("aiTest");if(ts)ts.onclick=async()=>{ts.disabled=true;say("A testar com uma etiqueta de exemplo (ID: 4EB655)…");
+  try{const cv=document.createElement("canvas");cv.width=640;cv.height=260;const x=cv.getContext("2d");x.fillStyle="#f4f4f0";x.fillRect(0,0,640,260);x.fillStyle="#111";x.font="bold 34px Arial";x.fillText("DETECTOR OPTICO",40,70);x.font="30px monospace";x.fillText("25/51  ID: 4EB655",40,150);x.font="20px Arial";x.fillText("EN 54-7  0786-CPR-21",40,210);
+   const b=await new Promise(r=>cv.toBlob(r,"image/jpeg",.9));const o=await aiRead([b]);
+   say(o&&String(o.id||"").toUpperCase()==="4EB655"?`A funcionar: a IA leu ID 4EB655 (modelo ${o.model}).`:`A IA respondeu, mas leu "${o&&o.id}". Experimenta outro modelo.`)}
+  catch(e){say("Não funcionou: "+(e.message||"erro")+".")}finally{ts.disabled=false}};
+ const dl=$("aiDel");if(dl)dl.onclick=async()=>{await api.set("meta","ai",{});say("Leitura com IA desligada.");render()}}
+
+/* =========================================================
+   Captura de ecrã: escolher janela/ecrã (ex.: Fieldwire, email,
+   PDF) e recortar a etiqueta; ou colar uma captura (Ctrl+V)
+   ========================================================= */
+const canShot=!!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia);
+async function screenShot(){const it=cur();if(!it){toast("Seleciona primeiro um equipamento.");return}const id=it.id;
+ if($("dlgPhoto").open)$("dlgPhoto").close();
+ if(!canShot){await pasteShot(id);return}
+ let st;try{st=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:"window"},audio:false,selfBrowserSurface:"include",surfaceSwitching:"exclude"})}
+ catch(e){if(!e||e.name!=="NotAllowedError")toast("Não foi possível capturar o ecrã neste navegador.");return}
+ try{const v=document.createElement("video");v.srcObject=st;v.muted=true;v.playsInline=true;await v.play();await new Promise(r=>setTimeout(r,400));
+  const cv=document.createElement("canvas");cv.width=v.videoWidth;cv.height=v.videoHeight;cv.getContext("2d").drawImage(v,0,0);openCrop(cv,id)}
+ catch(e){toast("Não foi possível capturar o ecrã.")}finally{st.getTracks().forEach(t=>t.stop())}}
+async function pasteShot(id){try{if(!navigator.clipboard||!navigator.clipboard.read)throw 0;const items=await navigator.clipboard.read();
+  for(const i of items){const t=i.types.find(x=>x.startsWith("image/"));if(t){const b=await i.getType(t);const im=await createImageBitmap(b);const cv=document.createElement("canvas");cv.width=im.width;cv.height=im.height;cv.getContext("2d").drawImage(im,0,0);openCrop(cv,id);return}}
+  toast("Não há nenhuma imagem copiada. Faz a captura (no computador: Win+Shift+S; no telemóvel: botões de ligar + volume) e tenta de novo, ou usa Carregar ficheiro.")}
+ catch(e){toast("Faz a captura e cola com Ctrl+V. No telemóvel: tira a captura com os botões e escolhe-a em Carregar ficheiro.")}}
+let crop=null;
+function openCrop(cv,itemId,mode){const D=$("dlgCrop"),box=$("crBox"),im=$("crImg"),sel=$("crSel");crop={cv,itemId,r:null,mode:mode||"photo"};
+ im.src=cv.toDataURL("image/png");sel.hidden=true;$("crUse").textContent=crop.mode==="read"?"Ler a foto toda":"Usar a captura toda";$("crTitle").textContent=crop.mode==="read"?"Recortar a zona do ID":"Recortar a etiqueta";D.showModal();
+ let st=null;const pt=e=>{const r=im.getBoundingClientRect();return{x:Math.max(0,Math.min(r.width,e.clientX-r.left)),y:Math.max(0,Math.min(r.height,e.clientY-r.top)),w:r.width,h:r.height}};
+ box.onpointerdown=e=>{e.preventDefault();box.setPointerCapture(e.pointerId);st=pt(e);crop.r=null;sel.hidden=true};
+ box.onpointermove=e=>{if(!st)return;const p=pt(e);const x=Math.min(st.x,p.x),y=Math.min(st.y,p.y),w=Math.abs(p.x-st.x),h=Math.abs(p.y-st.y);
+  sel.hidden=false;sel.style.cssText=`left:${x+im.offsetLeft}px;top:${y+im.offsetTop}px;width:${w}px;height:${h}px`;crop.r={x:x/p.w,y:y/p.h,w:w/p.w,h:h/p.h}};
+ box.onpointerup=()=>{st=null;if(crop.r&&(crop.r.w<.01||crop.r.h<.01)){crop.r=null;sel.hidden=true}$("crUse").textContent=crop.r?(crop.mode==="read"?"Ler a zona selecionada":"Usar a zona selecionada"):(crop.mode==="read"?"Ler a foto toda":"Usar a captura toda")}}
+$("crCancel").onclick=()=>{crop=null;$("dlgCrop").close()};
+$("crUse").onclick=async()=>{if(!crop)return;const{cv,itemId,r}=crop;let out=cv;
+ if(r){const x=Math.round(r.x*cv.width),y=Math.round(r.y*cv.height),w=Math.max(8,Math.round(r.w*cv.width)),h=Math.max(8,Math.round(r.h*cv.height));
+  out=document.createElement("canvas");out.width=w;out.height=h;out.getContext("2d").drawImage(cv,x,y,w,h,0,0,w,h)}
+ // etiquetas pequenas: aumentar para a leitura ficar mais fiável
+ if(Math.max(out.width,out.height)<900){const k=900/Math.max(out.width,out.height);const up=document.createElement("canvas");up.width=Math.round(out.width*k);up.height=Math.round(out.height*k);const c=up.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(out,0,0,up.width,up.height);out=up}
+ const mode=crop.mode;$("dlgCrop").close();crop=null;
+ const b=await new Promise(res=>out.toBlob(res,"image/jpeg",.92));const it=S.items.find(i=>i.id===itemId);if(!it||!b)return;
+ if(mode==="read"){readLabel(itemId,true,[b],{crop:true});return}
+ addPhotos(it,[new File([b],"captura.jpg",{type:"image/jpeg"})])};
+$("dpShot").onclick=()=>screenShot();
+if(!canShot){const s=$("dpShot").querySelector("small");if(s)s.textContent="Cola uma captura que já tenhas copiado"}
 
 boot();
