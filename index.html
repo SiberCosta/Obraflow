@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Planta de Obra</title>
+<meta name="description" content="Gestão de obra: plantas, equipamentos, IDs, ensaios e entrega.">
+<meta name="theme-color" content="#1d2421">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Planta de Obra">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="auth" class="auth" hidden></div>
+<header class="top">
+  <div class="brand"><h1>Planta de Obra</h1><span class="proj" id="projName"></span></div>
+  <div class="tabs" role="tablist">
+    <button id="tabObra" role="tab" aria-selected="true">Obra</button>
+    <button id="tabCoord" role="tab" aria-selected="false">Coordenação</button>
+  </div>
+  <button type="button" class="sync" id="syncBox" title="Sincronizar agora"></button>
+  <div class="me" id="meBox"></div>
+</header>
+<div class="banner" id="banner" hidden></div>
+
+<!-- ================= OBRA ================= -->
+<div id="viewObra" style="display:contents">
+  <div class="bar">
+    <select id="planSel" class="btn" aria-label="Piso"></select>
+    <label class="btn primary" for="planIn" id="btnNewFloor" title="Carregar a planta de um ou mais pisos (PDF ou imagem)">+ Novo piso</label>
+    <div class="floorprog" id="floorProg"></div>
+    <div class="grow"></div>
+    <div class="seg" role="group" aria-label="Modo">
+      <button id="mNav" aria-pressed="true">Navegar</button>
+      <button id="mMark" aria-pressed="false">Marcar equipamento</button>
+    </div>
+    <label class="btn" for="bulkIn" id="bulkBtn">Importar fotos</label>
+    <input id="bulkIn" type="file" accept="image/*" multiple hidden>
+    <button class="btn" id="btnExp">Descarregar planta</button>
+    <button class="btn" id="btnOv">Sobrepor…</button>
+    <button class="btn" id="btnFw">Fieldwire…</button>
+    <button class="btn" id="btnFloor">Pisos…</button>
+  </div>
+  <main class="obra">
+    <section class="viewer" id="viewer" aria-label="Planta do piso">
+      <canvas id="hi" hidden></canvas>
+      <div class="stage" id="stage"><img id="planImg" alt="Planta do piso"><img id="ovImg" alt="" hidden><img id="fwImg" alt="" hidden></div>
+      <div class="hint" id="hint"></div>
+      <div class="busy" id="busy" hidden></div>
+      <div class="legend" id="legend"></div>
+      <div class="zoom">
+        <button class="btn" id="zIn" aria-label="Aproximar">+</button>
+        <button class="btn" id="zOut" aria-label="Afastar">−</button>
+        <button class="btn" id="zFit" aria-label="Ajustar ao ecrã">⤢</button>
+      </div>
+      <div class="emptyplan" id="emptyPlan" hidden><div>
+        <h3>Sem plantas ainda</h3>
+        <p style="margin:0">Carrega as plantas dos pisos (imagens ou PDF). Podes escolher vários ficheiros de uma vez, ou um PDF com várias páginas: cada página fica um piso.</p>
+        <label class="btn primary" for="planIn">Carregar plantas</label>
+      </div></div>
+    </section>
+    <aside class="panel">
+      <div id="sheet" class="sheet" hidden></div>
+      <div class="msg busy" id="bulkNote" style="margin:10px 12px 0" hidden></div>
+      <div class="nextbox" id="nextBox" hidden></div>
+      <div class="bulkbar" id="bulkBar" hidden></div>
+      <div class="filters">
+        <button class="chip" data-f="todo" aria-pressed="true">Por fazer <b></b></button>
+        <button class="chip" data-f="mine" aria-pressed="false">Os meus <b></b></button>
+        <button class="chip" data-f="issues" aria-pressed="false">Anomalias <b></b></button>
+        <button class="chip" data-f="dups" aria-pressed="false">Repetidos <b></b></button>
+        <button class="chip" data-f="unplaced" aria-pressed="false">Por colocar <b></b></button>
+        <button class="chip" data-f="all" aria-pressed="false">Todos <b></b></button>
+        <button class="chip" id="multiBtn" aria-pressed="false">Selecionar vários</button>
+        <input id="q" type="search" placeholder="Procurar ID, MAC, tarefa…" aria-label="Procurar">
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+  </main>
+</div>
+<input id="planIn" type="file" accept="image/*,application/pdf" multiple hidden>
+<input id="phCam" type="file" accept="image/*" capture="environment" hidden>
+<input id="phFile" type="file" accept="image/*" multiple hidden>
+<input id="issueCam" type="file" accept="image/*" hidden>
+
+<!-- ================= COORDENAÇÃO ================= -->
+<main class="coord" id="viewCoord" hidden>
+  <div class="wrap" id="coordWrap"></div>
+</main>
+
+<dialog id="dlgPhoto"><div class="dlg">
+  <h3 id="dpTitle">Foto do equipamento</h3>
+  <div class="choice">
+    <input id="dpCam" type="file" accept="image/*" capture="environment" hidden>
+    <input id="dpFile" type="file" accept="image/*" multiple hidden>
+    <label for="dpCam">Tirar foto<small>Fotografa a etiqueta: o ID e o MAC são lidos automaticamente</small></label>
+    <label for="dpFile">Carregar ficheiro<small>Escolhe da galeria ou do computador</small></label>
+  </div>
+  <div class="acts"><button class="btn" id="dpSkip">Agora não</button></div>
+</div></dialog>
+
+<dialog id="dlgView"><div class="dlg">
+  <h3 id="pvTitle">Foto</h3>
+  <img id="pvImg" alt="Foto">
+  <div class="acts"><button class="btn danger" id="pvDel">Remover foto</button><button class="btn" id="pvClose">Fechar</button></div>
+</div></dialog>
+
+<dialog id="dlgFw"><div class="dlg">
+  <input id="fwFile" type="file" accept="image/*" hidden>
+  <h3>Fieldwire na planta</h3>
+  <div id="fwBody" style="display:grid;gap:10px"></div>
+  <div class="acts"><button class="btn" id="fwClose">Fechar</button></div>
+</div></dialog>
+<dialog id="dlgOv"><div class="dlg">
+  <input id="ovFile" type="file" accept="image/*,application/pdf" hidden>
+  <h3>Sobrepor outro desenho</h3>
+  <div id="ovBody" style="display:grid;gap:10px"></div>
+  <div class="acts"><button class="btn" id="ovClose">Fechar</button></div>
+</div></dialog>
+
+<dialog id="dlgDup"><div class="dlg">
+  <h3 id="dupTitle">ID repetido</h3>
+  <p id="dupText"></p>
+  <div class="dupgrid" id="dupGrid"></div>
+  <div class="acts"><button class="btn" id="dupCancel">Não guardar agora (verificar depois)</button></div>
+</div></dialog>
+
+<dialog id="dlgExp"><div class="dlg">
+  <h3>Descarregar planta com IDs</h3>
+  <div class="row" style="grid-template-columns:1fr 1fr">
+   <label class="f">Formato<select id="exFmt"><option value="pdfplan">PDF (só a planta)</option><option value="pdf">PDF (planta + lista de equipamentos)</option><option value="png">Imagem PNG</option><option value="jpg">Imagem JPG (mais leve)</option></select></label>
+   <label class="f">Texto em cada ponto<select id="exLbl"><option value="id">ID (ou referência se não houver)</option><option value="ref">Referência</option><option value="both">ID e referência</option></select></label>
+   <label class="f">Equipamentos<select id="exWhich"><option value="all">Todos deste piso</option><option value="visible">Só os da lista filtrada</option><option value="picked">Só os selecionados</option></select></label>
+   <label class="f" id="exOvWrap">Desenho sobreposto<select id="exOv"><option value="1">Incluir</option><option value="0">Não incluir</option></select></label>
+   <label class="f">Cor dos pontos<select id="exColor"><option value="stage">Pela etapa</option><option value="one">Uma só cor</option></select></label>
+  </div>
+  <p id="exInfo"></p>
+  <img id="exPrev" alt="Pré-visualização" hidden style="width:100%;max-height:50vh;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff">
+  <div class="acts"><button class="btn" id="exClose">Fechar</button><button class="btn primary" id="exGo">Gerar e descarregar</button></div>
+</div></dialog>
+
+<dialog id="dlgClose"><div class="dlg">
+  <h3 id="clTitle">Fecho do piso</h3>
+  <div id="clBody" style="display:grid;gap:12px"></div>
+  <div class="acts" id="clActs"></div>
+</div></dialog>
+
+<dialog id="dlgFloor"><div class="dlg">
+  <input id="planIn2" type="file" accept="image/*,application/pdf" multiple hidden>
+  <h3>Pisos</h3>
+  <p>Podes escolher vários ficheiros de uma vez, ou um PDF com várias páginas: cada página fica um piso desta obra. Cada piso tem a sua planta. Os marcadores guardam a posição em percentagem, por isso ficam no sítio certo se substituíres a planta por uma versão nova.</p>
+  <label class="f" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Nome do piso atual<input type="text" id="flName" autocomplete="off"></label>
+  <div class="acts" style="justify-content:flex-start">
+    <label class="btn primary" for="planIn2" id="flAdd">+ Adicionar pisos</label>
+    <button class="btn" id="flReplace">Substituir planta deste piso</button>
+    <button class="btn danger" id="flDel">Apagar piso</button>
+  </div>
+  <div class="acts"><button class="btn" id="flClose">Fechar</button></div>
+</div></dialog>
+
+<dialog id="dlgAssign"><div class="dlg">
+  <h3 id="asTitle">Atribuir piso</h3>
+  <p>Os técnicos atribuídos veem este piso em primeiro lugar.</p>
+  <div class="people" id="asPeople"></div>
+  <div class="picker" id="asPicker"></div>
+  <div class="acts"><button class="btn" id="asClose">Fechar</button></div>
+</div></dialog>
+
+<script src="vendor/pdf.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1/dist/umd/supabase.js" crossorigin="anonymous"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+if("serviceWorker" in navigator&&location.protocol!=="file:")window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
