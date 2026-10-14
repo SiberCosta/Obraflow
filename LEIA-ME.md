@@ -20,6 +20,7 @@ Tempo para pôr a funcionar: cerca de 20 minutos, uma única vez.
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalar no ecrã inicial e abrir sem rede |
 | `vendor/` | Leitor de PDF e de .zip (ficam no teu site, não dependem de terceiros) |
 | `supabase/schema.sql` | Cria a base de dados (passo 2) |
+| `supabase/atualizacao-2-acessos-notificacoes.sql` | Hierarquia de acesso e notificações por email (correr depois do passo 2) |
 
 ---
 
@@ -105,6 +106,60 @@ A segurança mantém-se: ninguém vê nada até a coordenação aprovar a conta 
    - **Sem acesso** — bloqueia a conta.
 
 ---
+
+## Página inicial, pastas e plantas
+
+- Ao abrir a app aparece a **página de entrada** com o projeto guardado neste aparelho e o acesso por email.
+- Depois de entrar, o separador **Início** mostra o projeto (progresso, os teus equipamentos por fazer, anomalias) e as **pastas** com as plantas.
+- **+ Nova pasta** cria uma pasta (ex.: *Piso 3*, *AVAC*, *Incêndio*). **+ Planta** dentro da pasta carrega PDFs ou imagens diretamente para essa pasta.
+- Para mudar uma planta de pasta, usa a lista por baixo do cartão da planta, ou **Pisos…** no separador Obra.
+
+## Atualização 2: hierarquia de acesso e notificações por email
+
+Corre **uma vez** no Supabase: **SQL Editor → New query** → cola todo o ficheiro `supabase/atualizacao-2-acessos-notificacoes.sql` → **Run** (se aparecer o aviso de operações destrutivas, confirma). Não apaga dados. A primeira pessoa da coordenação passa a **Administrador**.
+
+**Papéis (do mais alto para o mais baixo)**
+
+| Papel | O que pode fazer |
+|---|---|
+| Administrador | Tudo, incluindo nomear coordenação e administradores, configurar emails, leitura com IA e importar dados |
+| Coordenação | Validar, atribuir pisos e equipamentos, fecho de piso, aprovar técnicos, fiscalização e só leitura |
+| Técnico | Marcar equipamentos, fotos, ler etiquetas, checklists, anomalias, marcar Testado |
+| Fiscalização / cliente | O mesmo que o técnico e ainda marcar **Aceite** |
+| Só leitura | Ver tudo e descarregar relatórios, sem alterar nada |
+
+As regras são aplicadas no servidor: mesmo que alguém mexa na app, não consegue fazer mais do que o seu papel permite. Tem de existir sempre pelo menos um Administrador.
+
+**Notificações por email (gratuito, Brevo: 300 emails/dia)**
+1. Cria conta em **brevo.com**.
+2. Em **Senders, domains & dedicated IPs → Senders** junta o email remetente (pode ser o teu Gmail) e confirma-o no email que recebes.
+3. Em **SMTP & API → API keys** gera uma chave (`xkeysib-…`).
+4. Na app (Administrador): **Coordenação → Envio de emails** → cola a chave e o remetente → **Guardar** → **Enviar email de teste**.
+5. Cada pessoa liga as suas notificações em **Início → Notificações por email** e escolhe: na hora (de 5 em 5 minutos, tudo num só email) ou resumo diário (~18h), e que tipos de aviso quer.
+
+Avisos enviados: equipamento ou piso atribuído a ti; anomalia nova (coordenação e responsável) e anomalia resolvida (quem a registou); Testado → coordenação "para validar"; Validado → fiscalização "para aceitar"; Aceite → coordenação; plantas novas ou trocadas (opcional).
+
+## Trocar a planta de um piso sem perder os IDs
+
+**Obra → Pisos… → Trocar planta (manter os IDs no sítio)** e escolhe o PDF ou imagem novo:
+- **Mesmo enquadramento**: revisão do desenho com a mesma folha e escala; os IDs ficam exatamente na mesma posição.
+- **Alinhar com 2 pontos**: se a planta nova foi recortada, mudou de escala ou rodou. Tocas em 2 pontos na planta atual (ex.: cantos de pilares afastados), depois nos mesmos 2 pontos na planta nova, confirmas a pré-visualização e carregas em **Aplicar**.
+
+A planta anterior fica guardada: **Pisos… → Repor planta anterior** volta atrás (as posições também).
+
+## Assinalar no desenho
+
+No separador **Obra**, o botão **Assinalar** abre as ferramentas de marcação:
+- **Caneta**, **Seta**, **Linha**, **Retângulo**, **Elipse**, **Nuvem de revisão** e **Texto**;
+- 6 cores, 3 espessuras e a opção **Preencher**;
+- **Selecionar**: toca numa marcação para lhe juntar uma nota (aparece como etiqueta no desenho), mudar a cor ou apagar;
+- **Desfazer** (ou Ctrl+Z) e **Mostrar marcações** para esconder e voltar a mostrar.
+
+As marcações são guardadas e sincronizadas com a equipa, entram na **planta descarregada** (opção *Marcações: Incluir*) e no **auto de entrega**, e acompanham a planta quando a trocas com 2 pontos. Quem as criou ou a coordenação podem apagá-las; a conta *Só leitura* só as vê.
+
+## Regra das etapas
+
+Qualquer equipamento com **ID ou MAC registado** conta automaticamente como **Instalado e Endereçado** (lido da foto, escrito à mão, escolhido nas leituras ou importado). Os equipamentos que já tinham ID passam a Endereçado na primeira vez que alguém com permissão de escrita abre a app. Para voltar a uma etapa anterior é preciso apagar o ID.
 
 ## Instalar no aparelho
 

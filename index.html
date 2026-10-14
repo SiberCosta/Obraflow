@@ -22,7 +22,8 @@
 <header class="top">
   <div class="brand"><h1>CostaPlan</h1><span class="proj" id="projName"></span></div>
   <div class="tabs" role="tablist">
-    <button id="tabObra" role="tab" aria-selected="true">Obra</button>
+    <button id="tabHome" role="tab" aria-selected="true">Início</button>
+    <button id="tabObra" role="tab" aria-selected="false">Obra</button>
     <button id="tabCoord" role="tab" aria-selected="false">Coordenação</button>
   </div>
   <button type="button" class="sync" id="syncBox" title="Sincronizar agora"></button>
@@ -90,6 +91,11 @@
 <input id="phFile" type="file" accept="image/*" multiple hidden>
 <input id="issueCam" type="file" accept="image/*" hidden>
 
+<!-- ================= INÍCIO ================= -->
+<main class="home" id="viewHome" hidden>
+  <div class="wrap" id="homeWrap"></div>
+</main>
+
 <!-- ================= COORDENAÇÃO ================= -->
 <main class="coord" id="viewCoord" hidden>
   <div class="wrap" id="coordWrap"></div>
@@ -146,6 +152,7 @@
    <label class="f">Texto em cada ponto<select id="exLbl"><option value="id">ID (ou referência se não houver)</option><option value="ref">Referência</option><option value="both">ID e referência</option></select></label>
    <label class="f">Equipamentos<select id="exWhich"><option value="all">Todos deste piso</option><option value="visible">Só os da lista filtrada</option><option value="picked">Só os selecionados</option></select></label>
    <label class="f" id="exOvWrap">Desenho sobreposto<select id="exOv"><option value="1">Incluir</option><option value="0">Não incluir</option></select></label>
+   <label class="f">Marcações (desenhos e notas)<select id="exMk"><option value="1">Incluir</option><option value="0">Não incluir</option></select></label>
    <label class="f">Cor dos pontos<select id="exColor"><option value="stage">Pela etapa</option><option value="one">Uma só cor</option></select></label>
   </div>
   <p id="exInfo"></p>
@@ -164,14 +171,32 @@
   <h3>Pisos</h3>
   <p>Podes escolher vários ficheiros de uma vez, ou um PDF com várias páginas: cada página fica um piso desta obra. Cada piso tem a sua planta. Os marcadores guardam a posição em percentagem, por isso ficam no sítio certo se substituíres a planta por uma versão nova.</p>
   <label class="f" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Nome do piso atual<input type="text" id="flName" autocomplete="off"></label>
+  <label class="f" id="flFolderWrap" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Pasta<select id="flFolder" style="border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--panel);font-size:14px;text-transform:none;letter-spacing:0;color:var(--ink)"></select></label>
   <div class="acts" style="justify-content:flex-start">
     <label class="btn primary" for="planIn2" id="flAdd">+ Adicionar pisos</label>
     <button class="btn" id="flReplace">Substituir planta deste piso</button>
+    <button class="btn" id="flRevert" hidden>Repor planta anterior</button>
     <button class="btn danger" id="flDel">Apagar piso</button>
   </div>
   <div class="acts"><button class="btn" id="flClose">Fechar</button></div>
 </div></dialog>
 
+<dialog id="dlgFolder"><div class="dlg">
+  <h3 id="fdTitle">Nova pasta</h3>
+  <p>Organiza as plantas por pastas, por exemplo por piso (Piso 3), por especialidade (AVAC, Incêndio) ou por fase.</p>
+  <label class="f">Nome da pasta<input type="text" id="fdName" autocomplete="off" placeholder="ex.: Piso 3"></label>
+  <div class="acts"><button class="btn danger" id="fdDel" hidden>Apagar pasta</button><button class="btn" id="fdCancel">Cancelar</button><button class="btn primary" id="fdOk">Guardar</button></div>
+</div></dialog>
+<dialog id="dlgSwap"><div class="dlg">
+  <h3>Trocar planta do piso</h3>
+  <p id="swInfo"></p>
+  <div class="choice">
+   <button type="button" class="chbtn" id="swSame">Mesmo enquadramento<small>A planta nova é uma revisão com a mesma folha e escala. Os IDs ficam exatamente na mesma posição.</small></button>
+   <button type="button" class="chbtn" id="swPts">Alinhar com 2 pontos<small>A planta nova foi recortada, mudou de escala ou rodou. Marcas 2 pontos iguais nas duas plantas e os IDs são reposicionados.</small></button>
+  </div>
+  <p>A planta atual fica guardada: podes repô-la em <b>Pisos…</b> → <b>Repor planta anterior</b>.</p>
+  <div class="acts"><button class="btn" id="swNo">Cancelar</button></div>
+</div></dialog>
 <dialog id="dlgAssign"><div class="dlg">
   <h3 id="asTitle">Atribuir piso</h3>
   <p>Os técnicos atribuídos veem este piso em primeiro lugar.</p>

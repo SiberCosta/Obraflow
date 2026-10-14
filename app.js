@@ -54,7 +54,7 @@ const CFG=window.OBRA_CONFIG||{};
 const S={plans:[],items:[],issues:[],meta:{},ready:false,
  me:null,meId:null,role:null,isCoord:false,canWrite:false,local:false,demo:false,session:null,
  online:navigator.onLine,syncing:false,pending:0,lastSyncAt:null,
- view:"obra",planId:null,sel:null,mode:"nav",filter:"todo",q:""};
+ view:"home",planId:null,sel:null,mode:"nav",filter:"todo",q:""};
 let sb=null;                       // cliente Supabase
 let sampleFn=true,sampleMax=2;      // leitura de etiquetas no aparelho (sempre disponível)
 const names={};                     // id -> {name}
@@ -88,10 +88,19 @@ async function persist(c,id,data,deleted){
  try{if(deleted)await IDBX.del("docs",c+"|"+id);else await IDBX.put("docs",c+"|"+id,{col:c,id,data});
   if(!S.demo){await IDBX.add("outbox",{t:"doc",col:c,id,data:deleted?{}:data,deleted:!!deleted});S.pending++;renderSync();scheduleFlush()}}
  catch(e){onWriteErr(e)}}
+/* regra da obra: um equipamento com ID (ou MAC) registado conta sempre como Instalado e Endereçado */
+function autoStage(d){if(!d||!(String(d.devId||"").trim()||String(d.mac||"").trim()))return false;if(sIdx(d.stage)>=2)return false;
+ const at=now(),by=S.meId;d.stageLog={...(d.stageLog||{})};if(!d.stageLog.instalado)d.stageLog.instalado={by,at,auto:true};d.stageLog.enderecado={by,at,auto:true};
+ d.stage="enderecado";d.log=[...(d.log||[]).slice(-39),{at,by,t:"Etapa: Endereçado (automático: ID registado)"}];return true}
+/* aplica a regra aos equipamentos que já existiam */
+let autoDone=false;
+async function autoStageAll(){if(autoDone||!(S.canWrite||S.demo))return;autoDone=true;let n=0;
+ for(const[id,v]of Object.entries(L.items)){if((String(v.devId||"").trim()||String(v.mac||"").trim())&&sIdx(v.stage)<2){await api.update("items",id,{});n++}}
+ if(n)toast(`${n} equipamento${n>1?"s":""} com ID passaram a Endereçado.`)}
 const api={
  sub(c,cb){subsC[c].push(cb);emit(c);return()=>{}},
- async set(c,id,data){if(!S.canWrite&&!S.demo&&c!=="meta"){toast("Sem permissão para alterar.");return}L[c][id]=data;emitSoon(c);await persist(c,id,data,false)},
- async update(c,id,patch){if(!L[c][id])return;const d=deepMerge(L[c][id],patch);L[c][id]=d;emitSoon(c);await persist(c,id,d,false)},
+ async set(c,id,data){if(!S.canWrite&&!S.demo&&c!=="meta"){toast("Sem permissão para alterar.");return}if(c==="items")autoStage(data);L[c][id]=data;emitSoon(c);await persist(c,id,data,false)},
+ async update(c,id,patch){if(!L[c][id])return;const d=deepMerge(L[c][id],patch);if(c==="items")autoStage(d);L[c][id]=d;emitSoon(c);await persist(c,id,d,false)},
  async del(c,id){delete L[c][id];emitSoon(c);await persist(c,id,null,true)}};
 async function loadLocal(){const rows=await IDBX.all("docs").catch(()=>[]);L={plans:{},items:{},issues:{},meta:{}};
  for(const r of rows){const v=r.value;if(v&&L[v.col])L[v.col][v.id]=v.data}
@@ -176,8 +185,10 @@ async function keepOffline(p,onStep){const refs=[p.img,p.pdf,p.ov&&p.ov.ref,p.fw
 /* =========================================================
    Pessoas e papéis
    ========================================================= */
-const ROLE_N={pendente:"À espera de aprovação",tecnico:"Técnico",fiscal:"Fiscalização / cliente",coord:"Coordenação"};
-function setRole(r){S.role=r||null;S.isCoord=r==="coord";S.canWrite=!!r&&r!=="pendente"}
+/* hierarquia de acesso (do mais alto para o mais baixo) */
+const ROLE_N={admin:"Administrador",coord:"Coordenação",tecnico:"Técnico",fiscal:"Fiscalização / cliente",leitura:"Só leitura",pendente:"À espera de aprovação"};
+const ROLE_ORDER=["admin","coord","tecnico","fiscal","leitura","pendente"];
+function setRole(r){S.role=r||null;S.isAdmin=r==="admin";S.isCoord=r==="coord"||r==="admin";S.canWrite=!!r&&r!=="pendente"&&r!=="leitura"}
 function isActive(){return !!S.role&&S.role!=="pendente"}
 function isClient(){return S.role==="fiscal"}
 async function loadMembers(){if(!sb)return;const{data,error}=await sb.from("members").select("user_id,name,email,role,created_at").order("created_at");
@@ -200,13 +211,28 @@ function mountPicker(host,selected,onPick,placeholder){if(!host)return;
   inp.onfocus=()=>show(inp.value);inp.oninput=()=>show(inp.value);inp.onblur=()=>setTimeout(()=>{opts.hidden=true},200)};
  draw()}
 
+/* página de entrada: apresenta a plataforma e o projeto guardado neste aparelho */
+function homeCache(){try{return JSON.parse(localStorage.getItem("cp-home")||"null")}catch(e){return null}}
+function saveHomeCache(){if(!S.ready||!S.plans.length&&!S.meta.name)return;const its=S.items;
+ const c={name:S.meta.name||"",plans:S.plans.length,items:its.length,tested:its.filter(i=>sIdx(i.stage)>=3).length,at:now()};
+ try{const o=homeCache();if(!o||o.name!==c.name||o.items!==c.items||o.tested!==c.tested||o.plans!==c.plans)localStorage.setItem("cp-home",JSON.stringify(c))}catch(e){}}
+function landingHero(){const c=homeCache();const pct=c&&c.items?Math.round(c.tested/c.items*100):0;
+ return`<div class="lhero">
+  <div class="lbrand"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z" fill="var(--accent)"/><circle cx="12" cy="11.4" r="4.1" fill="#141917"/></svg><span>CostaPlan</span></div>
+  <h2>Gestão de obra no terreno</h2>
+  <p>Plantas, equipamentos e IDs, ensaios e entrega, no telemóvel, no tablet e no computador. Funciona mesmo sem rede.</p>
+  ${c&&(c.name||c.plans)?`<div class="lproj"><span class="lk">Projeto neste aparelho</span><b>${esc(c.name||"Obra")}</b>
+   <div class="lstats"><span><b>${c.plans}</b> plantas</span><span><b>${c.items}</b> equipamentos</span><span><b>${pct}%</b> testado</span></div>
+   <div class="lbar"><i style="width:${pct}%"></i></div></div>`:""}
+  <ul class="lfeat"><li><b>Pins na planta</b> com o ID lido da foto da etiqueta</li><li><b>Etapas, checklists e anomalias</b> por equipamento</li><li><b>Coordenação</b>, relatórios e auto de entrega</li></ul></div>`}
+
 /* =========================================================
    Entrar / registar / sair
    ========================================================= */
 let authMode="login";
 function showAuth(msg){const A=$("auth");A.hidden=false;document.body.classList.add("authing");
  const isUp=authMode==="signup",isReset=authMode==="reset";
- A.innerHTML=`<div class="authcard">
+ A.innerHTML=`<div class="landing">${landingHero()}<div class="authcard">
   <div class="authbrand"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z" fill="var(--accent)"/><circle cx="12" cy="11.4" r="4.1" fill="var(--ink)"/></svg><div><h1>CostaPlan</h1><small class="muted">Gestão de obra · plantas, IDs e ensaios</small></div></div>
   <h2>${isUp?"Criar conta":isReset?"Recuperar palavra-passe":"Entrar"}</h2>
   <form id="authForm" novalidate>
@@ -217,7 +243,7 @@ function showAuth(msg){const A=$("auth");A.hidden=false;document.body.classList.
    <button class="btn primary" type="submit" id="auGo">${isUp?"Criar conta":isReset?"Enviar email de recuperação":"Entrar"}</button>
   </form>
   <div class="authalt">${isUp?`<button class="linkb" data-m="login">Já tenho conta</button>`:`<button class="linkb" data-m="signup">Criar conta nova</button>`}${isReset?`<button class="linkb" data-m="login">Voltar</button>`:`<button class="linkb" data-m="reset">Esqueci-me da palavra-passe</button>`}</div>
-  <p class="muted" style="font-size:12px;margin:0">${isUp?"Depois de criares a conta, a coordenação tem de a aprovar. A primeira conta criada fica como coordenação.":"Precisas de ligação à internet para entrar pela primeira vez neste aparelho."}</p></div>`;
+  <p class="muted" style="font-size:12px;margin:0">${isUp?"Depois de criares a conta, a coordenação tem de a aprovar. A primeira conta criada fica como coordenação.":"Precisas de ligação à internet para entrar pela primeira vez neste aparelho."}</p></div></div>`;
  A.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{authMode=b.dataset.m;showAuth()});
  $("authForm").onsubmit=async e=>{e.preventDefault();const em=$("auEmail").value.trim(),pw=$("auPass")?$("auPass").value:"",nm=$("auName")?$("auName").value.trim():"";
   const m=$("auMsg");const fail=t=>{m.hidden=false;m.className="msg err";m.textContent=t};
@@ -246,7 +272,7 @@ async function startSession(session,offline){S.session=offline?null:session;S.me
  if(navigator.onLine)await loadMembers().catch(()=>{});
  if(!S.role){setRole("pendente")}
  if(!isActive()){showPending();return}
- hideAuth();S.ready=true;render();realtime();syncNow()}
+ hideAuth();S.ready=true;render();realtime();syncNow().then(autoStageAll)}
 
 /* =========================================================
    Arranque
@@ -258,7 +284,7 @@ async function boot(){
  api.sub("items",a=>{S.items=a;render()});
  api.sub("issues",a=>{S.issues=a;render()});
  api.sub("meta",a=>{const pr=a.find(x=>x.id==="project");S.meta=pr?(({id,...r})=>r)(pr):{};const pp=a.find(x=>x.id==="people");legacyPeople=(pp&&pp.map)||{};render()});
- if(S.demo){S.meId="demo";S.me={name:"Demonstração"};setRole("coord");S.ready=true;render();return}
+ if(S.demo){S.meId="demo";S.me={name:"Demonstração"};setRole("coord");S.ready=true;render();autoStageAll();return}
  sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
  sb.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY")askNewPassword();
   if(ev==="SIGNED_OUT"){S.session=null;showAuth()}
@@ -295,10 +321,13 @@ function renderNow(){
  if(S.demo){b.hidden=false;b.innerHTML=`<span>Modo demonstração: os dados ficam só neste aparelho. Preenche o ficheiro <b>config.js</b> com os dados do Supabase para trabalhar em equipa (ver LEIA-ME).</span>`}
  else if(S.isCoord&&members.some(m=>m.role==="pendente")){const n=members.filter(m=>m.role==="pendente").length;b.hidden=false;b.innerHTML=`<span>${n} pessoa${n>1?"s":""} à espera de aprovação.</span><button class="btn sm" id="goTeam">Ver equipa</button>`;$("goTeam").onclick=()=>{S.view="coord";render();setTimeout(()=>{const t=$("teamSec");if(t)t.scrollIntoView({behavior:"smooth"})},80)}}
  else b.hidden=true;
- $("tabObra").setAttribute("aria-selected",S.view==="obra");$("tabCoord").setAttribute("aria-selected",S.view==="coord");
- $("viewObra").style.display=S.view==="obra"?"contents":"none";$("viewCoord").hidden=S.view!=="coord";
- if(S.view==="obra")renderObra();else renderCoord();
+ $("tabHome").setAttribute("aria-selected",S.view==="home");$("tabObra").setAttribute("aria-selected",S.view==="obra");$("tabCoord").setAttribute("aria-selected",S.view==="coord");
+ $("viewObra").style.display=S.view==="obra"?"contents":"none";$("viewCoord").hidden=S.view!=="coord";$("viewHome").hidden=S.view!=="home";
+ document.body.dataset.view=S.view;
+ if(S.view==="obra")renderObra();else if(S.view==="coord")renderCoord();else renderHome();
+ saveHomeCache();
 }
+$("tabHome").onclick=()=>{S.view="home";render();window.scrollTo(0,0)};
 $("tabObra").onclick=()=>{S.view="obra";render();setTimeout(fit,30)};
 $("tabCoord").onclick=()=>{S.view="coord";render()};
 $("syncBox").onclick=()=>{if(S.demo){toast("Modo demonstração: os dados ficam só neste aparelho.");return}if(!navigator.onLine){toast("Sem rede. As alterações ficam guardadas e são enviadas quando voltar a ligação.");return}syncNow().then(()=>toast(S.pending?`Ainda há ${S.pending} alterações por enviar.`:"Tudo sincronizado."))};
@@ -309,7 +338,7 @@ $("syncBox").onclick=()=>{if(S.demo){toast("Modo demonstração: os dados ficam 
    ========================================================= */
 const viewer=$("viewer"),stage=$("stage"),img=$("planImg"),hi=$("hi");
 let view={z:1,x:0,y:0},loadedPlan=null;
-function plan(){return S.plans.find(p=>p.id===S.planId)||null}
+function plan(){const p=S.plans.find(x=>x.id===S.planId)||null;return p&&S.swap&&S.swap.pid===p.id&&S.swap.show==="new"?{...p,...S.swap.nd,ov:null,fw:null}:p}
 function scalePins(){stage.querySelectorAll(".pin,.ghost,.alignpt").forEach(el=>el.style.scale=String(1/view.z))}
 let declZ=0;
 function applyView(){stage.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.z})`;scalePins();scheduleHi();if(Math.abs(view.z-declZ)>1e-6)declutter()}
@@ -354,7 +383,7 @@ window.addEventListener("resize",()=>{if(S.view==="obra")fit()});
 /* toque: arrastar para mover, dois dedos para zoom */
 const ptrs=new Map();let drag=null,pinch=null;
 viewer.addEventListener("pointerdown",e=>{
- if(e.target.closest(".zoom,.hint,.legend,.emptyplan"))return;
+ if(e.target.closest(".zoom,.hint,.legend,.emptyplan,.mkbar,.mkpanel"))return;
  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});viewer.setPointerCapture(e.pointerId);
  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:view.z};drag=null;return}
  const pin=e.target.closest(".pin"),gh=e.target.closest(".ghost");
@@ -374,6 +403,8 @@ function endPtr(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
  if(d.pin&&d.moved&&d.pt){api.update("items",d.pin,logPatch(S.items.find(i=>i.id===d.pin),{x:d.pt.x,y:d.pt.y,updatedAt:now(),updatedBy:S.meId},"Posição alterada"));toast("Posição atualizada");return}
  if(d.moved)return;
  if(S.moving){const pt=toPlan(e);const id=S.moving;if(pt){S.moving=null;api.update("items",id,logPatch(S.items.find(i=>i.id===id),{x:pt.x,y:pt.y,updatedAt:now(),updatedBy:S.meId},"Posição alterada"));toast("Posição atualizada");render()}return}
+ if(S.swap&&S.swap.stage>=1&&S.swap.stage<3){swapClick(e);return}
+ if(S.swap)return;
  if(d.pin){if(S.multi)toggleMulti(d.pin);else select(d.pin);return}
  if(S.align){const pt=toPlan(e);if(pt){const p=plan();S.align.dst.push({x:pt.x*p.w,y:pt.y*p.h});if(S.align.dst.length===2)finishAlign();else render()}return}
  if(d.ghost!=null&&S.canWrite){createFromGhost(d.ghost);return}
@@ -430,9 +461,9 @@ function renderObra(){
  const p=plan();
  // pisos
  const sel=$("planSel");
- const opts=S.plans.map(x=>{const mine=(x.assignees||[]).includes(S.meId);return`<option value="${esc(x.id)}">${mine?"● ":""}${esc(x.name)}</option>`}).join("");
+ const opts=planOptionsHtml();
  sel.innerHTML=opts||`<option value="">Sem pisos</option>`;sel.value=S.planId||"";
- $("btnFloor").hidden=!S.canWrite;$("btnNewFloor").hidden=!S.canWrite||!p;$("btnNewFloor").onclick=()=>{replacing=null};$("bulkBtn").hidden=!S.canWrite||!p;
+ $("btnFloor").hidden=!S.canWrite;$("btnNewFloor").hidden=!S.canWrite||!p;$("btnNewFloor").onclick=()=>{replacing=null;uploadFolder=(plan()||{}).folder||null};$("bulkBtn").hidden=!S.canWrite||!p;
  $("mMark").disabled=!S.canWrite||!p;
  // progresso do piso
  const its=planItems();const fp=$("floorProg");
@@ -448,14 +479,14 @@ function renderObra(){
  // hint
  const c=cur();
  const gN=ghostList().length;
- $("hint").innerHTML=S.moving?`<b>Mover ${esc((S.items.find(i=>i.id===S.moving)||{}).code||"")}:</b> toca no novo sítio na planta. <button class="btn sm" id="mvCancel">Cancelar</button>`
+ $("hint").innerHTML=S.draw?mkHint():S.swap&&S.swap.stage?swapHint():S.moving?`<b>Mover ${esc((S.items.find(i=>i.id===S.moving)||{}).code||"")}:</b> toca no novo sítio na planta. <button class="btn sm" id="mvCancel">Cancelar</button>`
   :S.align?`<b>Alinhar:</b> clica na planta base no <b>ponto ${S.align.dst.length+1}</b> (o mesmo que marcaste ${S.align.kind==="ov"?"no desenho a sobrepor":"na captura do Fieldwire"}). <button class="btn sm" id="alCancel">Cancelar</button>`
   :c&&c.x==null?`<b>Colocar ${esc(c.code)}:</b> `+(c.taskNo?`clica em cima do pin <b>${esc(c.taskNo)}</b> do Fieldwire.`:`clica na planta onde está este equipamento.`)
   :S.mode==="mark"?`<b>Marcar:</b> clica onde está o equipamento e tira a foto da etiqueta.`
   :gN?`<b>Fieldwire:</b> ${gN} pins por registar. Clica num círculo laranja e cola a foto da etiqueta com <b>Ctrl+V</b>.`
   :`<b>Navegar:</b> arrasta para mover, roda ou dois dedos para zoom. Toca num marcador para abrir.`;
  const mvc=$("mvCancel");if(mvc)mvc.onclick=()=>{S.moving=null;render()};
- viewer.classList.toggle("marking",S.mode==="mark"||!!S.moving||!!S.align);
+ viewer.classList.toggle("marking",S.mode==="mark"||!!S.moving||!!S.align||!!(S.swap&&S.swap.stage&&S.swap.stage<3));wireSwapHint();
  const alc=$("alCancel");if(alc)alc.onclick=()=>{S.align=null;render()};
  $("btnFw").hidden=!S.canWrite||!p;
  $("btnExp").hidden=!p;$("btnOv").hidden=!p||(!S.canWrite&&!p.ov);
@@ -468,15 +499,15 @@ function renderObra(){
 function renderPins(){if(drag&&drag.moved&&drag.pin)return;
  stage.querySelectorAll(".pin,.ghost,.alignpt").forEach(e=>e.remove());const p=plan();if(!p){$("fwImg").hidden=true;$("ovImg").hidden=true;return}
  const frag=document.createDocumentFragment();
- for(const it of planItems()){if(it.x==null)continue;const el=document.createElement("div");
+ for(const it of planItems()){if(it.x==null||swapHidesPins())continue;const el=document.createElement("div");const sp=swapPos(it);
   el.className="pin"+(it.id===S.sel?" sel":"")+(S.multi&&S.multi.has(it.id)?" picked":"")+(hasIssue(it)?" issue":"")+(isDup(it)?" dup":"")+(inFilter(it,S.filter==="unplaced"?"all":S.filter)&&matchQ(it)?"":" dim");
-  el.dataset.id=it.id;el.style.setProperty("--c",sOf(it.stage).c);el.style.left=it.x*p.w+"px";el.style.top=it.y*p.h+"px";el.style.scale=String(1/view.z);
+  el.dataset.id=it.id;el.style.setProperty("--c",sOf(it.stage).c);el.style.left=sp.x*p.w+"px";el.style.top=sp.y*p.h+"px";el.style.scale=String(1/view.z);
   el.innerHTML=`<span class="tag"></span><svg class="mk" viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z"/><circle cx="12" cy="11.4" r="4.1"/></svg>`;el.querySelector(".tag").textContent=it.devId||it.mac||it.code;
   if(!it.devId&&!it.mac)el.classList.add("noid");
   el.title=(it.devId?`ID ${it.devId} · `:"")+(it.mac?`MAC ${it.mac} · `:"")+(!it.devId&&!it.mac?"Sem ID lido · ":"")+`${it.code} · ${tOf(it.type).n} · ${sOf(it.stage).n}`;frag.appendChild(el)}
  for(const g of ghostList()){const el=document.createElement("div");el.className="ghost";el.dataset.g=g.i;el.style.left=g.x*p.w+"px";el.style.top=g.y*p.h+"px";el.style.scale=String(1/view.z);el.title="Pin do Fieldwire por registar: clica e cola a foto";frag.appendChild(el)}
  if(S.align)S.align.dst.forEach(q=>{const el=document.createElement("div");el.className="alignpt ghost-like";el.style.left=q.x+"px";el.style.top=q.y+"px";el.style.scale=String(1/view.z);frag.appendChild(el)});
- stage.appendChild(frag);renderOverlay(p);renderOv(p);declutter()}
+ swapMarkers(frag,p);stage.appendChild(frag);renderOverlay(p);renderOv(p);renderMarks(p);declutter()}
 function renderList(){
  const its=planItems();
  document.querySelectorAll(".filters .chip[data-f]").forEach(ch=>{const f=ch.dataset.f;ch.setAttribute("aria-pressed",S.filter===f);ch.querySelector("b").textContent=its.filter(i=>inFilter(i,f)).length});
@@ -620,7 +651,7 @@ function wireSheet(it){
  $("edNext").onclick=()=>{flushFields();const n=nextOf(it.id);if(n){select(n.id);centerOn(n)}else{toast("Não há mais equipamentos por fazer neste piso.");select(null)}};
 }
 const box=id=>$(id);
-function setStage(it,k){if(!S.canWrite)return;const ti=sIdx(k),ci=sIdx(it.stage);
+function setStage(it,k){if(!S.canWrite)return;if(sIdx(k)<2&&(String(it.devId||"").trim()||String(it.mac||"").trim())){toast("Com ID registado o equipamento conta sempre como Instalado e Endereçado. Apaga o ID para voltar atrás.");return}const ti=sIdx(k),ci=sIdx(it.stage);
  if(!canStage(k)){toast(lockMsg(k));return}
  const checks=CHECKS[it.type]||CHECKS.EQ,cdone=checks.filter((_,j)=>ck(it)[j]).length;
  if(ti>=3&&ci<3&&cdone<checks.length&&stageArmed!==k){stageArmed=k;sheetFor=null;render();return}
@@ -691,7 +722,7 @@ const T_NORMAL={tessedit_pageseg_mode:"11",tessedit_char_whitelist:"ABCDEFGHIJKL
 function tess(){if(!tessP)tessP=(async()=>{await loadScript(LIB.tess);const w=await Tesseract.createWorker("eng",1);await w.setParameters(T_NORMAL);return w})().catch(e=>{tessP=null;throw e});return tessP}
 async function prepareReader(){await tess();try{await loadScript(LIB.zx)}catch(e){}}
 function initSample(){}
-/* prepara a imagem: tamanho adequado, tons de cinzento e contraste */
+/* prepara a imagem para os códigos de barras: tamanho adequado, tons de cinzento e contraste */
 async function prepCanvas(blob,rot){const bm=await createImageBitmap(blob);const L=Math.max(bm.width,bm.height);const k=Math.min(2.2,Math.max(1,1700/L))*(L>2400?2400/L:1);
  const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");const sw=rot%180!==0;cv.width=sw?h:w;cv.height=sw?w:h;
  const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.translate(cv.width/2,cv.height/2);cx.rotate(rot*Math.PI/180);cx.drawImage(bm,-w/2,-h/2,w,h);cx.setTransform(1,0,0,1,0,0);
@@ -699,6 +730,23 @@ async function prepCanvas(blob,rot){const bm=await createImageBitmap(blob);const
  for(let i=0,j=0;i<d.length;i+=4,j++){const v=(d[i]*.299+d[i+1]*.587+d[i+2]*.114)|0;g[j]=v;if(v<lo)lo=v;if(v>hi)hi=v}
  const span=Math.max(40,hi-lo);for(let i=0,j=0;i<d.length;i+=4,j++){const v=Math.max(0,Math.min(255,(g[j]-lo)*255/span));d[i]=d[i+1]=d[i+2]=v}
  cx.putImageData(im,0,0);return cv}
+/* prepara a imagem para o texto: qualquer orientação (rot), canal de cor (lum = normal; g = verde, para
+   placas verdes / fundos coloridos) e binarização adaptativa (cada zona compara com a sua vizinhança,
+   por isso texto escuro sobre verde, branco ou reflexos fica preto sobre branco) */
+const bmCache=new WeakMap();
+async function bitmapOf(blob){let b=bmCache.get(blob);if(!b){b=await createImageBitmap(blob);bmCache.set(blob,b)}return b}
+function adaptiveBW(cx,W,H,ch,winFrac,C){const im=cx.getImageData(0,0,W,H),d=im.data,n=W*H;const g=new Float32Array(n);
+ for(let i=0,j=0;j<n;i+=4,j++)g[j]=ch==="g"?d[i+1]:d[i]*.299+d[i+1]*.587+d[i+2]*.114;
+ const I=new Float64Array((W+1)*(H+1));for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=g[y*W+x];I[(y+1)*(W+1)+x+1]=I[y*(W+1)+x+1]+row}}
+ const r=Math.max(4,Math.round(Math.max(W,H)*winFrac/2));
+ for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);for(let x=0;x<W;x++){const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1);
+  const sum=I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0];const m=sum/((x1-x0)*(y1-y0));const v=g[y*W+x]<m-C?0:255;const k=(y*W+x)*4;d[k]=d[k+1]=d[k+2]=v;d[k+3]=255}}
+ cx.putImageData(im,0,0)}
+async function textCanvas(blob,rot,ch){const bm=await bitmapOf(blob);const L=Math.max(bm.width,bm.height);const k=1700/L;
+ const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");const sw=rot%180!==0;cv.width=sw?h:w;cv.height=sw?w:h;
+ const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality="high";
+ cx.translate(cv.width/2,cv.height/2);cx.rotate(rot*Math.PI/180);cx.drawImage(bm,-w/2,-h/2,w,h);cx.setTransform(1,0,0,1,0,0);
+ adaptiveBW(cx,cv.width,cv.height,ch,.03,12);return cv}
 async function readCodes(blob){const out=[];
  try{if("BarcodeDetector" in window){const fm=await BarcodeDetector.getSupportedFormats();const want=fm.filter(f=>["data_matrix","qr_code","code_128","code_39","aztec","ean_13"].includes(f));
    if(want.length){const bm=await createImageBitmap(blob);const r=await new BarcodeDetector({formats:want}).detect(bm);r.forEach(x=>x.rawValue&&out.push(x.rawValue))}}}catch(e){}
@@ -710,6 +758,12 @@ async function readCodes(blob){const out=[];
  return out}
 /* candidatos a ID / MAC a partir do texto e dos códigos */
 const hexFix=t=>String(t).toUpperCase().replace(/O/g,"0").replace(/[IL]/g,"1");
+/* valor depois de "ID:": hexadecimal com 6 a 8 caracteres é o caso típico (pontuação alta); corta lixo no fim ("TDSF23y" → 7D5F23) */
+function idVal(raw){const u=String(raw).toUpperCase();let v=hexFixId(u);
+ if(!/^[0-9A-F]+$/.test(v)){for(let n=u.length-1;n>=5;n--){const t=hexFixId(u.slice(0,n));if(/^[0-9A-F]+$/.test(t)){v=t;break}}}
+ const hex=/^[0-9A-F]+$/.test(v);return{v,s:hex&&v.length>=6&&v.length<=8?10:hex?7:8}}
+/* depois de "ID:" o valor é quase sempre hexadecimal: corrige confusões típicas do OCR (S→5, T→7, Z→2, G→6, Q→0) */
+const hexFixId=t=>{const u=String(t).toUpperCase();const v=u.replace(/[OQ]/g,"0").replace(/[IL]/g,"1").replace(/S/g,"5").replace(/T/g,"7").replace(/Z/g,"2").replace(/G/g,"6");return /^[0-9A-F]+$/.test(v)&&/\d/.test(v)?v:u};
 function candsFrom(text,codes){const C=[];
  const add=(k,v,s)=>{v=String(v||"").trim().toUpperCase();if(!v)return;if(k==="mac")v=normMac(v);const o=C.find(c=>c.k===k&&c.v===v);if(o){o.s=Math.max(o.s,s);return}C.push({k,v,s})};
  const scan=(T,boost)=>{T=" "+String(T||"").replace(/[|\\]/g," ")+" ";
@@ -717,8 +771,8 @@ function candsFrom(text,codes){const C=[];
   for(const m of T.matchAll(/(?:[0-9A-FOIL]{2}[:\-]){5}[0-9A-FOIL]{2}/gi)){const v=hexFix(m[0]).replace(/[^0-9A-F]/g,"");if(v.length===12)add("mac",v,9+boost)}
   for(const m of T.matchAll(/MAC[^0-9A-Z]{0,4}([0-9A-FOIL]{12})(?![0-9A-Z])/gi)){const v=hexFix(m[1]);if(/^[0-9A-F]{12}$/.test(v))add("mac",v,9+boost)}
   // ID com prefixo: "ID:", "ID-Nr.", "ID No.", "Device ID" (pode vir colado: "25/51ID:8B281B")
-  for(const m of T.matchAll(/(?:^|[^A-Za-z])ID(?:[-\s]?N[RO°º]\.?|\s+NO\.?)?\s*[:#.]\s*([0-9A-Z]{4,12})(?![0-9A-Z])/gi)){let v=m[1].toUpperCase();if(/^[0-9A-FOIL]+$/.test(v))v=hexFix(v);add("id",v,10+boost)}
-  for(const m of T.matchAll(/(?:^|[^A-Z0-9])ID\s+([0-9A-FOIL]{5,10})(?![0-9A-Z])/gi)){const v=hexFix(m[1]);if(/\d/.test(v))add("id",v,9+boost)}};
+  for(const m of T.matchAll(/(?:^|[^A-Za-z])[I1l]D(?:[-\s]?N[RO°º]\.?|\s+NO\.?)?\s*[:;#.]\s*([0-9A-Z]{4,12})(?![0-9A-Z])/gi)){const r=idVal(m[1]);add("id",r.v,r.s+boost)}
+  for(const m of T.matchAll(/(?:^|[^A-Z0-9])[I1l]D\s+([0-9A-Z]{5,10})(?![0-9A-Z])/gi)){const v=hexFixId(m[1]);if(/^[0-9A-F]+$/.test(v)&&/\d/.test(v))add("id",v,9+boost)}};
  scan(text,0);
  for(const c of codes||[]){const t=String(c).trim();scan(t,0);
   if(/^[0-9A-F]{12}$/i.test(t))add("mac",t,8);else if(/^[0-9A-F]{5,10}$/i.test(t))add("id",t,8);else if(/^[0-9A-Z\-]{4,16}$/i.test(t)&&/\d/.test(t))add("id",t,6)}
@@ -732,9 +786,10 @@ function candsFrom(text,codes){const C=[];
   add("id",v,letters?(v.length===6?5:4):2)});
  return C.sort((a,b)=>b.s-a.s).slice(0,6)}
 async function readOne(blob,onStep){const codes=await readCodes(blob);
- const w=await tess();await w.setParameters(T_NORMAL);let text="",cands=[];
- for(const rot of[0,90,270]){onStep&&onStep(rot);const cv=await prepCanvas(blob,rot);const r=await w.recognize(cv);text+="\n"+(r&&r.data&&r.data.text||"");
-  cands=candsFrom(text,codes);if(cands.length&&cands[0].s>=8)break}
+ const w=await tess();await w.setParameters(T_NORMAL);let text="",cands=candsFrom("",codes);if(cands.length&&cands[0].s>=8)return{cands,codes,text};
+ // qualquer orientação: direita, deitada para um lado e para o outro, de pernas para o ar; em cada uma, leitura normal e pelo canal verde
+ for(const rot of[0,90,270,180])for(const ch of["lum","g"]){onStep&&onStep(rot,ch);const cv=await textCanvas(blob,rot,ch);const r=await w.recognize(cv);text+="\n"+(r&&r.data&&r.data.text||"");
+  cands=candsFrom(text,codes);if(cands.length&&cands[0].s>=9)return{cands,codes,text}}
  return{cands,codes,text}}
 /* zona recortada (só a linha do ID): várias leituras com tamanhos e nitidez diferentes, e votação */
 function lineCanvas(bm,Ht,soft){const s=Ht/bm.height;const w=Math.max(8,Math.round(bm.width*s));const cv=document.createElement("canvas");cv.width=w;cv.height=Ht;
@@ -748,9 +803,10 @@ function lineCanvas(bm,Ht,soft){const s=Ht/bm.height;const w=Math.max(8,Math.rou
 async function readCrop(blob,onStep){const first=await readOne(blob);if(first.cands.length&&first.cands[0].s>=9)return first;
  const w=await tess();const bm=await createImageBitmap(blob);const votes={};const add=(v,n)=>{votes[v]=(votes[v]||0)+n};let text=first.text,k=0;
  try{for(const Ht of[60,90,130])for(const soft of[1,2]){k++;onStep&&onStep(k,6);const cv=lineCanvas(bm,Ht,soft);
+   if(soft===1)adaptiveBW(cv.getContext("2d",{willReadFrequently:true}),cv.width,cv.height,k%2?"lum":"g",.6,10);
    await w.setParameters({tessedit_pageseg_mode:"7",tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789: "});
    const t=((await w.recognize(cv)).data.text||"").toUpperCase();text+="\n"+t;
-   for(const m of t.matchAll(/[I1L|]?[D0O]?\s*[:.]\s*([0-9A-Z]{5,10})(?![0-9A-Z])/g)){if(/^[0-9A-FOIL]+$/.test(m[1]))add(hexFix(m[1]),2)}
+   for(const m of t.matchAll(/[I1L|]?[D0O]?\s*[:;.]\s*([0-9A-Z]{5,10})(?![0-9A-Z])/g)){const v=hexFixId(m[1]);if(/^[0-9A-F]+$/.test(v))add(v,2)}
    await w.setParameters({tessedit_char_whitelist:"0123456789ABCDEF"});
    let h=((await w.recognize(cv)).data.text||"").replace(/\s/g,"").toUpperCase();h=h.replace(/^1?D(?=[0-9A-F]{6})/,"");if(h.length>=5&&h.length<=10)add(h,1)}}
  finally{await w.setParameters(T_NORMAL).catch(()=>{})}
@@ -763,7 +819,7 @@ async function readCrop(blob,onStep){const first=await readOne(blob);if(first.ca
  cands.sort((a,b)=>b.s-a.s);return{cands:cands.slice(0,6),codes:first.codes,text}}
 
 /* leitura com IA (Google Gemini, plano gratuito) — opcional, só com rede */
-const READ_PROMPT=`As imagens são fotografias da etiqueta ou placa de UM equipamento técnico instalado numa obra (podem ser fotografias de um ecrã). Copia apenas o identificador do equipamento.
+const READ_PROMPT=`As imagens são fotografias da etiqueta ou placa de UM equipamento técnico instalado numa obra (podem ser fotografias de um ecrã, estar rodadas, de lado ou de pernas para o ar, e ter fundo verde de placa eletrónica). Copia apenas o identificador do equipamento.
 
 Responde só com um objeto JSON neste formato:
 {"id":string|null,"mac":string|null,"confianca":"alta"|"media"|"baixa","obs":string|null}
@@ -828,7 +884,7 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
   if(!all.length){src="local";
    if(!tessP)setReadMsgFor(id,navigator.onLine?"A preparar o leitor (só na primeira vez, pode demorar um pouco)…":"A preparar o leitor…","busy");
    for(let k=0;k<blobs.length;k++){const r=opts.crop?await readCrop(blobs[k],(a,n)=>setReadMsgFor(id,`A ler a zona recortada (${a} de ${n})…`,"busy"))
-     :await readOne(blobs[k],rot=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?" · a rodar a imagem":""}…`,"busy"));
+     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="g"?" · realce para fundo verde":""}…`,"busy"));
     for(const c of r.cands){const o=all.find(x=>x.k===c.k&&x.v===c.v);if(o)o.s=Math.max(o.s,c.s)+1;else all.push({...c})}}}
   all.sort((a,b)=>b.s-a.s);all=all.slice(0,6);
   const it=S.items.find(i=>i.id===id)||it0;
@@ -949,21 +1005,21 @@ $("planIn").onchange=async e=>{let files=[...e.target.files];e.target.value="";i
       const pg=await doc.getPage(pn);const r=await rasterPage(pg);busy.textContent="A enviar a planta"+tag+"…";const imgRef=await putFile(r.blob,"image/jpeg");
       const data={img:imgRef,pdf:pdfRef,page:pn,w:r.w,h:r.h};
       if(rep){await api.update("plans",rep,data);created++;firstId=rep}
-      else{const id=uid();await api.set("plans",id,{name:n>1?`${nm.floor} – pág. ${pn}`:nm.floor,order:order++,assignees:[],createdAt:now(),...data});created++;firstId=firstId||id}}
+      else{const id=uid();await api.set("plans",id,{name:n>1?`${nm.floor} – pág. ${pn}`:nm.floor,order:order++,assignees:[],folder:uploadFolder||null,createdAt:now(),...data});created++;firstId=firstId||id}}
     }else{busy.textContent="A preparar "+cleanName(f.name)+tag+"…";
      const im=new Image();const u=URL.createObjectURL(f);await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error("imagem inválida"));im.src=u});
      let w=im.naturalWidth,h=im.naturalHeight;URL.revokeObjectURL(u);const raster=(f.size>15e6||!/^image\/(png|jpeg|webp|gif)$/.test(f.type))?await shrink(f,6000,.9):f;
      if(raster!==f){const t=await createImageBitmap(raster);w=t.width;h=t.height}
      busy.textContent="A enviar a planta"+tag+"…";const imgRef=await putFile(raster,raster.type||"image/jpeg");const data={img:imgRef,pdf:null,page:1,w,h};
      if(rep){await api.update("plans",rep,data);created++;firstId=rep}
-     else{const id=uid();await api.set("plans",id,{name:nm.floor,order:order++,assignees:[],createdAt:now(),...data});created++;firstId=firstId||id}}
+     else{const id=uid();await api.set("plans",id,{name:nm.floor,order:order++,assignees:[],folder:uploadFolder||null,createdAt:now(),...data});created++;firstId=firstId||id}}
    }catch(err){fail.push(cleanName(f.name)+": "+err.message)}}
   if(firstId){S.planId=firstId;S.sel=null;loadedPlan=null}
   if(rep&&created)toast("Planta substituída. Os marcadores mantêm a posição.");
   else if(created)toast(created>1?`${created} pisos criados na obra. Escolhe o piso na lista do topo.`:"Piso criado. Escolhe Marcar equipamento para começar.");
   if(fail.length)toast("Não foi possível usar: "+fail.join("; "));
   render()}
- finally{replacing=null;busy.hidden=true}};
+ finally{replacing=null;uploadFolder=null;busy.hidden=true}};
 
 /* =========================================================
    Gestão: técnicos, fiscalização, resumo do dia, fecho de piso
@@ -1101,7 +1157,7 @@ function drawMarkers(cv,its,mode,colorMode){const cx=cv.getContext("2d"),W=cv.wi
   cx.beginPath();cx.arc(q.x,cy,R*.42,0,7);cx.fillStyle=hasIssue(q.it)?"#c2402f":"#fff";cx.fill()}
  return cv}
 $("exGo").onclick=async()=>{const p=plan();if(!p)return;const btn=$("exGo");btn.disabled=true;const fmt=$("exFmt").value,mode=$("exLbl").value,colorMode=$("exColor").value;
- try{const its=exportItems();if(!its.length){toast("Não há equipamentos colocados para incluir.");return}
+ try{const its=exportItems();if(!its.length&&!marksFor(p.id).length){toast("Não há equipamentos nem marcações para incluir.");return}
   btn.textContent="A desenhar a planta…";const base0=await planCanvas(p);if(p.ov&&$("exOv").value==="1")await drawOvOn(base0,p);const cv=drawMarkers(base0,its,mode,colorMode);
   const base=`Planta_${(p.name||"piso").replace(/[^\p{L}\p{N}]+/gu,"_").slice(0,50)}_${new Date().toISOString().slice(0,10)}`;
   btn.textContent="A preparar o ficheiro…";
@@ -1390,7 +1446,7 @@ function renderCoord(){
    <td style="white-space:nowrap">${it?`<button class="btn sm" data-goto="${esc(it.id)}">Ver</button>`:""} ${S.canWrite?`<button class="btn sm" data-resolve="${esc(x.id)}">Resolvida</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="6" class="muted">Sem anomalias abertas.</td></tr>`}
   </tbody></table></div>
  </section>
- ${teamSection()}${aiSection()}${dataSection()}${offlineSection()}
+ ${teamSection()}${mailSection()}${aiSection()}${dataSection()}${offlineSection()}
  <section class="block"><h2><span>Relatório para o cliente</span>
   <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="rpCsv">Descarregar CSV</button><button class="btn primary" id="rpHtml">Descarregar relatório</button></span></h2>
   <div class="rfilters">
@@ -1415,7 +1471,7 @@ function renderCoord(){
  W.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>openClose(b.dataset.close));
  wireCoordExtras(W);
  $("rfPlan").onchange=e=>{R.plan=e.target.value;render()};$("rfType").onchange=e=>{R.type=e.target.value;render()};$("rfStage").onchange=e=>{R.stage=e.target.value;render()};$("rfPhotos").onchange=e=>{R.photos=e.target.checked};
- wireTeam(W);wireData(W);wireAi(W);
+ wireTeam(W);wireMail(W);wireData(W);wireAi(W);
  $("rpCsv").onclick=()=>saveFile(`Equipamentos_${slug()}.csv`,"﻿"+reportCsv(rItems));
  $("rpHtml").onclick=async()=>{const b=$("rpHtml");b.disabled=true;b.textContent="A preparar…";try{await saveFile(`Relatorio_${slug()}.html`,await reportHtml(rItems))}finally{b.disabled=false;b.textContent="Descarregar relatório"}};
 }
@@ -1447,25 +1503,97 @@ $("asClose").onclick=()=>$("dlgAssign").close();
 /* =========================================================
    Equipa (contas e papéis)
    ========================================================= */
+const PERMS=[["Ver plantas, equipamentos e relatórios",["admin","coord","tecnico","fiscal","leitura"]],
+ ["Marcar equipamentos, fotos, ler etiquetas, checklists",["admin","coord","tecnico","fiscal"]],
+ ["Registar e resolver anomalias",["admin","coord","tecnico","fiscal"]],
+ ["Marcar Testado",["admin","coord","tecnico","fiscal"]],
+ ["Marcar Validado",["admin","coord"]],
+ ["Marcar Aceite",["admin","coord","fiscal"]],
+ ["Carregar e trocar plantas, pastas",["admin","coord","tecnico","fiscal"]],
+ ["Atribuir pisos e equipamentos, fecho de piso",["admin","coord"]],
+ ["Aprovar técnicos, fiscalização e só leitura",["admin","coord"]],
+ ["Nomear coordenação e administradores",["admin"]],
+ ["Configurar emails e leitura com IA, importar dados",["admin"]]];
+function isMgr(){return S.isAdmin||(S.isCoord&&!hasV2())||S.demo}
+function hasV2(){return members.some(m=>m.role==="admin")}
+function rolesICanGive(target){if(S.isAdmin)return ROLE_ORDER;if(S.isCoord&&!["admin","coord"].includes(target.role))return["tecnico","fiscal","leitura","pendente"];return[]}
 function teamSection(){if(S.demo)return"";
- const rows=members.map(m=>{const me=m.user_id===S.meId;const pend=m.role==="pendente";
+ const sorted=members.slice().sort((a,b)=>ROLE_ORDER.indexOf(a.role)-ROLE_ORDER.indexOf(b.role)||String(a.name).localeCompare(String(b.name),"pt"));
+ const rows=sorted.map(m=>{const me=m.user_id===S.meId;const pend=m.role==="pendente";const can=me?[]:rolesICanGive(m);
   return`<tr${pend?' class="pendrow"':""}><td>${personChip(m.user_id)}${me?` <small class="muted">(eu)</small>`:""}</td><td class="muted">${esc(m.email)}</td>
-   <td>${S.isCoord&&!me?`<select data-role="${esc(m.user_id)}" aria-label="Papel de ${esc(m.name)}">${Object.entries(ROLE_N).map(([k,n])=>`<option value="${k}"${m.role===k?" selected":""}>${k==="pendente"?"Sem acesso / por aprovar":n}</option>`).join("")}</select>`:esc(ROLE_N[m.role]||m.role)}</td>
-   <td>${S.isCoord&&pend?`<button class="btn sm primary" data-approve="${esc(m.user_id)}">Aprovar como técnico</button>`:""}</td></tr>`}).join("");
- return`<section class="block" id="teamSec"><h2><span>Equipa</span><span class="muted" style="font-family:var(--f-body);font-size:13px;text-transform:none;letter-spacing:0">${members.filter(m=>m.role!=="pendente").length} com acesso</span></h2>
-  <p class="muted" style="margin:0;font-size:13px">Cada pessoa cria a sua conta na página de entrada (email e palavra-passe). Depois a coordenação aprova-a aqui e escolhe o papel: <b>Técnico</b> (marca, fotografa, testa), <b>Fiscalização / cliente</b> (pode marcar <b>Aceite</b>) ou <b>Coordenação</b> (valida, atribui e gere a equipa).</p>
-  <div class="tbl"><table><thead><tr><th>Pessoa</th><th>Email</th><th>Papel</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="4" class="muted">Sem pessoas.</td></tr>`}</tbody></table></div></section>`}
+   <td>${can.length?`<select data-role="${esc(m.user_id)}" aria-label="Papel de ${esc(m.name)}">${can.map(k=>`<option value="${k}"${m.role===k?" selected":""}>${k==="pendente"?"Sem acesso / por aprovar":ROLE_N[k]}</option>`).join("")}</select>`:`<span class="rolepill r-${esc(m.role)}">${esc(ROLE_N[m.role]||m.role)}</span>`}</td>
+   <td>${can.length&&pend?`<button class="btn sm primary" data-approve="${esc(m.user_id)}">Aprovar como técnico</button>`:""}</td></tr>`}).join("");
+ const cols=ROLE_ORDER.filter(r=>r!=="pendente");
+ return`<section class="block" id="teamSec"><h2><span>Equipa e acessos</span><span class="muted" style="font-family:var(--f-body);font-size:13px;text-transform:none;letter-spacing:0">${members.filter(m=>m.role!=="pendente").length} com acesso</span></h2>
+  ${S.isCoord&&!hasV2()?`<div class="msg warn">Para usar a hierarquia completa (Administrador e Só leitura) e as notificações por email, corre no Supabase o ficheiro <b>supabase/atualizacao-2-acessos-notificacoes.sql</b> (ver LEIA-ME).</div>`:""}
+  <p class="muted" style="margin:0;font-size:13px">Cada pessoa cria a sua conta na página de entrada. Depois é aprovada aqui com um papel. O <b>Administrador</b> pode dar qualquer papel; a <b>Coordenação</b> aprova técnicos, fiscalização e só leitura.</p>
+  <div class="tbl"><table><thead><tr><th>Pessoa</th><th>Email</th><th>Papel</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="4" class="muted">Sem pessoas.</td></tr>`}</tbody></table></div>
+  <details class="perm"><summary>O que cada papel pode fazer</summary><div class="tbl"><table class="permt"><thead><tr><th></th>${cols.map(r=>`<th>${esc(ROLE_N[r])}</th>`).join("")}</tr></thead><tbody>
+   ${PERMS.map(([t,rs])=>`<tr><td>${esc(t)}</td>${cols.map(r=>`<td class="c">${rs.includes(r)?"✓":"–"}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details></section>`}
 async function setMemberRole(uid0,role){if(!sb||!navigator.onLine){toast("Precisas de rede para mudar a equipa.");return}
- if(role!=="coord"&&members.filter(m=>m.role==="coord"&&m.user_id!==uid0).length===0){toast("Tem de ficar pelo menos uma pessoa na coordenação.");render();return}
- const{error}=await sb.from("members").update({role}).eq("user_id",uid0);if(error){toast("Não foi possível mudar: "+error.message);return}
- await loadMembers();toast("Equipa atualizada.");render()}
+ const t=members.find(m=>m.user_id===uid0);
+ if(t&&t.role==="admin"&&role!=="admin"&&members.filter(m=>m.role==="admin").length<=1){toast("Tem de existir pelo menos um administrador.");render();return}
+ const{data,error}=await sb.from("members").update({role}).eq("user_id",uid0).select("user_id");
+ if(error||!data||!data.length){toast(error&&/check constraint/i.test(error.message)?"Este papel ainda não existe no servidor: corre a atualização 2 no Supabase (ver LEIA-ME).":error&&/administrador/i.test(error.message)?"Tem de existir pelo menos um administrador.":"Não tens permissão para dar este papel.");await loadMembers();render();return}
+ await loadMembers();toast(`${t?t.name:"Pessoa"}: ${ROLE_N[role]}.`);render()}
 function wireTeam(W){W.querySelectorAll("[data-role]").forEach(s=>s.onchange=()=>setMemberRole(s.dataset.role,s.value));
  W.querySelectorAll("[data-approve]").forEach(b=>b.onclick=()=>setMemberRole(b.dataset.approve,"tecnico"))}
 
 /* =========================================================
+   Notificações por email
+   - cada pessoa escolhe no Início se quer receber e o quê (tabela notif_prefs)
+   - o administrador configura o envio (Brevo, gratuito) em Coordenação
+   ========================================================= */
+let myPrefs=null,prefsState="";   // "", "loading", "missing" (sem atualização 2), "ok"
+const EV_N={ev_atribuido:"Quando me atribuem equipamentos ou pisos",ev_anomalia:"Anomalias novas e resolvidas",ev_etapas:"Mudanças de etapa que me dizem respeito (para validar, para aceitar, aceites)",ev_plantas:"Plantas novas ou trocadas"};
+async function loadPrefs(){if(!sb||S.demo||!navigator.onLine||prefsState==="loading")return;prefsState="loading";
+ const{data,error}=await sb.from("notif_prefs").select("*").eq("user_id",S.meId).maybeSingle();
+ if(error){prefsState=/does not exist|relation|schema cache/i.test(error.message)?"missing":"";myPrefs=null}else{prefsState="ok";myPrefs=data||{enabled:false,mode:"imediato",ev_atribuido:true,ev_anomalia:true,ev_etapas:true,ev_plantas:false}}render()}
+function notifCard(){if(S.demo||!isActive())return"";if(!prefsState&&navigator.onLine)setTimeout(loadPrefs,0);
+ const P=myPrefs;
+ return`<section class="block" id="notifSec"><h2><span>Notificações por email</span>${P&&P.enabled?`<span class="pill" style="--c:var(--ok)">Ligadas</span>`:""}</h2>
+  ${prefsState==="missing"?`<p class="muted" style="margin:0;font-size:13px">As notificações ainda não estão ativas no servidor. ${S.isCoord?"Corre a atualização 2 no Supabase (ver LEIA-ME).":"Fala com a coordenação."}</p>`
+  :!P?`<p class="muted" style="margin:0;font-size:13px">${navigator.onLine?"A carregar…":"Liga-te à rede para ver as tuas notificações."}</p>`
+  :`<div class="notif">
+    <label class="sw"><input type="checkbox" id="nfOn"${P.enabled?" checked":""}><span>Receber emails em <b>${esc(S.me&&S.me.email||"")}</b></span></label>
+    <div class="nfopts"${P.enabled?"":" hidden"}>
+     <div class="seg" role="group" aria-label="Frequência"><button type="button" data-nfmode="imediato" aria-pressed="${P.mode!=="diario"}">Na hora (a cada 5 min)</button><button type="button" data-nfmode="diario" aria-pressed="${P.mode==="diario"}">Resumo diário (~18h)</button></div>
+     ${Object.entries(EV_N).map(([k,t])=>`<label class="ck"><input type="checkbox" data-nfev="${k}"${P[k]?" checked":""}><span>${esc(t)}</span></label>`).join("")}
+    </div></div>`}</section>`}
+async function savePrefs(patch){if(!sb||!navigator.onLine){toast("Precisas de rede para mudar as notificações.");return}
+ myPrefs={...myPrefs,...patch};const{error}=await sb.from("notif_prefs").upsert({user_id:S.meId,...myPrefs,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+ if(error){toast("Não foi possível guardar: "+error.message);prefsState="";loadPrefs();return}render()}
+function wireNotif(W){const on=$("nfOn");if(!on)return;on.onchange=()=>{savePrefs({enabled:on.checked});toast(on.checked?"Notificações por email ligadas.":"Notificações por email desligadas.")};
+ W.querySelectorAll("[data-nfmode]").forEach(b=>b.onclick=()=>savePrefs({mode:b.dataset.nfmode}));
+ W.querySelectorAll("[data-nfev]").forEach(c=>c.onchange=()=>savePrefs({[c.dataset.nfev]:c.checked}))}
+/* configuração do envio (Administrador) */
+let mailSt=null,mailMsg="";
+async function loadMailStatus(){if(!sb||!navigator.onLine)return;const{data,error}=await sb.rpc("mail_status");mailSt=error?{missing:true}:data||{};render()}
+function mailSection(){if(S.demo||!S.isCoord)return"";if(mailSt===null&&navigator.onLine){mailSt={loading:true};setTimeout(loadMailStatus,0)}
+ const m=mailSt||{};
+ return`<section class="block" id="mailSec"><h2><span>Envio de emails</span><span class="pill" style="--c:${m.configured?"var(--ok)":"var(--muted)"}">${m.configured?"Configurado":"Por configurar"}</span></h2>
+  ${m.missing?`<div class="msg warn">Corre primeiro no Supabase a <b>atualização 2</b> (supabase/atualizacao-2-acessos-notificacoes.sql).</div>`:""}
+  <p class="muted" style="margin:0;font-size:13px">Os emails são enviados pelo <b>Brevo</b> (gratuito até 300 por dia), a partir do servidor da obra, de 5 em 5 minutos, com tudo junto num só email por pessoa. ${m.configured?`Remetente: <b>${esc(m.sender||"")}</b>.`:""}</p>
+  ${S.isAdmin?`<ol class="muted" style="margin:0;font-size:13px;padding-left:18px"><li>Cria conta grátis em <b>brevo.com</b>.</li><li>Em <b>Senders, domains &amp; dedicated IPs → Senders</b> junta o teu email (ex.: o teu Gmail) e confirma-o.</li><li>Em <b>SMTP &amp; API → API keys</b> carrega em <b>Generate a new API key</b> e cola-a aqui.</li></ol>
+  <div class="mailform"><input type="password" id="mlKey" autocomplete="off" placeholder="${m.configured?"Chave guardada. Cola outra para trocar":"Chave API do Brevo (xkeysib-…)"}">
+   <input type="email" id="mlFrom" placeholder="Email remetente confirmado no Brevo" value="${esc(m.sender||(S.me&&S.me.email)||"")}">
+   <input type="text" id="mlName" placeholder="Nome do remetente" value="${esc(m.name||"CostaPlan")}">
+   <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="mlSave">Guardar</button><button class="btn" id="mlTest"${m.configured?"":" disabled"}>Enviar email de teste</button></span></div>
+  <p id="mlMsg" class="muted" style="margin:0;font-size:13px">${esc(mailMsg)}</p>`:`<p class="muted" style="margin:0;font-size:13px">Só o administrador configura o envio.</p>`}</section>`}
+function wireMail(W){const say=t=>{mailMsg=t;const e=$("mlMsg");if(e)e.textContent=t};
+ const sv=$("mlSave");if(sv)sv.onclick=async()=>{const key=$("mlKey").value.trim(),from=$("mlFrom").value.trim(),name=$("mlName").value.trim();
+  if(!from||!/@/.test(from)){say("Escreve o email remetente (o mesmo que confirmaste no Brevo).");return}if(!key&&!(mailSt&&mailSt.configured)){say("Cola a chave API do Brevo.");return}
+  const{error}=await sb.rpc("set_mail_config",{p_key:key,p_sender:from,p_name:name,p_site:location.href.split("#")[0].split("?")[0]});
+  if(error){say("Não foi possível guardar: "+error.message);return}say("Guardado. Envia um email de teste.");mailSt=null;loadMailStatus()};
+ const ts=$("mlTest");if(ts)ts.onclick=async()=>{ts.disabled=true;say("A enviar…");const{error}=await sb.rpc("mail_test");
+  if(error){say("Não foi possível: "+error.message);ts.disabled=false;return}
+  setTimeout(async()=>{const{data}=await sb.rpc("mail_last_result");const st=data&&data.status;
+   say(st>=200&&st<300?`Enviado para ${S.me&&S.me.email}. Vê a caixa de correio (e o spam).`:st?`O Brevo recusou (código ${st}): ${String(data.body||"").slice(0,160)}. Confirma a chave e o remetente.`:"Pedido feito. Vê a caixa de correio daqui a um minuto.");ts.disabled=false},4000)}}
+
+/* =========================================================
    Importar os dados da Planta de Obra (Claude) ou uma cópia de segurança
    ========================================================= */
-function dataSection(){if(!S.isCoord)return"";
+function dataSection(){if(!isMgr())return"";
  return`<section class="block"><h2><span>Dados da obra</span></h2>
   <div class="datagrid">
    <div><b>Importar dados</b><p class="muted">Escolhe o ficheiro .zip criado na Planta de Obra do Claude (Coordenação → Exportar tudo) ou uma cópia de segurança desta app. Os pisos, plantas, equipamentos, fotos, anomalias e histórico ficam nesta obra. Importar o mesmo ficheiro duas vezes não duplica nada.</p>
@@ -1532,7 +1660,7 @@ async function saveFile(name,text){const t=/\.csv$/i.test(name)?"text/csv;charse
    Leitura de etiquetas com IA (Google Gemini, plano gratuito)
    ========================================================= */
 let aiMsg="";
-function aiSection(){if(!S.isCoord)return"";const a=aiCfg();
+function aiSection(){if(!isMgr())return"";const a=aiCfg();
  return`<section class="block" id="aiSec"><h2><span>Leitura de etiquetas com IA</span><span class="pill" style="--c:${a?"var(--ok)":"var(--muted)"}">${a?"Ligada":"Desligada"}</span></h2>
   <p class="muted" style="margin:0;font-size:13px">Opcional. Com uma chave gratuita da Google (Gemini), as fotos são lidas por IA quando há rede: lê muito melhor fotos desfocadas, de lado ou tiradas a um ecrã. Sem rede, ou se a IA falhar, a app usa o leitor do telemóvel. As fotos enviadas para leitura passam pelos servidores da Google.</p>
   <ol class="muted" style="margin:0;font-size:13px;padding-left:18px"><li>Abre <b>aistudio.google.com/apikey</b> com a tua conta Google e carrega em <b>Create API key</b>.</li><li>Copia a chave (começa por <b>AIza…</b>) e cola-a aqui.</li><li>Carrega em <b>Guardar</b> e depois em <b>Testar</b>.</li></ol>
@@ -1590,5 +1718,296 @@ $("crUse").onclick=async()=>{if(!crop)return;const{cv,itemId,r}=crop;let out=cv;
  addPhotos(it,[new File([b],"captura.jpg",{type:"image/jpeg"})])};
 $("dpShot").onclick=()=>screenShot();
 if(!canShot){const s=$("dpShot").querySelector("small");if(s)s.textContent="Cola uma captura que já tenhas copiado"}
+
+/* =========================================================
+   Início: apresentação do projeto, pastas e plantas
+   ========================================================= */
+let uploadFolder=null;
+function folders(){const f=L.meta&&L.meta.folders;return((f&&f.list)||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0)||String(a.name).localeCompare(String(b.name),"pt",{numeric:true}))}
+function folderName(id){const f=folders().find(x=>x.id===id);return f?f.name:""}
+function plansIn(fid){const ids=new Set(folders().map(f=>f.id));return S.plans.filter(p=>fid?p.folder===fid:!(p.folder&&ids.has(p.folder)))}
+async function saveFolders(list){await api.set("meta","folders",{list})}
+/* seletor de plantas agrupado por pasta */
+function planOptionsHtml(){const opt=x=>{const mine=(x.assignees||[]).includes(S.meId);return`<option value="${esc(x.id)}">${mine?"● ":""}${esc(x.name)}</option>`};
+ const fs=folders();if(!fs.length)return S.plans.map(opt).join("");
+ let h=fs.map(f=>{const ps=plansIn(f.id);return ps.length?`<optgroup label="${esc(f.name)}">${ps.map(opt).join("")}</optgroup>`:""}).join("");
+ const loose=plansIn(null);if(loose.length)h+=`<optgroup label="Sem pasta">${loose.map(opt).join("")}</optgroup>`;return h}
+/* miniaturas das plantas (geradas e guardadas só neste aparelho) */
+const thumbUrl={},thumbWait={};
+async function thumbOf(ref){if(!ref)return"";if(thumbUrl[ref])return thumbUrl[ref];if(thumbWait[ref])return thumbWait[ref];
+ thumbWait[ref]=(async()=>{const key="thumb:"+ref;let b=await IDBX.get("files",key).catch(()=>null);
+  if(!b){const src=await blobOf(ref);const bm=await createImageBitmap(src);const k=Math.min(1,520/Math.max(bm.width,bm.height));const cv=document.createElement("canvas");cv.width=Math.round(bm.width*k);cv.height=Math.round(bm.height*k);
+   const cx=cv.getContext("2d");cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(bm,0,0,cv.width,cv.height);b=await new Promise(r=>cv.toBlob(r,"image/jpeg",.8));IDBX.put("files",key,b).catch(()=>{})}
+  thumbUrl[ref]=URL.createObjectURL(b);return thumbUrl[ref]})();
+ try{return await thumbWait[ref]}finally{delete thumbWait[ref]}}
+function hydrateThumbs(root){root.querySelectorAll("img[data-thumb]").forEach(im=>{const r=im.dataset.thumb;if(im.dataset.done===r)return;im.dataset.done=r;
+ thumbOf(r).then(u=>{im.src=u;im.parentElement.classList.add("ok")}).catch(()=>{im.parentElement.classList.add("off")})})}
+const homeOpen=(()=>{try{return JSON.parse(localStorage.getItem("cp-folders-closed")||"{}")}catch(e){return{}}})();
+function renderHome(){const W=$("homeWrap");const its=S.items,c=counts(its),openI=S.issues.filter(x=>x.status!=="resolvida");
+ const mine=its.filter(i=>i.assignee===S.meId&&isTodo(i)).length,un=its.filter(i=>i.x==null).length;
+ const last=S.plans.find(p=>p.id===S.planId)||S.plans[0];
+ const fs=folders();const groups=fs.map(f=>({id:f.id,name:f.name,plans:plansIn(f.id)}));const loose=plansIn(null);
+ if(loose.length||!fs.length)groups.push({id:"",name:fs.length?"Sem pasta":"Plantas",plans:loose});
+ const card=p=>{const pi=its.filter(i=>i.planId===p.id),pc=counts(pi),oi=openI.filter(x=>x.planId===p.id).length,st=(p.close&&p.close.status)||"aberto";
+  return`<div class="pcard" data-open="${esc(p.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(p.name)}">
+   <div class="pthumb"><img data-thumb="${esc(p.img||"")}" alt=""><span class="pdoc">${p.pdf?"PDF":"IMG"}</span>${oi?`<span class="pbad">${oi} anomalia${oi>1?"s":""}</span>`:""}</div>
+   <div class="pbody"><b>${esc(p.name)}</b>${stackBar(pi)}<div class="pmeta"><span>${pc.total} equip.</span><span>${pct(pc.ge(3),pc.total)}% testado</span>${st!=="aberto"?`<span>${FLOOR_ST[st]}</span>`:""}</div>
+   ${S.canWrite&&fs.length?`<select class="pmove" data-move="${esc(p.id)}" aria-label="Mover para a pasta"><option value="">Sem pasta</option>${fs.map(f=>`<option value="${esc(f.id)}"${p.folder===f.id?" selected":""}>${esc(f.name)}</option>`).join("")}</select>`:""}</div></div>`};
+ W.innerHTML=`
+ <section class="hero">
+  <div class="htop"><div><span class="hk">Projeto</span><h2>${esc(S.meta.name||"A minha obra")}</h2>
+   <p>${S.plans.length} planta${S.plans.length===1?"":"s"}${fs.length?` em ${fs.length} pasta${fs.length===1?"":"s"}`:""} · ${c.total} equipamentos · ${S.me&&S.me.name&&!S.demo?esc(S.me.name)+" · "+esc(ROLE_N[S.role]||""):"Neste aparelho"}</p></div>
+   ${last?`<button class="btn primary" id="hmGo">Abrir ${esc(last.name)} →</button>`:""}</div>
+  <div class="htiles">
+   <div><span>Testados</span><b>${pct(c.ge(3),c.total)}%</b><small>${c.ge(3)} de ${c.total}</small></div>
+   <div><span>Aceites</span><b>${pct(c.aceite,c.total)}%</b><small>${c.aceite} de ${c.total}</small></div>
+   <button type="button" class="${mine?"warn":""}" id="hmMine"><span>Os meus por fazer</span><b>${mine}</b><small>ver lista</small></button>
+   <button type="button" class="${openI.length?"bad":""}" id="hmIss"><span>Anomalias abertas</span><b>${openI.length}</b><small>${un?un+" por colocar":"ver lista"}</small></button>
+  </div>${stackBar(its)}
+ </section>
+ <section class="block"><h2><span>Pastas e plantas</span>${S.canWrite?`<span class="hacts"><button class="btn" id="hmNewF">+ Nova pasta</button><button class="btn primary" id="hmNewP">+ Planta</button></span>`:""}</h2>
+  ${!S.plans.length?`<div class="empty">Ainda não há plantas. ${S.canWrite?"Cria uma pasta (ex.: <b>Piso 3</b>, <b>AVAC</b>, <b>Incêndio</b>) e carrega as plantas em PDF ou imagem.":""}</div>`:""}
+  ${groups.map(g=>{const closed=!!homeOpen[g.id||"_"];return`<div class="folder${closed?" closed":""}">
+   <div class="fhead"><button type="button" class="ftog" data-tog="${esc(g.id||"_")}" aria-expanded="${!closed}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.3l2 2h8.7A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg><b>${esc(g.name)}</b><span class="fcount">${g.plans.length}</span></button>
+    ${S.canWrite?`<span class="facts">${g.id?`<button class="btn sm" data-fedit="${esc(g.id)}">Renomear</button>`:""}<button class="btn sm" data-fadd="${esc(g.id)}">+ Planta</button></span>`:""}</div>
+   <div class="pgrid">${g.plans.map(card).join("")||`<div class="none">Pasta vazia. ${S.canWrite?"Carrega em + Planta para juntar plantas.":""}</div>`}</div></div>`}).join("")}
+ </section>${notifCard()}`;
+ hydrateThumbs(W);wireNotif(W);
+ const go=id=>{S.planId=id;S.sel=null;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
+ W.querySelectorAll("[data-open]").forEach(el=>{el.onclick=e=>{if(e.target.closest("select"))return;go(el.dataset.open)};el.onkeydown=e=>{if(e.key==="Enter")go(el.dataset.open)}});
+ const hg=$("hmGo");if(hg)hg.onclick=()=>go(last.id);
+ $("hmMine").onclick=()=>{S.filter="mine";const m=its.find(i=>i.assignee===S.meId&&isTodo(i));if(m)S.planId=m.planId;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
+ $("hmIss").onclick=()=>{S.filter=openI.length?"issues":"unplaced";const x=openI[0];if(x)S.planId=x.planId;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
+ W.querySelectorAll("[data-tog]").forEach(b=>b.onclick=()=>{const k=b.dataset.tog;homeOpen[k]=!homeOpen[k];try{localStorage.setItem("cp-folders-closed",JSON.stringify(homeOpen))}catch(e){}b.closest(".folder").classList.toggle("closed",!!homeOpen[k]);b.setAttribute("aria-expanded",!homeOpen[k])});
+ W.querySelectorAll("[data-move]").forEach(s=>{s.onclick=e=>e.stopPropagation();s.onchange=()=>{api.update("plans",s.dataset.move,{folder:s.value||null});toast(s.value?"Planta movida para "+folderName(s.value):"Planta tirada da pasta")}});
+ W.querySelectorAll("[data-fadd]").forEach(b=>b.onclick=()=>{uploadFolder=b.dataset.fadd||null;replacing=null;$("planIn").click()});
+ W.querySelectorAll("[data-fedit]").forEach(b=>b.onclick=()=>openFolder(b.dataset.fedit));
+ const nf=$("hmNewF");if(nf)nf.onclick=()=>openFolder(null);
+ const np=$("hmNewP");if(np)np.onclick=()=>{uploadFolder=null;replacing=null;$("planIn").click()}}
+/* criar / renomear / apagar pasta */
+let fdFor=null,fdArmed=false;
+function openFolder(id){fdFor=id;fdArmed=false;const f=folders().find(x=>x.id===id);$("fdTitle").textContent=f?"Pasta: "+f.name:"Nova pasta";$("fdName").value=f?f.name:"";
+ $("fdDel").hidden=!f||!S.isCoord;$("fdDel").textContent="Apagar pasta";$("fdDel").classList.remove("armed");$("dlgFolder").showModal();setTimeout(()=>$("fdName").focus(),50)}
+$("fdCancel").onclick=()=>$("dlgFolder").close();
+$("fdOk").onclick=async()=>{const n=$("fdName").value.trim();if(!n){$("fdName").focus();return}const list=folders();
+ if(fdFor){const f=list.find(x=>x.id===fdFor);if(f)f.name=n}else list.push({id:uid(),name:n,order:list.length});
+ await saveFolders(list);$("dlgFolder").close();toast(fdFor?"Pasta renomeada":"Pasta criada: "+n);render()};
+$("fdName").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("fdOk").click()}};
+$("fdDel").onclick=async()=>{const n=plansIn(fdFor).length;if(!fdArmed){fdArmed=true;$("fdDel").classList.add("armed");$("fdDel").textContent=n?`Confirmar: apagar a pasta (as ${n} plantas ficam em Sem pasta)`:"Confirmar apagar";return}
+ for(const p of plansIn(fdFor))await api.update("plans",p.id,{folder:null});await saveFolders(folders().filter(f=>f.id!==fdFor));$("dlgFolder").close();toast("Pasta apagada");render()};
+/* pasta da planta no diálogo Pisos */
+(()=>{const open0=$("btnFloor").onclick,close0=$("flClose").onclick;
+ $("btnFloor").onclick=()=>{open0();const p=plan();const sel=$("flFolder");sel.innerHTML=`<option value="">Sem pasta</option>`+folders().map(f=>`<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("");sel.value=p&&p.folder||"";sel.disabled=!p;$("flFolderWrap").hidden=!folders().length};
+ $("flClose").onclick=()=>{const p=plan(),v=$("flFolder").value||null;if(p&&(p.folder||null)!==v&&folders().length)api.update("plans",p.id,{folder:v});close0()};
+ $("flAdd").onclick=()=>{replacing=null;const p=plan();uploadFolder=p&&p.folder||null}})();
+
+/* =========================================================
+   Trocar a planta de um piso sem perder a posição dos IDs
+   - "mesmo enquadramento": revisão do desenho com a mesma folha → posições mantêm-se
+   - "alinhar com 2 pontos": desenho recortado, com outra escala ou rodado → as posições
+     são recalculadas a partir de 2 pontos de referência marcados nas duas plantas
+   A planta anterior fica guardada e pode ser reposta.
+   ========================================================= */
+S.swap=null;   // {pid, nd:{img,pdf,page,w,h}, od:{...}, stage:1|2|3, show:"old"|"new", src:[], dst:[], T}
+function simFrom(src,dst){const[s1,s2]=src,[d1,d2]=dst;const sx=s2.x-s1.x,sy=s2.y-s1.y,dx=d2.x-d1.x,dy=d2.y-d1.y,den=sx*sx+sy*sy;if(den<25)return null;
+ const a=(dx*sx+dy*sy)/den,b=(dy*sx-dx*sy)/den;return[a,b,d1.x-(a*s1.x-b*s1.y),d1.y-(b*s1.x+a*s1.y)]}
+const simApply=(T,x,y)=>({x:T[0]*x-T[1]*y+T[2],y:T[1]*x+T[0]*y+T[3]});
+const simCompose=(S2,T1)=>[S2[0]*T1[0]-S2[1]*T1[1],S2[0]*T1[1]+S2[1]*T1[0],S2[0]*T1[2]-S2[1]*T1[3]+S2[2],S2[1]*T1[2]+S2[0]*T1[3]+S2[3]];
+function simInv(T){const[a,b,tx,ty]=T,d=a*a+b*b,ia=a/d,ib=-b/d;return[ia,ib,-(ia*tx-ib*ty),-(ib*tx+ia*ty)]}
+/* posição de um equipamento na planta que está a ser mostrada (na pré-visualização da troca) */
+function swapPos(it){const W=S.swap;if(!W||W.show!=="new"||W.pid!==it.planId||!W.T)return{x:it.x,y:it.y};
+ const q=simApply(W.T,it.x*W.od.w,it.y*W.od.h);return{x:q.x/W.nd.w,y:q.y/W.nd.h}}
+function swapHidesPins(){const W=S.swap;return !!(W&&W.show==="new"&&!W.T)}
+function swapHint(){const W=S.swap;const n=(W.stage===1?W.src:W.dst).length+1;
+ if(W.stage===1)return`<b>Trocar planta · 1/3:</b> na planta <b>atual</b>, toca no <b>ponto ${n} de 2</b> (ex.: canto de um pilar, eixo de uma porta). Usa pontos afastados. <button class="btn sm" id="swCancel">Cancelar</button>`;
+ if(W.stage===2)return`<b>Trocar planta · 2/3:</b> agora na planta <b>nova</b>, toca no <b>mesmo ponto ${n}</b>. <button class="btn sm" id="swRedo">Recomeçar</button> <button class="btn sm" id="swCancel">Cancelar</button>`;
+ const out=swapOutside();
+ return`<b>Trocar planta · 3/3:</b> confere se os IDs ficaram no sítio certo na planta nova.${out?` <span style="color:var(--warn)">${out} ficam fora da planta.</span>`:""}
+  <span style="display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:4px"><button class="btn sm primary" id="swApply">Aplicar</button><button class="btn sm" id="swOld">${W.show==="new"?"Ver planta antiga":"Ver planta nova"}</button><button class="btn sm" id="swRedo">Refazer pontos</button><button class="btn sm" id="swCancel">Cancelar</button></span>`}
+function swapOutside(){const W=S.swap;if(!W||!W.T)return 0;let n=0;for(const it of S.items)if(it.planId===W.pid&&it.x!=null){const q=simApply(W.T,it.x*W.od.w,it.y*W.od.h);if(q.x<0||q.y<0||q.x>W.nd.w||q.y>W.nd.h)n++}return n}
+function wireSwapHint(){const W=S.swap;if(!W)return;
+ const c=$("swCancel");if(c)c.onclick=()=>{S.swap=null;loadedPlan=null;render();toast("Troca cancelada. A planta não mudou.")};
+ const r=$("swRedo");if(r)r.onclick=()=>{Object.assign(W,{stage:1,show:"old",src:[],dst:[],T:null});loadedPlan=null;render()};
+ const o=$("swOld");if(o)o.onclick=()=>{W.show=W.show==="new"?"old":"new";loadedPlan=null;render()};
+ const a=$("swApply");if(a)a.onclick=()=>commitSwap("pontos")}
+function swapClick(e){const W=S.swap;const pt=toPlan(e);if(!pt)return;
+ if(W.stage===1){W.src.push(pt);if(W.src.length===2){W.stage=2;W.show="new";loadedPlan=null;toast("Agora toca nos mesmos 2 pontos na planta nova.")}render();return}
+ if(W.stage===2){W.dst.push(pt);if(W.dst.length===2){
+   const T=simFrom(W.src.map(q=>({x:q.x*W.od.w,y:q.y*W.od.h})),W.dst.map(q=>({x:q.x*W.nd.w,y:q.y*W.nd.h})));
+   if(!T){toast("Os dois pontos estão demasiado próximos. Escolhe pontos mais afastados.");Object.assign(W,{stage:1,show:"old",src:[],dst:[]});loadedPlan=null;render();return}
+   W.T=T;W.stage=3}render()}}
+function swapMarkers(frag,p){const W=S.swap;if(!W||W.pid!==p.id)return;const pts=W.show==="old"?W.src:W.stage>=2?W.dst:[];
+ pts.forEach((q,i)=>{const el=document.createElement("div");el.className="alignpt swpt";el.dataset.n=i+1;el.style.left=q.x*p.w+"px";el.style.top=q.y*p.h+"px";el.style.scale=String(1/view.z);frag.appendChild(el)})}
+/* carregar o ficheiro da planta nova */
+async function swapFile(f){const p=plan();if(!p)return;const busy=$("busy");busy.hidden=false;
+ try{let nd;
+  if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){if(!window.pdfjsLib)throw new Error("leitor de PDF indisponível");busy.textContent="A abrir a planta nova…";
+   const buf=await f.arrayBuffer();const doc=await openPdf(buf);let pdfRef=null;
+   if(f.size<=50e6){pdfRef=await putFile(new Blob([buf],{type:"application/pdf"}),"application/pdf");pdfCache[pdfRef]=Promise.resolve(doc)}
+   busy.textContent="A preparar a planta nova…";const r=await rasterPage(await doc.getPage(1));const img=await putFile(r.blob,"image/jpeg");
+   nd={img,pdf:pdfRef,page:1,w:r.w,h:r.h};if(doc.numPages>1)toast(`O PDF tem ${doc.numPages} páginas: foi usada a página 1.`)}
+  else{busy.textContent="A preparar a planta nova…";const im=new Image();const u=URL.createObjectURL(f);await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error("imagem inválida"));im.src=u});
+   let w=im.naturalWidth,h=im.naturalHeight;URL.revokeObjectURL(u);const raster=(f.size>15e6||!/^image\/(png|jpeg|webp|gif)$/.test(f.type))?await shrink(f,6000,.9):f;
+   if(raster!==f){const t=await createImageBitmap(raster);w=t.width;h=t.height}nd={img:await putFile(raster,raster.type||"image/jpeg"),pdf:null,page:1,w,h}}
+  S.swap={pid:p.id,nd,od:{img:p.img,pdf:p.pdf||null,page:p.page||1,w:p.w,h:p.h},stage:0,show:"old",src:[],dst:[],T:null};
+  const same=Math.abs(nd.w/nd.h-p.w/p.h)<.01;
+  $("swInfo").textContent=`Planta nova: ${nd.w}×${nd.h} px${same?" (mesma proporção da atual)":" (proporção diferente da atual: recomenda-se alinhar com 2 pontos)"}. ${planItems(p.id).filter(i=>i.x!=null).length} IDs colocados neste piso.`;
+  $("swSame").classList.toggle("primary",same);$("swPts").classList.toggle("primary",!same);$("dlgSwap").showModal()}
+ catch(err){S.swap=null;toast("Não foi possível usar a planta nova: "+(err.message||"erro"))}finally{busy.hidden=true}}
+$("swSame").onclick=()=>{$("dlgSwap").close();commitSwap("igual")};
+$("swPts").onclick=()=>{$("dlgSwap").close();Object.assign(S.swap,{stage:1,show:"old"});S.sel=null;S.mode="nav";S.view="obra";loadedPlan=null;render();setTimeout(fit,40)};
+$("swNo").onclick=()=>{$("dlgSwap").close();S.swap=null;loadedPlan=null;render()};
+async function commitSwap(mode){const W=S.swap;if(!W)return;const p=S.plans.find(x=>x.id===W.pid);if(!p){S.swap=null;return}
+ const T=mode==="igual"?[W.nd.w/W.od.w,0,0,0]:W.T;  // "igual": as posições em percentagem mantêm-se
+ const its=S.items.filter(i=>i.planId===p.id&&i.x!=null);let moved=0;
+ if(mode!=="igual")for(const it of its){const q=simApply(T,it.x*W.od.w,it.y*W.od.h);const x=+(q.x/W.nd.w).toFixed(4),y=+(q.y/W.nd.h).toFixed(4);
+  if(x!==it.x||y!==it.y){moved++;await api.update("items",it.id,logPatch(it,{x,y,updatedAt:now(),updatedBy:S.meId},"Planta trocada: posição ajustada"))}}
+ const hist=[...(p.history||[]).slice(-9),{...W.od,at:now(),by:S.meId,mode,T}];
+ const patch={...W.nd,history:hist,updatedAt:now()};
+ if(p.ov&&p.ov.T)patch.ov={T:simCompose(T,p.ov.T)};if(p.fw&&p.fw.T)patch.fw={T:simCompose(T,p.fw.T)};
+ await api.update("plans",p.id,patch);S.swap=null;loadedPlan=null;render();setTimeout(fit,60);
+ toast(mode==="igual"?`Planta trocada. Os ${its.length} IDs mantêm a posição.`:`Planta trocada. ${moved} IDs reposicionados pelos 2 pontos de referência.`)}
+async function revertSwap(){const p=plan();const h=p&&(p.history||[]).slice(-1)[0];if(!h)return;const cur={w:p.w,h:p.h};
+ const Ti=h.mode==="igual"||!h.T?null:simInv(h.T);
+ if(Ti)for(const it of S.items.filter(i=>i.planId===p.id&&i.x!=null)){const q=simApply(Ti,it.x*cur.w,it.y*cur.h);
+  await api.update("items",it.id,logPatch(it,{x:+(q.x/h.w).toFixed(4),y:+(q.y/h.h).toFixed(4),updatedAt:now(),updatedBy:S.meId},"Planta anterior reposta: posição ajustada"))}
+ const patch={img:h.img,pdf:h.pdf,page:h.page||1,w:h.w,h:h.h,history:(p.history||[]).slice(0,-1),updatedAt:now()};
+ const Tb=h.T?simInv(h.T):null;if(Tb&&p.ov&&p.ov.T)patch.ov={T:simCompose(Tb,p.ov.T)};if(Tb&&p.fw&&p.fw.T)patch.fw={T:simCompose(Tb,p.fw.T)};
+ await api.update("plans",p.id,patch);loadedPlan=null;render();setTimeout(fit,60);toast("Planta anterior reposta.")}
+(()=>{const inp=document.createElement("input");inp.type="file";inp.accept="image/*,application/pdf";inp.hidden=true;inp.id="swapIn";$("dlgFloor").querySelector(".dlg").appendChild(inp);
+ inp.onchange=e=>{const f=e.target.files[0];e.target.value="";$("dlgFloor").close();if(f)swapFile(f)};
+ const rep=$("flReplace");rep.textContent="Trocar planta (manter os IDs no sítio)";rep.onclick=()=>inp.click();
+ const open1=$("btnFloor").onclick;$("btnFloor").onclick=()=>{open1();const p=plan();const n=(p&&p.history||[]).length;const b=$("flRevert");b.hidden=!n||!S.canWrite;
+  if(n){const h=p.history[n-1];b.textContent=`Repor planta anterior (${fmtDate(h.at)})`}};
+ $("flRevert").onclick=()=>{$("dlgFloor").close();revertSwap()}})();
+
+/* =========================================================
+   Assinalar no desenho: caneta, seta, linha, retângulo, elipse,
+   nuvem de revisão e texto, com cor, espessura e nota.
+   Cada marcação é um registo próprio (meta "mk_…"), por isso várias
+   pessoas podem assinalar ao mesmo tempo sem se apagarem umas às outras.
+   ========================================================= */
+const MK_TOOLS=[["select","Selecionar","M5 3l12 9-5 1 3 6-2 1-3-6-4 3z"],["pen","Caneta","M3 21l3-1 12-12-2-2L4 18zM15 5l2-2 4 4-2 2"],["arrow","Seta","M4 20L20 4M11 4h9v9"],["line","Linha","M4 20L20 4"],
+ ["rect","Retângulo","M4 6h16v12H4z"],["ellipse","Elipse","M12 5c5 0 9 3 9 7s-4 7-9 7-9-3-9-7 4-7 9-7z"],["cloud","Nuvem de revisão","M6 18a3 3 0 0 1 0-6 4 4 0 0 1 7-3 3 3 0 0 1 5 2 3 3 0 0 1 0 7z"],["text","Texto","M5 5h14M12 5v14"]];
+const MK_COLORS=["#d62d20","#f08c00","#1971c2","#2f9e44","#7048e8","#1d2421"];
+const MK_W=[["Fina",.0012],["Média",.0025],["Grossa",.005]];
+S.draw=null;     // {tool,color,w}
+S.mkSel=null;
+S.marksShow=(()=>{try{return localStorage.getItem("cp-marks")!=="0"}catch(e){return true}})();
+let mkLast=(()=>{try{return JSON.parse(localStorage.getItem("cp-mk-style")||"null")}catch(e){return null}})()||{color:MK_COLORS[0],w:1};
+const myMarks=[];   // criadas nesta sessão (para desfazer)
+function marksFor(pid){return Object.entries(L.meta||{}).filter(([id,v])=>id.startsWith("mk_")&&v&&v.planId===pid).map(([id,v])=>({id,...v})).sort((a,b)=>String(a.at).localeCompare(String(b.at)))}
+function mkStroke(m,p){return(MK_W[m.w]||MK_W[1])[1]*Math.max(p.w,p.h)}
+/* caminho SVG (em píxeis da planta) de cada marcação; serve também para o canvas das exportações */
+function mkPath(m,p){const P=(m.pts||[]).map(q=>[q[0]*p.w,q[1]*p.h]);if(!P.length)return"";const sw=mkStroke(m,p);
+ if(m.type==="pen")return P.map((q,i)=>(i?"L":"M")+q[0].toFixed(1)+" "+q[1].toFixed(1)).join("");
+ const[a,b]=[P[0],P[P.length-1]];
+ if(m.type==="line")return`M${a[0]} ${a[1]}L${b[0]} ${b[1]}`;
+ if(m.type==="arrow"){const ang=Math.atan2(b[1]-a[1],b[0]-a[0]),h=Math.max(sw*5,8),s=.45;
+  return`M${a[0]} ${a[1]}L${b[0]} ${b[1]}M${b[0]-h*Math.cos(ang-s)} ${b[1]-h*Math.sin(ang-s)}L${b[0]} ${b[1]}L${b[0]-h*Math.cos(ang+s)} ${b[1]-h*Math.sin(ang+s)}`}
+ const x0=Math.min(a[0],b[0]),y0=Math.min(a[1],b[1]),x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]);
+ if(m.type==="rect")return`M${x0} ${y0}H${x1}V${y1}H${x0}Z`;
+ if(m.type==="ellipse"){const cx=(x0+x1)/2,cy=(y0+y1)/2,rx=(x1-x0)/2||1,ry=(y1-y0)/2||1;return`M${cx-rx} ${cy}A${rx} ${ry} 0 1 0 ${cx+rx} ${cy}A${rx} ${ry} 0 1 0 ${cx-rx} ${cy}Z`}
+ if(m.type==="cloud"){const r=Math.max(sw*4,Math.min(x1-x0,y1-y0)/10,6);let d=`M${x0} ${y0}`;
+  const edge=(ax,ay,bx,by)=>{const L=Math.hypot(bx-ax,by-ay),n=Math.max(1,Math.round(L/(r*2)));for(let i=1;i<=n;i++){const x=ax+(bx-ax)*i/n,y=ay+(by-ay)*i/n,rr=L/n/2*1.15;d+=`A${rr} ${rr} 0 0 1 ${x} ${y}`}};
+  edge(x0,y0,x1,y0);edge(x1,y0,x1,y1);edge(x1,y1,x0,y1);edge(x0,y1,x0,y0);return d+"Z"}
+ return""}
+function mkFont(m,p){return Math.max(p.w,p.h)*({0:.010,1:.014,2:.022}[m.w]??.014)}
+/* desenho no ecrã (SVG dentro da planta: acompanha o zoom) */
+function renderMarks(p){mkSync();let svg=$("mkSvg");if(!svg){svg=document.createElementNS("http://www.w3.org/2000/svg","svg");svg.id="mkSvg";stage.appendChild(svg)}
+ if(!p||!S.marksShow&&!S.draw){svg.innerHTML="";svg.style.display="none";renderMkBar();return}
+ svg.style.display="";svg.setAttribute("viewBox",`0 0 ${p.w} ${p.h}`);svg.setAttribute("width",p.w);svg.setAttribute("height",p.h);
+ const sel=S.draw&&S.draw.tool==="select";svg.classList.toggle("selecting",!!sel);
+ const ms=marksFor(p.id).map(m=>{const T=swapMarkPos(m,p);return T});
+ svg.innerHTML=ms.map(m=>{const sw=mkStroke(m,p);const pick=m.id===S.mkSel;
+  if(m.type==="text"){const q=m.pts[0],fs=mkFont(m,p),x=q[0]*p.w,y=q[1]*p.h;const lines=String(m.text||"").split("\n");const wch=Math.max(...lines.map(l=>l.length),1)*fs*.58+fs*.8,hh=lines.length*fs*1.25+fs*.5;
+   return`<g data-mk="${esc(m.id)}" class="mk${pick?" pick":""}"><rect x="${x}" y="${y-fs*1.05}" width="${wch}" height="${hh}" rx="${fs*.25}" fill="#fff" fill-opacity=".88" stroke="${esc(m.color)}" stroke-width="${sw*.8}"/>
+    <text x="${x+fs*.4}" y="${y}" font-size="${fs}" fill="${esc(m.color)}" font-family="Arial,Helvetica,sans-serif" font-weight="700">${lines.map((l,i)=>`<tspan x="${x+fs*.4}" dy="${i?fs*1.25:0}">${esc(l)}</tspan>`).join("")}</text></g>`}
+  const d=mkPath(m,p);const note=m.text?`<title>${esc(m.text)}</title>`:"";
+  return`<g data-mk="${esc(m.id)}" class="mk${pick?" pick":""}">${note}<path d="${d}" fill="none" stroke="transparent" stroke-width="${Math.max(sw*8,14/view.z)}" class="hit"/><path d="${d}" fill="${m.type==="rect"||m.type==="ellipse"||m.type==="cloud"?esc(m.color):"none"}" fill-opacity="${m.fill?.12:0}" stroke="${esc(m.color)}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>${m.text&&m.type!=="pen"?mkNoteTag(m,p):""}</g>`}).join("")+(mkDraft?mkDraftSvg(p):"");
+ renderMkBar()}
+function mkNoteTag(m,p){const q=m.pts[m.pts.length-1],fs=mkFont({w:0},p);const t=String(m.text).split("\n")[0].slice(0,40);
+ return`<g class="mknote"><rect x="${q[0]*p.w+fs*.4}" y="${q[1]*p.h-fs*1.1}" width="${t.length*fs*.56+fs*.8}" height="${fs*1.5}" rx="${fs*.3}" fill="${esc(m.color)}"/><text x="${q[0]*p.w+fs*.8}" y="${q[1]*p.h}" font-size="${fs}" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-weight="700">${esc(t)}</text></g>`}
+function swapMarkPos(m,p){const W=S.swap;if(!W||W.show!=="new"||W.pid!==m.planId||!W.T)return m;return{...m,pts:m.pts.map(q=>{const r=simApply(W.T,q[0]*W.od.w,q[1]*W.od.h);return[r.x/W.nd.w,r.y/W.nd.h]})}}
+/* barra de ferramentas */
+function renderMkBar(){let bar=$("mkBar");if(!bar){bar=document.createElement("div");bar.id="mkBar";bar.className="mkbar";viewer.appendChild(bar)}
+ if(!S.draw||S.view!=="obra"){bar.hidden=true;renderMkPanel();return}bar.hidden=false;const D=S.draw;
+ bar.innerHTML=`<div class="mkrow">${MK_TOOLS.map(([k,n,ic])=>`<button type="button" class="mkt${D.tool===k?" on":""}" data-tool="${k}" title="${n}" aria-label="${n}" aria-pressed="${D.tool===k}"><svg viewBox="0 0 24 24"><path d="${ic}"/></svg></button>`).join("")}</div>
+  <div class="mkrow">${MK_COLORS.map(c=>`<button type="button" class="mkc${D.color===c?" on":""}" data-color="${c}" style="--k:${c}" aria-label="Cor"></button>`).join("")}
+   <select id="mkW" aria-label="Espessura">${MK_W.map(([n],i)=>`<option value="${i}"${D.w===i?" selected":""}>${n}</option>`).join("")}</select>
+   <label class="mkfill"><input type="checkbox" id="mkFill"${D.fill?" checked":""}> Preencher</label></div>
+  <div class="mkrow"><button type="button" class="btn sm" id="mkUndo"${myMarks.length?"":" disabled"}>Desfazer</button><label class="mkfill"><input type="checkbox" id="mkShow"${S.marksShow?" checked":""}> Mostrar marcações</label><button type="button" class="btn sm primary" id="mkDone">Concluir</button></div>`;
+ bar.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{D.tool=b.dataset.tool;if(D.tool!=="select")S.mkSel=null;render()});
+ bar.querySelectorAll("[data-color]").forEach(b=>b.onclick=()=>{D.color=b.dataset.color;saveMkStyle();const m=selMark();if(m)updMark(m.id,{color:D.color});render()});
+ $("mkW").onchange=e=>{D.w=+e.target.value;saveMkStyle();const m=selMark();if(m)updMark(m.id,{w:D.w});render()};
+ $("mkFill").onchange=e=>{D.fill=e.target.checked;saveMkStyle();const m=selMark();if(m)updMark(m.id,{fill:D.fill});render()};
+ $("mkShow").onchange=e=>{S.marksShow=e.target.checked;try{localStorage.setItem("cp-marks",S.marksShow?"1":"0")}catch(x){}render()};
+ $("mkUndo").onclick=()=>{const id=myMarks.pop();if(id&&L.meta[id]){api.del("meta",id);if(S.mkSel===id)S.mkSel=null;toast("Marcação desfeita")}render()};
+ $("mkDone").onclick=()=>{S.draw=null;S.mkSel=null;render()};
+ renderMkPanel()}
+function saveMkStyle(){mkLast={color:S.draw.color,w:S.draw.w,fill:!!S.draw.fill};try{localStorage.setItem("cp-mk-style",JSON.stringify(mkLast))}catch(e){}}
+/* painel da marcação selecionada: nota, apagar */
+function selMark(){return S.mkSel&&L.meta[S.mkSel]?{id:S.mkSel,...L.meta[S.mkSel]}:null}
+function renderMkPanel(){let pn=$("mkPanel");if(!pn){pn=document.createElement("div");pn.id="mkPanel";pn.className="mkpanel";viewer.appendChild(pn)}
+ const m=selMark();if(!m||S.view!=="obra"){pn.hidden=true;return}pn.hidden=false;
+ const mine=m.by===S.meId,canEd=S.canWrite&&(mine||S.isCoord);const tn={pen:"Traço",arrow:"Seta",line:"Linha",rect:"Retângulo",ellipse:"Elipse",cloud:"Nuvem",text:"Texto"}[m.type]||"Marcação";
+ if(pn.dataset.for===m.id&&pn.contains(document.activeElement))return;pn.dataset.for=m.id;
+ pn.innerHTML=`<div class="mkph"><b>${tn}</b><span class="muted">${esc(nameOf(m.by))} · ${fmtDate(m.at)}</span><button type="button" class="btn sm" id="mkpX" aria-label="Fechar">×</button></div>
+  <textarea id="mkpT" rows="${m.type==="text"?3:2}" placeholder="${m.type==="text"?"Texto":"Nota (opcional): o que se passa aqui?"}"${canEd?"":" readonly"}>${esc(m.text||"")}</textarea>
+  ${canEd?`<div class="mkpa"><button type="button" class="btn sm danger" id="mkpDel">Apagar</button><button type="button" class="btn sm primary" id="mkpOk">Guardar</button></div>`:""}`;
+ $("mkpX").onclick=()=>{S.mkSel=null;render()};
+ const ok=$("mkpOk");if(ok)ok.onclick=()=>{const t=$("mkpT").value.trim();if(m.type==="text"&&!t){api.del("meta",m.id);S.mkSel=null;render();return}updMark(m.id,{text:t});S.mkSel=null;render();toast("Marcação guardada")};
+ const dl=$("mkpDel");if(dl)dl.onclick=()=>{api.del("meta",m.id);S.mkSel=null;render();toast("Marcação apagada")};
+ if(m.type==="text"&&!m.text&&canEd)setTimeout(()=>$("mkpT")&&$("mkpT").focus(),30)}
+function updMark(id,patch){if(!S.canWrite){toast("Sem permissão para alterar.");return}api.update("meta",id,{...patch,editedAt:now(),editedBy:S.meId})}
+/* desenhar com o dedo / rato */
+let mkDraft=null;
+function mkDraftSvg(p){const m=mkDraft;const d=mkPath(m,p);return d?`<path d="${d}" fill="none" stroke="${m.color}" stroke-width="${mkStroke(m,p)}" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>`:""}
+function mkPt(e){const r=img.getBoundingClientRect();if(!r.width)return null;return[+Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)).toFixed(5),+Math.min(1,Math.max(0,(e.clientY-r.top)/r.height)).toFixed(5)]}
+viewer.addEventListener("pointerdown",e=>{if(!S.draw||e.button>0)return;if(e.target.closest(".zoom,.hint,.legend,#mkBar,#mkPanel"))return;
+ const p=plan();if(!p)return;const D=S.draw;
+ if(D.tool==="select"){const g=e.target.closest("[data-mk]");if(g){e.stopPropagation();e.stopImmediatePropagation();S.mkSel=g.dataset.mk;render()}else if(S.mkSel){S.mkSel=null;render()}return}
+ if(!S.canWrite){toast("Sem permissão para assinalar.");return}
+ e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();const q=mkPt(e);if(!q)return;
+ if(D.tool==="text"){createMark({type:"text",pts:[q],text:""},true);return}
+ mkDraft={type:D.tool,pts:[q,q],color:D.color,w:D.w};if(D.tool==="pen")mkDraft.pts=[q];
+ const id=e.pointerId;try{viewer.setPointerCapture(id)}catch(x){}
+ const mv=ev=>{if(ev.pointerId!==id||!mkDraft)return;const r=mkPt(ev);if(!r)return;
+  if(mkDraft.type==="pen"){const l=mkDraft.pts[mkDraft.pts.length-1];if(Math.hypot((r[0]-l[0])*p.w,(r[1]-l[1])*p.h)>Math.max(p.w,p.h)*.002/Math.max(view.z,.2)*.5)mkDraft.pts.push(r)}else mkDraft.pts[1]=r;renderMarks(p)};
+ const up=ev=>{if(ev.pointerId!==id)return;viewer.removeEventListener("pointermove",mv,true);viewer.removeEventListener("pointerup",up,true);viewer.removeEventListener("pointercancel",up,true);
+  const m=mkDraft;mkDraft=null;if(!m){render();return}
+  const span=Math.max(...m.pts.map(q=>q[0]))-Math.min(...m.pts.map(q=>q[0]))+Math.max(...m.pts.map(q=>q[1]))-Math.min(...m.pts.map(q=>q[1]));
+  if(span<.004||ev.type==="pointercancel"){render();return}
+  if(m.type==="pen"&&m.pts.length>400)m.pts=m.pts.filter((_,i)=>i%Math.ceil(m.pts.length/400)===0||i===m.pts.length-1);
+  createMark({type:m.type,pts:m.pts},false)};
+ viewer.addEventListener("pointermove",mv,true);viewer.addEventListener("pointerup",up,true);viewer.addEventListener("pointercancel",up,true)},true);
+viewer.addEventListener("pointermove",e=>{if(mkDraft)e.stopPropagation()},true);
+async function createMark(m,openPanel){const p=plan();if(!p)return;const id="mk_"+uid();const D=S.draw;
+ await api.set("meta",id,{planId:p.id,type:m.type,pts:m.pts,text:m.text||"",color:D.color,w:D.w,fill:!!D.fill,by:S.meId,at:now()});myMarks.push(id);
+ if(openPanel){D.tool="select";S.mkSel=id}render()}
+/* botão "Assinalar" na barra da obra */
+(()=>{const b=document.createElement("button");b.className="btn";b.id="btnMk";b.textContent="Assinalar";b.title="Desenhar e escrever notas na planta";$("btnExp").before(b);
+ b.onclick=()=>{if(S.draw){S.draw=null;S.mkSel=null}else{S.draw={tool:"pen",color:mkLast.color,w:mkLast.w??1,fill:!!mkLast.fill};S.mode="nav";S.sel=null;S.marksShow=true}render()}})();
+function mkSync(){const b=$("btnMk");if(b){b.hidden=!plan();b.classList.toggle("dark",!!S.draw);b.setAttribute("aria-pressed",!!S.draw)}}
+/* exportações: as marcações entram na planta descarregada e no auto de entrega */
+function drawMarksOn(cv,p){const k=cv.width/p.w,cx=cv.getContext("2d");cx.save();cx.scale(k,k);
+ for(const m of marksFor(p.id)){const sw=mkStroke(m,p);cx.lineCap="round";cx.lineJoin="round";
+  if(m.type==="text"){const q=m.pts[0],fs=mkFont(m,p),x=q[0]*p.w,y=q[1]*p.h,lines=String(m.text||"").split("\n");cx.font=`bold ${fs}px Arial`;const w=Math.max(...lines.map(l=>cx.measureText(l).width))+fs*.8,h=lines.length*fs*1.25+fs*.5;
+   cx.fillStyle="rgba(255,255,255,.88)";cx.strokeStyle=m.color;cx.lineWidth=sw*.8;cx.beginPath();cx.rect(x,y-fs*1.05,w,h);cx.fill();cx.stroke();cx.fillStyle=m.color;lines.forEach((l,i)=>cx.fillText(l,x+fs*.4,y+i*fs*1.25));continue}
+  const path=new Path2D(mkPath(m,p));if(m.fill&&["rect","ellipse","cloud"].includes(m.type)){cx.globalAlpha=.12;cx.fillStyle=m.color;cx.fill(path);cx.globalAlpha=1}
+  cx.strokeStyle=m.color;cx.lineWidth=sw;cx.stroke(path);
+  if(m.text){const q=m.pts[m.pts.length-1],fs=mkFont({w:0},p),t=String(m.text).split("\n")[0].slice(0,40);cx.font=`bold ${fs}px Arial`;const w=cx.measureText(t).width+fs*.8;cx.fillStyle=m.color;cx.fillRect(q[0]*p.w+fs*.4,q[1]*p.h-fs*1.1,w,fs*1.5);cx.fillStyle="#fff";cx.fillText(t,q[0]*p.w+fs*.8,q[1]*p.h)}}
+ cx.restore();return cv}
+const planCanvas0=planCanvas;
+planCanvas=async function(p){const cv=await planCanvas0(p);const inc=$("dlgExp").open?($("exMk")?$("exMk").value==="1":true):S.marksShow;if(inc&&marksFor(p.id).length)drawMarksOn(cv,p);return cv};
+/* trocar planta: as marcações acompanham os IDs */
+const commitSwap0=commitSwap;
+commitSwap=async function(mode){const W=S.swap;if(W&&mode!=="igual"&&W.T){for(const m of marksFor(W.pid)){const pts=m.pts.map(q=>{const r=simApply(W.T,q[0]*W.od.w,q[1]*W.od.h);return[+(r.x/W.nd.w).toFixed(5),+(r.y/W.nd.h).toFixed(5)]});await api.update("meta",m.id,{pts})}}return commitSwap0(mode)};
+const revertSwap0=revertSwap;
+revertSwap=async function(){const p=plan();const h=p&&(p.history||[]).slice(-1)[0];if(h&&h.mode!=="igual"&&h.T){const Ti=simInv(h.T);for(const m of marksFor(p.id)){const pts=m.pts.map(q=>{const r=simApply(Ti,q[0]*p.w,q[1]*p.h);return[+(r.x/h.w).toFixed(5),+(r.y/h.h).toFixed(5)]});await api.update("meta",m.id,{pts})}}return revertSwap0()};
+document.addEventListener("keydown",e=>{if(!S.draw||e.target.matches("input,textarea,select"))return;if((e.key==="Delete"||e.key==="Backspace")&&S.mkSel){const m=selMark();if(m&&(m.by===S.meId||S.isCoord)){api.del("meta",m.id);S.mkSel=null;render()}}
+ if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();$("mkUndo")&&$("mkUndo").click()}});
+function mkHint(){const t=S.draw.tool;return t==="select"?`<b>Assinalar · Selecionar:</b> toca numa marcação para lhe juntar uma nota, mudar a cor ou apagar. Arrasta fora das marcações para mover a planta.`
+ :t==="text"?`<b>Assinalar · Texto:</b> toca na planta onde queres escrever.`:`<b>Assinalar:</b> desenha na planta com o dedo ou o rato. Para mover a planta escolhe <b>Selecionar</b> (seta) ou usa os botões + e −.`}
 
 boot();
