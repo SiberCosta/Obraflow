@@ -54,7 +54,9 @@ const CFG=window.OBRA_CONFIG||{};
 const S={plans:[],items:[],issues:[],meta:{},ready:false,
  me:null,meId:null,role:null,isCoord:false,canWrite:false,local:false,demo:false,session:null,
  online:navigator.onLine,syncing:false,pending:0,lastSyncAt:null,
- view:"home",planId:null,sel:null,mode:"nav",filter:"todo",q:""};
+ view:"home",planId:null,sel:null,mode:"nav",filter:"todo",q:"",
+ projectId:null,projects:[],mp:false,pm:[]};      // projeto aberto, projetos com acesso, servidor com vários projetos
+const PK=(c,id,p)=>(p||S.projectId)+"|"+c+"|"+id;
 let sb=null;                       // cliente Supabase
 let sampleFn=true,sampleMax=2;      // leitura de etiquetas no aparelho (sempre disponível)
 const names={};                     // id -> {name}
@@ -84,9 +86,9 @@ function emit(c){const arr=Object.entries(L[c]).map(([id,v])=>({id,...v}));subsC
 const emitQ={};function emitSoon(c){if(emitQ[c])return;emitQ[c]=1;setTimeout(()=>{delete emitQ[c];emit(c)},0)}
 function deepMerge(a,b){const o={...(a||{})};for(const[k,v]of Object.entries(b)){o[k]=v&&typeof v==="object"&&!Array.isArray(v)&&o[k]&&typeof o[k]==="object"&&!Array.isArray(o[k])?deepMerge(o[k],v):v}return o}
 function onWriteErr(e){console.warn(e);toast("Não foi possível guardar no aparelho: "+((e&&e.message)||"erro"))}
-async function persist(c,id,data,deleted){
- try{if(deleted)await IDBX.del("docs",c+"|"+id);else await IDBX.put("docs",c+"|"+id,{col:c,id,data});
-  if(!S.demo){await IDBX.add("outbox",{t:"doc",col:c,id,data:deleted?{}:data,deleted:!!deleted});S.pending++;renderSync();scheduleFlush()}}
+async function persist(c,id,data,deleted){const P=S.projectId;
+ try{if(deleted)await IDBX.del("docs",PK(c,id,P));else await IDBX.put("docs",PK(c,id,P),{project:P,col:c,id,data});
+  if(!S.demo){await IDBX.add("outbox",{t:"doc",project:P,col:c,id,data:deleted?{}:data,deleted:!!deleted});S.pending++;renderSync();scheduleFlush()}}
  catch(e){onWriteErr(e)}}
 /* regra da obra: um equipamento com ID (ou MAC) registado conta sempre como Instalado e Endereçado */
 function autoStage(d){if(!d||!(String(d.devId||"").trim()||String(d.mac||"").trim()))return false;if(sIdx(d.stage)>=2)return false;
@@ -99,11 +101,15 @@ async function autoStageAll(){if(autoDone||!(S.canWrite||S.demo))return;autoDone
  if(n)toast(`${n} equipamento${n>1?"s":""} com ID passaram a Endereçado.`)}
 const api={
  sub(c,cb){subsC[c].push(cb);emit(c);return()=>{}},
- async set(c,id,data){if(!S.canWrite&&!S.demo&&c!=="meta"){toast("Sem permissão para alterar.");return}if(c==="items")autoStage(data);L[c][id]=data;emitSoon(c);await persist(c,id,data,false)},
- async update(c,id,patch){if(!L[c][id])return;const d=deepMerge(L[c][id],patch);if(c==="items")autoStage(d);L[c][id]=d;emitSoon(c);await persist(c,id,d,false)},
- async del(c,id){delete L[c][id];emitSoon(c);await persist(c,id,null,true)}};
-async function loadLocal(){const rows=await IDBX.all("docs").catch(()=>[]);L={plans:{},items:{},issues:{},meta:{}};
- for(const r of rows){const v=r.value;if(v&&L[v.col])L[v.col][v.id]=v.data}
+ async set(c,id,data){if(!S.projectId){toast("Escolhe primeiro um projeto.");return}if(!S.canWrite&&!S.demo&&c!=="meta"){toast("Sem permissão para alterar.");return}if(c==="items")autoStage(data);L[c][id]=data;emitSoon(c);await persist(c,id,data,false)},
+ async update(c,id,patch){if(!S.projectId||!L[c][id])return;const d=deepMerge(L[c][id],patch);if(c==="items")autoStage(d);L[c][id]=d;emitSoon(c);await persist(c,id,d,false)},
+ async del(c,id){if(!S.projectId)return;delete L[c][id];emitSoon(c);await persist(c,id,null,true)}};
+/* dados guardados antes de haver vários projetos passam para o projeto "p0" */
+async function migrateLocal(){if(await IDBX.get("kv","mig3").catch(()=>null))return;
+ const rows=await IDBX.all("docs").catch(()=>[]);for(const r of rows){const v=r.value;if(v&&!v.project){await IDBX.put("docs","p0|"+v.col+"|"+v.id,{...v,project:"p0"}).catch(()=>{});await IDBX.del("docs",r.key).catch(()=>{})}}
+ const ls=await IDBX.get("kv","lastSync").catch(()=>null);if(ls)await IDBX.put("kv","lastSync:p0",ls).catch(()=>{});await IDBX.put("kv","mig3",1).catch(()=>{})}
+async function loadLocal(){await migrateLocal();const rows=S.projectId?await IDBX.all("docs").catch(()=>[]):[];L={plans:{},items:{},issues:{},meta:{}};
+ for(const r of rows){const v=r.value;if(v&&v.project===S.projectId&&L[v.col])L[v.col][v.id]=v.data}
  S.pending=await IDBX.count("outbox").catch(()=>0);S.lastSyncAt=await IDBX.get("kv","lastSyncAt").catch(()=>null)}
 
 /* ---- sincronização com o Supabase ---- */
@@ -116,31 +122,37 @@ async function flush(){if(flushing||S.demo||!sb||!S.session||!navigator.onLine||
    if(b){const{error}=await sb.storage.from("ficheiros").upload(v.path,b,{contentType:b.type||v.type||"application/octet-stream",upsert:true});
     if(error&&!/exists|duplicate/i.test(error.message||""))throw error}
    await IDBX.del("outbox",r.key)}
-  const docs=rows.filter(x=>x.value.t==="doc");const last={};for(const r of docs)last[r.value.col+"|"+r.value.id]=r.value;
-  const batch=Object.values(last).map(v=>({col:v.col,id:v.id,data:v.data||{},deleted:!!v.deleted}));
-  for(let i=0;i<batch.length;i+=200){const{error}=await sb.from("docs").upsert(batch.slice(i,i+200),{onConflict:"col,id"});if(error)throw error}
+  // no servidor antigo (sem a atualização 3) só existe o projeto "p0"
+  const docs=rows.filter(x=>x.value.t==="doc"&&(S.mp||(x.value.project||"p0")==="p0"));const last={};for(const r of docs)last[(r.value.project||"p0")+"|"+r.value.col+"|"+r.value.id]=r.value;
+  const batch=Object.values(last).map(v=>({...(S.mp?{project:v.project||"p0"}:{}),col:v.col,id:v.id,data:v.data||{},deleted:!!v.deleted}));
+  for(let i=0;i<batch.length;i+=200){const{error}=await sb.from("docs").upsert(batch.slice(i,i+200),{onConflict:S.mp?"project,col,id":"col,id"});if(error)throw error}
   for(const r of docs)await IDBX.del("outbox",r.key)}
  catch(e){ok=false;console.warn("sync",e);if(/row-level security|permission/i.test((e&&e.message)||""))toast("O servidor recusou a alteração: a tua conta ainda não está aprovada.")}
  finally{flushing=false;S.pending=await IDBX.count("outbox").catch(()=>S.pending);S.syncing=false;renderSync();
   if(S.pending&&navigator.onLine)scheduleFlush(ok?800:15000)}}
-async function pull(){if(S.demo||!sb||!S.session||!navigator.onLine||!S.canWrite&&!isActive())return;
+async function pull(){if(S.demo||!sb||!S.session||!navigator.onLine||!S.canWrite&&!isActive()||!S.projectId)return;
  if(pulling){pullAgain=true;return}pulling=true;S.syncing=true;renderSync();
- try{const pend=new Set((await IDBX.all("outbox")).filter(x=>x.value.t==="doc").map(x=>x.value.col+"|"+x.value.id));
-  let since=(await IDBX.get("kv","lastSync"))||"1970-01-01T00:00:00Z",more=true;
-  while(more){const{data,error}=await sb.from("docs").select("col,id,data,deleted,updated_at").gt("updated_at",since).order("updated_at",{ascending:true}).limit(1000);
+ try{const pend=new Set((await IDBX.all("outbox")).filter(x=>x.value.t==="doc").map(x=>(x.value.project||"p0")+"|"+x.value.col+"|"+x.value.id));
+  const P=S.projectId;if(!S.mp&&P!=="p0")return;
+  let since=(await IDBX.get("kv","lastSync:"+P))||"1970-01-01T00:00:00Z",more=true;
+  while(more){let q=sb.from("docs").select("col,id,data,deleted,updated_at").gt("updated_at",since);if(S.mp)q=q.eq("project",P);
+   const{data,error}=await q.order("updated_at",{ascending:true}).limit(1000);
    if(error)throw error;
-   for(const r of data){if(!L[r.col]||pend.has(r.col+"|"+r.id))continue;
-    if(r.deleted){delete L[r.col][r.id];await IDBX.del("docs",r.col+"|"+r.id)}else{L[r.col][r.id]=r.data;await IDBX.put("docs",r.col+"|"+r.id,{col:r.col,id:r.id,data:r.data})}
-    emitSoon(r.col)}
+   const here=P===S.projectId;
+   for(const r of data){if(!L[r.col]||pend.has(P+"|"+r.col+"|"+r.id))continue;
+    if(r.deleted){if(here)delete L[r.col][r.id];await IDBX.del("docs",PK(r.col,r.id,P))}else{if(here)L[r.col][r.id]=r.data;await IDBX.put("docs",PK(r.col,r.id,P),{project:P,col:r.col,id:r.id,data:r.data})}
+    if(here)emitSoon(r.col)}
    if(data.length)since=data[data.length-1].updated_at;more=data.length===1000}
-  await IDBX.put("kv","lastSync",since);S.lastSyncAt=new Date().toISOString();await IDBX.put("kv","lastSyncAt",S.lastSyncAt)}
+  await IDBX.put("kv","lastSync:"+P,since);S.lastSyncAt=new Date().toISOString();await IDBX.put("kv","lastSyncAt",S.lastSyncAt)}
  catch(e){console.warn("pull",e)}
  finally{pulling=false;S.syncing=false;renderSync();if(pullAgain){pullAgain=false;pull()}}}
 async function syncNow(){await flush();await pull()}
 let rtChan=null,rtTimer=null;
 function realtime(){if(!sb||rtChan)return;
  rtChan=sb.channel("obra").on("postgres_changes",{event:"*",schema:"public",table:"docs"},()=>{clearTimeout(rtTimer);rtTimer=setTimeout(pull,400)})
-  .on("postgres_changes",{event:"*",schema:"public",table:"members"},()=>loadMembers().then(render)).subscribe()}
+  .on("postgres_changes",{event:"*",schema:"public",table:"members"},()=>loadMembers().then(render))
+  .on("postgres_changes",{event:"*",schema:"public",table:"projects"},()=>loadProjects().then(render))
+  .on("postgres_changes",{event:"*",schema:"public",table:"project_members"},()=>loadProjects().then(render)).subscribe()}
 window.addEventListener("online",()=>{S.online=true;renderSync();syncNow()});
 window.addEventListener("offline",()=>{S.online=false;renderSync()});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")syncNow()});
@@ -296,7 +308,7 @@ function hideAuth(){$("auth").hidden=true;document.body.classList.remove("authin
 function showPending(){const A=$("auth");A.hidden=false;document.body.classList.add("authing");
  A.innerHTML=`<div class="authcard"><h2>Conta à espera de aprovação</h2><p>Olá ${esc(nameOf(S.meId))}. A coordenação tem de aprovar a tua conta e escolher o teu papel (técnico ou fiscalização). Avisa-a de que já te registaste.</p>
   <button class="btn primary" id="pdCheck">Verificar de novo</button><button class="btn" id="pdOut">Sair</button></div>`;
- $("pdCheck").onclick=async()=>{await loadMembers();if(isActive()){hideAuth();render();syncNow()}else toast("Ainda à espera de aprovação.")};$("pdOut").onclick=signOut}
+ $("pdCheck").onclick=async()=>{await loadMembers();if(isActive()){hideAuth();await loadProjects();S.view="projects";render()}else toast("Ainda à espera de aprovação.")};$("pdOut").onclick=signOut}
 async function signOut(){const n=await IDBX.count("outbox").catch(()=>0);
  if(n&&!confirmOut){confirmOut=true;toast(`Há ${n} alterações por enviar. Liga-te à internet antes de sair, ou carrega em Sair outra vez para sair na mesma.`);setTimeout(()=>{confirmOut=false},6000);return}
  if(sb)await sb.auth.signOut().catch(()=>{});
@@ -308,7 +320,7 @@ async function startSession(session,offline){S.session=offline?null:session;S.me
  if(navigator.onLine)await loadMembers().catch(()=>{});
  if(!S.role){setRole("pendente")}
  if(!isActive()){showPending();return}
- hideAuth();S.ready=true;render();realtime();syncNow().then(autoStageAll)}
+ hideAuth();S.ready=true;await loadProjects();S.view="projects";render();realtime();flush()}
 
 /* =========================================================
    Arranque
@@ -319,12 +331,12 @@ async function boot(){
  api.sub("plans",a=>{S.plans=a.sort((x,y)=>(x.order||0)-(y.order||0)||String(x.name).localeCompare(String(y.name),"pt",{numeric:true}));pickPlan();S.ready=true;render()});
  api.sub("items",a=>{S.items=a;render()});
  api.sub("issues",a=>{S.issues=a;render()});
- api.sub("meta",a=>{const pr=a.find(x=>x.id==="project");S.meta=pr?(({id,...r})=>r)(pr):{};const pp=a.find(x=>x.id==="people");legacyPeople=(pp&&pp.map)||{};render()});
- if(S.demo){S.meId="demo";S.me={name:"Demonstração"};setRole("coord");S.ready=true;render();autoStageAll();return}
+ api.sub("meta",a=>{const pr=a.find(x=>x.id==="project");S.meta=pr?(({id,...r})=>r)(pr):{};syncMetaName();const pp=a.find(x=>x.id==="people");legacyPeople=(pp&&pp.map)||{};render()});
+ if(S.demo){S.meId="demo";S.me={name:"Demonstração"};setRole("coord");S.ready=true;await loadProjects();S.view="projects";render();return}
  sb=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
  sb.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY")askNewPassword();
   if(ev==="SIGNED_OUT"){S.session=null;showAuth()}
-  else if(session&&S.meId===session.user.id&&!S.session){S.session=session;loadMembers().then(render);realtime();syncNow()}});   // sessão renovada quando a rede volta
+  else if(session&&S.meId===session.user.id&&!S.session){S.session=session;loadMembers().then(render);loadProjects().then(render);realtime();syncNow()}});   // sessão renovada quando a rede volta
  let res=null;try{res=await sb.auth.getSession()}catch(e){res=null}
  const ses=res&&res.data&&res.data.session;
  if(ses){await startSession(ses);return}
@@ -533,7 +545,7 @@ function renderPins(){if(drag&&drag.moved&&drag.pin)return;
  stage.querySelectorAll(".pin,.ghost,.alignpt").forEach(e=>e.remove());const p=plan();if(!p){$("fwImg").hidden=true;$("ovImg").hidden=true;return}
  const frag=document.createDocumentFragment();
  for(const it of planItems()){if(it.x==null||swapHidesPins())continue;const el=document.createElement("div");const sp=swapPos(it);
-  el.className="pin"+(it.id===S.sel?" sel":"")+(S.multi&&S.multi.has(it.id)?" picked":"")+(hasIssue(it)?" issue":"")+(isDup(it)?" dup":"")+(inFilter(it,S.filter==="unplaced"?"all":S.filter)&&matchQ(it)?"":" dim");
+  el.className="pin"+(it.id===S.sel?" sel":"")+(S.multi&&S.multi.has(it.id)?" picked":"")+(hasIssue(it)?" issue":"")+(isDup(it)?" dup":"")+(["inconclusivo","fora"].includes(readStateOf(it))?" inc":"")+(inFilter(it,S.filter==="unplaced"?"all":S.filter)&&matchQ(it)?"":" dim");
   el.dataset.id=it.id;el.style.setProperty("--c",sOf(it.stage).c);el.style.left=sp.x*p.w+"px";el.style.top=sp.y*p.h+"px";el.style.scale=String(1/view.z);
   el.innerHTML=`<span class="tag"></span><svg class="mk" viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z"/><circle cx="12" cy="11.4" r="4.1"/></svg>`;el.querySelector(".tag").textContent=it.devId||it.mac||it.code;
   if(!it.devId&&!it.mac)el.classList.add("noid");
@@ -557,7 +569,7 @@ function renderList(){
   d.innerHTML=`<span class="sw"></span><span class="code"><span></span>${isDup(it)?`<span class="flag">ID REPETIDO</span>`:""}${hasIssue(it)?`<span class="flag">ANOMALIA</span>`:""}${isLate(it)?`<span class="flag" style="background:var(--warn)">ATRASO</span>`:""}</span>${st}<span class="meta"></span>`;
   const lab=it.devId||it.mac;d.querySelector(".code span").textContent=lab?`${lab} · ${it.code}`:it.code;
   const np=(it.photos||[]).length;
-  d.querySelector(".meta").textContent=[it.assignee&&(it.assignee===S.meId?"Meu":nameOf(it.assignee)),it.due&&"Prazo "+fmtDay(it.due),it.taskNo&&"Tarefa "+it.taskNo,it.model||tOf(it.type).n,it.devId&&"ID "+it.devId,it.mac&&"MAC "+it.mac,np&&`${np} foto${np>1?"s":""}`].filter(Boolean).join(" · ");
+  d.querySelector(".meta").textContent=[it.assignee&&(it.assignee===S.meId?"Meu":nameOf(it.assignee)),it.due&&"Prazo "+fmtDay(it.due),it.taskNo&&"Tarefa "+it.taskNo,it.model||tOf(it.type).n,it.devId&&"ID "+it.devId,it.mac&&"MAC "+it.mac,np&&`${np} foto${np>1?"s":""}`,(st=>st&&st!=="ok"?"⚠ "+RS_N[st]:"")(readStateOf(it))].filter(Boolean).join(" · ");
   if(S.multi){d.classList.toggle("picked",S.multi.has(it.id));d.insertAdjacentHTML("afterbegin",`<span class="tick" aria-hidden="true">${S.multi.has(it.id)?"✓":""}</span>`);d.onclick=()=>toggleMulti(it.id)}
   else d.onclick=()=>{select(it.id);centerOn(it)};d.onkeydown=e=>{if(e.key==="Enter")d.onclick()};L.appendChild(d)}
 }
@@ -853,7 +865,7 @@ async function refineAt(P,full,k,w,votes){const b=w.bbox||{};const h=(b.y1-b.y0)
  const box={x0:Math.max(0,b.x0*k-h*.5),y0:Math.max(0,b.y0*k-h*.6),x1:Math.min(full.width,(isId?b.x0*k+h*11:b.x1*k+h*.6)),y1:Math.min(full.height,b.y1*k+h*.6)};
  if(box.x1-box.x0<h||box.y1-box.y0<4)return;
  for(const[H,ch,soft]of[[56,"lum",0],[56,"g",0],[80,"lum",1]]){const r=await P.line.recognize(lineCut(full,box,H,ch,soft));lineVotes(r.data&&r.data.text,votes,1)}}
-async function readOne(blob,onStep){const codes=await readCodes(blob);let cands=applyPattern(candsFrom("",codes));if(cands.length&&cands[0].s>=9)return{cands,codes,text:""};
+async function readOne(blob,onStep,deep){const codes=await readCodes(blob);let cands=applyPattern(candsFrom("",codes));if(cands.length&&cands[0].s>=9)return{cands,codes,text:""};
  const P=await pool();let text="";const votes={};
  const strongNow=()=>{const best=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];return best&&best[1]>=2.5};
  // 1) leitura rápida da foto inteira (imagem reduzida) em cada orientação, normal e pelo canal verde, em paralelo
@@ -869,7 +881,7 @@ async function readOne(blob,onStep){const codes=await readCodes(blob);let cands=
   cands=applyPattern([...candsFrom(text,codes),...Object.entries(votes).map(([v,n])=>({k:"id",v,s:n>=2.5?10.5:n>=1.5?8:6}))]);
   if(cands.length&&cands[0].s>=10)return{cands,codes,text}}
  // 3) último recurso: foto inteira em alta resolução, direita
- for(const ch of["lum","g"]){onStep&&onStep(0,ch);const r=await P.a[0].recognize(await textCanvas(blob,0,ch,1700));text+="\n"+(r.data.text||"");cands=applyPattern([...candsFrom(text,codes),...Object.entries(votes).map(([v,n])=>({k:"id",v,s:n>=2.5?10.5:n>=1.5?8:6}))]);if(cands.length&&cands[0].s>=10)break}
+ for(const[rot,ch]of deep?[[0,"lum"],[0,"g"],[90,"lum"],[270,"lum"],[180,"lum"],[90,"g"],[270,"g"]]:[[0,"lum"],[0,"g"]]){onStep&&onStep(rot,ch);const r=await P.a[0].recognize(await textCanvas(blob,rot,ch,deep?2200:1700));text+="\n"+(r.data.text||"");cands=applyPattern([...candsFrom(text,codes),...Object.entries(votes).map(([v,n])=>({k:"id",v,s:n>=2.5?10.5:n>=1.5?8:6}))]);if(cands.length&&cands[0].s>=10)break}
  return{cands,codes,text}}
 /* zona recortada (só a linha do ID): várias leituras com tamanhos e nitidez diferentes, e votação */
 function lineCanvas(bm,Ht,soft){const s=Ht/bm.height;const w=Math.max(8,Math.round(bm.width*s));const cv=document.createElement("canvas");cv.width=w;cv.height=Ht;
@@ -949,11 +961,41 @@ function renderReadMsg(it){const h=$("readMsg");if(!h)return;let m=readMsg&&read
     logPatch(cur0,patch,(c.k==="mac"?"MAC: ":"ID: ")+c.v);api.update("items",it.id,patch);readMsg=null;const o=findDup(it.id,fld,c.v);if(o)toast(`${c.k==="mac"?"MAC":"ID"} ${c.v} repetido com ${o.code}. Ficou guardado e marcado a vermelho.`);sheetFor=null;render()};w.appendChild(b)});
   el.appendChild(w)}
  if(wantCrop){const b=document.createElement("button");b.type="button";b.className="btn sm";b.style.cssText="margin-top:8px;display:block";b.textContent="Recortar a zona do ID e ler de novo";b.onclick=()=>cropFromPhoto(it.id);el.appendChild(b)}}
-async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.items.find(i=>i.id===id);if(!it0||readingId)return;
- const refs=(it0.photos||[]).slice(-sampleMax);if(!refs.length&&!blobsIn){setReadMsgFor(id,"Tira primeiro uma foto da etiqueta.","warn");return}
- readingId=id;lastReadErr=null;const br=$("btnRead");if(br)br.disabled=true;setReadMsgFor(id,"A ler a etiqueta no aparelho…","busy");
+/* fila de leitura: as fotos continuam a ser lidas em segundo plano, mesmo com a ficha fechada ou noutro piso.
+   1.ª tentativa normal; se não chegar, 2.ª tentativa mais profunda (todas as fotos, todas as orientações em alta resolução).
+   Se mesmo assim não houver certeza, o equipamento fica "Leitura inconclusiva" com as leituras possíveis para escolher. */
+const RQ=[];let rqBusy=false;const rqFail={};
+function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};if(!S.items.some(i=>i.id===id))return;
+ const user=!!(overwrite||opts.crop);const i=RQ.findIndex(x=>x.id===id);if(i>=0)RQ.splice(i,1);
+ const o={id,overwrite,blobs:blobsIn,opts,pid:S.projectId};if(user)RQ.unshift(o);else RQ.push(o);
+ if(rqBusy&&readingId!==id)setReadMsgFor(id,RQ.indexOf(o)>0?`Na fila de leitura (${RQ.indexOf(o)+1}.º)… podes fechar a ficha, a leitura continua.`:"A seguir: leitura desta etiqueta… podes fechar a ficha.","busy");
+ bgBadge();runRQ()}
+async function runRQ(){if(rqBusy)return;rqBusy=true;
+ try{while(RQ.length){const o=RQ.shift();bgBadge();if(o.pid!==S.projectId||!S.items.some(i=>i.id===o.id))continue;
+   const deepNext=!o.opts.deep&&!o.opts.crop;
+   let r=await readLabelNow(o.id,o.overwrite,o.blobs,{...o.opts,willRetry:deepNext});
+   if(r&&r.state==="retry"&&o.pid===S.projectId){bgBadge(o.id);r=await readLabelNow(o.id,o.overwrite,null,{...o.opts,deep:true})}
+   if(r&&r.state==="erro")rqFail[o.id]=Date.now()}}
+ finally{rqBusy=false;bgBadge()}}
+/* estado da leitura de cada equipamento */
+function readStateOf(it){const id=String(it.devId||"").trim().toUpperCase();
+ if(id||String(it.mac||"").trim()){const R=refSet();return id&&R&&!R.has(id)?"fora":"ok"}
+ if(!(it.photos||[]).length)return"";
+ if(readingId===it.id||RQ.some(x=>x.id===it.id)||it.readState==="a_ler"&&!it.readAt)return"a_ler";
+ return it.readAt?"inconclusivo":"pendente"}
+const RS_N={ok:"Lido",fora:"Não consta da lista",a_ler:"A ler…",inconclusivo:"Inconclusivo",pendente:"Por ler"};
+/* procura fotos que ainda não foram lidas (ex.: tiradas e fechadas sem ler) e põe-nas na fila */
+function bgScan(){if(!S.canWrite||!S.projectId||!sampleFn)return;const t=Date.now();let n=0;
+ for(const it of S.items){if(readStateOf(it)!=="pendente"||RQ.some(x=>x.id===it.id)||rqFail[it.id]&&t-rqFail[it.id]<6e5)continue;RQ.push({id:it.id,overwrite:false,blobs:null,opts:{},pid:S.projectId});n++}
+ if(n){bgBadge();runRQ()}}
+setInterval(()=>{if(document.visibilityState==="visible")bgScan()},45000);
+function bgBadge(){let b=$("bgRead");if(!b){const s=$("syncBox");if(!s)return;b=document.createElement("button");b.type="button";b.id="bgRead";b.className="bgread";b.title="Leitura de etiquetas em segundo plano";s.after(b);b.onclick=()=>{if(S.projectId)go("ids")}}
+ const n=RQ.length+(rqBusy?1:0);b.hidden=!n;b.innerHTML=`<i></i>A ler etiquetas${n>1?` · ${n}`:""}`}
+async function readLabelNow(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.items.find(i=>i.id===id);if(!it0)return null;
+ const refs=(it0.photos||[]).slice(opts.deep?-4:-sampleMax);if(!refs.length&&!blobsIn){setReadMsgFor(id,"Tira primeiro uma foto da etiqueta.","warn");return null}
+ readingId=id;lastReadErr=null;const br=$("btnRead");if(br)br.disabled=true;setReadMsgFor(id,opts.deep?"Ainda sem certeza: a ler de novo com mais detalhe (todas as fotos e orientações)…":"A ler a etiqueta no aparelho…","busy");
  let aiErr=null;
- try{let blobs=blobsIn&&blobsIn.length?blobsIn.slice(-sampleMax):[];
+ try{let blobs=blobsIn&&blobsIn.length?blobsIn.slice(opts.deep?-4:-sampleMax):[];
   if(!blobs.length)for(const r of refs){try{blobs.push(await bestBlobOf(r))}catch(e){}}
   if(!blobs.length)throw new Error("a foto não está disponível neste aparelho");
   let all=[],src="local",aiObs="";aiErr=null;
@@ -966,22 +1008,27 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
    // começa pela foto principal (a mais recente, em qualidade máxima); só lê as outras se esta não chegar
    const order=blobs.map((b,i)=>i).reverse();
    for(let n=0;n<order.length;n++){const k=order[n];if(n>0&&all.some(c=>c.k==="id"&&c.s>=10))break;const r=opts.crop?await readCrop(blobs[k],(a,n)=>setReadMsgFor(id,`A ler a zona recortada (${a} de ${n})…`,"busy"))
-     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${n+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="zoom"?" · a confirmar o código":""}…`,"busy"));
+     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`${opts.deep?"Leitura detalhada":"A ler a etiqueta"}${blobs.length>1?` (foto ${n+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="zoom"?" · a confirmar o código":""}…`,"busy"),opts.deep);
     for(const c of r.cands){const o=all.find(x=>x.k===c.k&&x.v===c.v);if(o)o.s=Math.max(o.s,c.s)+1;else all.push({...c})}}}
-  all.sort((a,b)=>b.s-a.s);all=all.slice(0,6);
+  all=refFix(all,id);all.sort((a,b)=>b.s-a.s);all=all.slice(0,6);
   const it=S.items.find(i=>i.id===id)||it0;
   const ids=all.filter(c=>c.k==="id"),macs=all.filter(c=>c.k==="mac");
-  const bestId=ids[0]&&ids[0].s>=5?ids[0]:null;   // validação automática: fica o melhor candidato; os outros ficam para corrigir com um toque
+  let bestId=ids[0]&&ids[0].s>=5?ids[0]:null;   // validação automática: fica o melhor candidato; os outros ficam para corrigir com um toque
+  const RF=refSet();let incWhy="";
+  if(bestId&&RF&&!RF.has(bestId.v)){incWhy=`li ${bestId.v}, mas não consta da lista de IDs do projeto`;bestId=null}
+  else if(bestId&&!RF&&ids[1]&&ids[1].s>=5&&bestId.s-ids[1].s<1&&!bestId.v.startsWith(ids[1].v)&&!ids[1].v.startsWith(bestId.v)){incWhy=`há duas leituras possíveis (${ids[0].v} ou ${ids[1].v})`;bestId=null}
   const bestMac=macs[0]&&macs[0].s>=8?macs[0]:null;
   const patch={},filled=[];let dup=null;
   const got={devId:bestId?bestId.v:"",mac:!bestId&&bestMac?bestMac.v:""};
   if(bestId&&bestMac&&!it.mac)got.mac=bestMac.v;
   for(const[k,v]of Object.entries(got))if(v&&(overwrite||!it[k])){const o=findDup(it.id,k,v);if(o&&!dup)dup={field:k,value:v,other:o};patch[k]=v;filled.push(k)}
-  const conf=bestId&&bestId.s>=10||(!bestId&&bestMac)?"alta":"media";
+  const conf=bestId&&(bestId.s>=10||bestId.ref)||(!bestId&&bestMac)?"alta":"media";
   const txt=got.devId?"ID "+got.devId:got.mac?"MAC "+got.mac:"";
   patch.readCands=all.map(({k,v,s})=>({k,v,s}));patch.readAt=now();patch.readConf=txt?conf:"baixa";
   const by=src==="ai"?"Lido pela IA":"Lido no aparelho";
-  patch.readNote=txt?`${by}: ${txt}`+(conf!=="alta"?". Se não estiver certo, toca na leitura correta abaixo ou escreve o ID.":" (validado automaticamente)."):all.length?"Não tenho a certeza de qual é o ID. Escolhe abaixo o valor certo, ou escreve-o.":opts.crop?"Não consegui ler a zona recortada. Escreve o ID, ou tira outra foto mais nítida.":"Não consegui ler o ID nesta foto. Recorta a zona do ID, tira outra foto mais perto e nítida, ou escreve o ID.";
+  const retry=!txt&&opts.willRetry;
+  patch.readState=txt?"ok":retry?"a_ler":"inconclusivo";if(retry)delete patch.readAt;
+  patch.readNote=txt?`${by}: ${txt}`+(bestId&&bestId.ref==="fix"?` (a foto dizia ${bestId.from}; corrigido pela lista de IDs)`:"")+(conf!=="alta"?". Se não estiver certo, toca na leitura correta abaixo ou escreve o ID.":bestId&&bestId.ref?" (confirmado pela lista de IDs).":" (validado automaticamente)."):retry?"Ainda sem certeza: vou ler de novo com mais detalhe…":incWhy?`Leitura inconclusiva: ${incWhy}. Escolhe abaixo o ID certo, ou escreve-o.`:all.length?"Leitura inconclusiva: não tenho a certeza de qual é o ID. Escolhe abaixo o valor certo, ou escreve-o.":opts.crop?"Não consegui ler a zona recortada. Escreve o ID, ou tira outra foto mais nítida.":"Leitura inconclusiva: não consegui ler o ID nas fotos. Recorta a zona do ID, tira outra foto mais perto e nítida, ou escreve o ID.";
   if(dup)patch.readNote=`${by}: ${dup.field==="mac"?"MAC":"ID"} ${dup.value}. Atenção: está repetido com ${dup.other.code}.`;
   if(src==="ai"&&aiObs)patch.readNote+=" "+aiObs;
   if(aiErr)patch.readNote+=` (Leitura com IA indisponível: ${aiErr}.)`;
@@ -991,8 +1038,9 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
   await api.update("items",id,patch);readMsg=null;
   if(dup)toast(`${dup.field==="mac"?"MAC":"ID"} ${dup.value} repetido com ${dup.other.code}. Ficou guardado e marcado a vermelho.`);
   if(S.sel===id){sheetFor=null;S.shTab="det";render();requestAnimationFrame(()=>requestAnimationFrame(()=>{filled.forEach(k=>{const el=$("ed_"+k);if(el)el.classList.add("auto")});
-   if(!txt){const el=$("ed_devId");if(el){el.focus();el.classList.add("need")}}}))}
- }catch(e){lastReadErr="error";setReadMsgFor(id,(aiErr?`A leitura com IA falhou (${aiErr}) e o leitor do telemóvel também: `:"Não foi possível ler a etiqueta: ")+(e.message||"erro")+". Escreve o ID ou tenta mais tarde.","err")}
+   if(!txt&&!retry){const el=$("ed_devId");if(el){el.focus();el.classList.add("need")}}}))}
+  return{state:txt?"ok":retry?"retry":"inconclusivo"}
+ }catch(e){lastReadErr="error";setReadMsgFor(id,(aiErr?`A leitura com IA falhou (${aiErr}) e o leitor do telemóvel também: `:"Não foi possível ler a etiqueta: ")+(e.message||"erro")+". Escreve o ID ou tenta mais tarde.","err");return{state:"erro"}}
  finally{readingId=null;const b2=$("btnRead");if(b2)b2.disabled=false}}
 async function askPermission(){}
 
@@ -2270,12 +2318,34 @@ function equipPage(){const L2=equipList();const ppl=[...new Set(S.items.map(i=>i
   <select id="eqS"><option value="">Todas as etapas</option>${STAGES.map(s=>`<option value="${s.k}"${EQ.stage===s.k?" selected":""}>${s.n}</option>`).join("")}</select>
   <select id="eqW"><option value="">Todos os responsáveis</option><option value="-"${EQ.who==="-"?" selected":""}>Sem responsável</option>${ppl.map(id=>`<option value="${esc(id)}"${EQ.who===id?" selected":""}>${esc(nameOf(id))}</option>`).join("")}</select>
   <select id="eqO"><option value="">Todos</option><option value="noid"${EQ.only==="noid"?" selected":""}>Sem ID</option><option value="iss"${EQ.only==="iss"?" selected":""}>Com anomalia</option><option value="late"${EQ.only==="late"?" selected":""}>Em atraso</option><option value="unpl"${EQ.only==="unpl"?" selected":""}>Por colocar na planta</option></select>
-  <span class="muted" style="font-size:13px">${L2.length} resultados</span></div>
- <div class="tbl"><table><thead><tr><th>Ref.</th><th>ID</th><th>MAC</th><th>Planta</th><th>Sistema</th><th>Etapa</th><th>Responsável</th><th>Prazo</th><th class="num">Fotos</th><th class="num">Anom.</th></tr></thead><tbody>
+  <span class="muted" style="font-size:13px">${L2.length} resultados</span>${vToggle(pageView("eq"))}</div>
+ ${pageView("eq")==="grid"?eqGrid(L2):`<div class="tbl"><table><thead><tr><th>Ref.</th><th>ID</th><th>MAC</th><th>Planta</th><th>Sistema</th><th>Etapa</th><th>Responsável</th><th>Prazo</th><th class="num">Fotos</th><th class="num">Anom.</th></tr></thead><tbody>
  ${L2.slice(0,500).map(i=>`<tr class="click${isDup(i)?" dup":""}" data-item="${esc(i.id)}"><td class="mono">${esc(i.code)}</td><td class="mono">${esc(i.devId)}</td><td class="mono">${esc(i.mac)}</td><td>${esc(planName(i.planId))}</td><td>${esc(tOf(i.type).n)}</td>
   <td><span class="stchip" style="--c:${sOf(i.stage).c}">${sOf(i.stage).n}</span></td><td>${i.assignee?esc(nameOf(i.assignee)):`<span class="muted">—</span>`}</td><td${isLate(i)?' style="color:var(--bad);font-weight:600"':""}>${i.due?fmtDay(i.due):""}</td><td class="num">${(i.photos||[]).length||""}</td><td class="num"${openIssues(i.id).length?' style="color:var(--bad);font-weight:700"':""}>${openIssues(i.id).length||""}</td></tr>`).join("")||`<tr><td colspan="10" class="empty2">Nada corresponde aos filtros.</td></tr>`}
- ${L2.length>500?`<tr><td colspan="10" class="muted">A mostrar 500 de ${L2.length}. O CSV inclui todos.</td></tr>`:""}</tbody></table></div></div>`}
-function wireEquip(){const bind=(id,k)=>{const e=$(id);e.oninput=e.onchange=()=>{EQ[k]=e.value;const pos=e.selectionStart;renderPage("equip");const n=$(id);if(id==="eqQ"){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}}};
+ ${L2.length>500?`<tr><td colspan="10" class="muted">A mostrar 500 de ${L2.length}. O CSV inclui todos.</td></tr>`:""}</tbody></table></div>`}</div>`}
+/* apresentação em grelha ou lista (lembrada neste aparelho) */
+function pageView(k){return getPref("of-v-"+k,k==="doc"?"list":"list")}
+function wireVT(k,page){document.querySelectorAll("#pageWrap .vtog [data-vt]").forEach(b=>b.onclick=()=>{setPref("of-v-"+k,b.dataset.vt);renderPage(page)});hydrateThumbs($("pageWrap"))}
+function eqGrid(L2){const R0=typeof refSet==="function"?refSet():null;
+ return`<div class="eqgrid">${L2.slice(0,240).map(i=>{const ph=(i.photos||[]).slice(-1)[0],st=sOf(i.stage),oi=openIssues(i.id).length,rs=readStateOf(i);
+  return`<div class="eqc${isDup(i)?" dup":""}" data-item="${esc(i.id)}" role="button" tabindex="0">
+   <div class="eqph">${ph?`<img data-thumb="${esc(ph)}" alt="">`:`<span class="eqno"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>Sem foto</span>`}
+    <span class="stchip" style="--c:${st.c}">${st.n}</span>${oi?`<span class="eqbad">${oi} anomalia${oi>1?"s":""}</span>`:""}</div>
+   <div class="eqb"><div class="eqt"><b class="mono">${esc(i.code)}</b><span class="muted">${esc(tOf(i.type).n)}</span></div>
+    <div class="eqid mono">${i.devId?`<b${rs==="fora"?' class="bad"':""}>${esc(i.devId)}</b>`:`<span class="muted">Sem ID</span>`}${rs&&rs!=="ok"?` <span class="rs rs-${rs}">${RS_N[rs]}</span>`:""}${isDup(i)?` <span class="rs rs-fora">Repetido</span>`:""}</div>
+    <small class="muted">${esc(planName(i.planId))}${i.assignee?" · "+esc(nameOf(i.assignee)):""}${i.due?` · <span${isLate(i)?' class="bad"':""}>${fmtDay(i.due)}</span>`:""}</small></div></div>`}).join("")||`<div class="empty2">Nada corresponde aos filtros.</div>`}</div>${L2.length>240?`<p class="muted">A mostrar 240 de ${L2.length}. Usa os filtros ou a vista em lista.</p>`:""}`}
+function isGrid(L2){const td=today();
+ return`<div class="isgrid">${L2.map(x=>{const it=S.items.find(i=>i.id===x.itemId);const late=x.status!=="resolvida"&&x.due&&x.due<td;const pr=x.prio||"media";
+  return`<div class="isc${x.status==="resolvida"?" done":""}"${it?` data-item="${esc(it.id)}" role="button" tabindex="0"`:""}>
+   ${x.photo?`<div class="isph"><img data-thumb="${esc(x.photo)}" alt=""></div>`:""}
+   <div class="isb"><div class="ist"><span class="prio ${pr}">${PRIO[pr]}</span><span class="stchip" style="--c:${x.status==="resolvida"?"var(--ok)":x.status==="curso"?"var(--info)":"var(--warn)"}">${x.status==="resolvida"?"Resolvida":x.status==="curso"?"Em curso":"Aberta"}</span></div>
+    <p>${esc(x.text)}</p>
+    <small class="muted">${it?`<span class="mono">${esc(it.devId||it.code)}</span> · `:"Geral · "}${esc(planName(x.planId))}</small>
+    <div class="isf"><span>${x.assignee?esc(nameOf(x.assignee)):`<span class="muted">Sem responsável</span>`}</span>${x.due?`<span${late?' class="bad"':""}>Prazo ${fmtDay(x.due)}</span>`:""}</div></div></div>`}).join("")||`<div class="empty2">Sem pendências ${ISF.st==="open"?"abertas":""}.</div>`}</div>`}
+function docTile(d){const ex=docExt(d.name),n=(d.items||[]).length;
+ return`<div class="doct"><span class="dti" style="--c:${DOC_COL[ex]||"#64748b"}">${esc(ex.slice(0,4))}</span><b title="${esc(d.name)}">${esc(d.name)}</b><small class="muted">${esc(d.cat||"")} · ${fmtSize(d.size||0)}${n?" · "+n+" equip.":""}</small><small class="muted">${esc(nameOf(d.by))} · ${fmtDate(d.at)}</small>
+  <div class="dta"><button class="btn sm" data-dopen="${esc(d.id)}">Abrir</button>${S.canWrite&&(S.isCoord||d.by===S.meId)?`<button class="btn sm danger" data-ddel="${esc(d.id)}">Apagar</button>`:""}</div></div>`}
+function wireEquip(){wireVT("eq","equip");const bind=(id,k)=>{const e=$(id);e.oninput=e.onchange=()=>{EQ[k]=e.value;const pos=e.selectionStart;renderPage("equip");const n=$(id);if(id==="eqQ"){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}}};
  bind("eqQ","q");bind("eqP","plan");bind("eqT","type");bind("eqS","stage");bind("eqW","who");bind("eqO","only");
  $("eqCsv").onclick=()=>saveFile(`Equipamentos_${slug()}.csv`,"﻿"+reportCsv(equipList()))}
 
@@ -2291,7 +2361,7 @@ function idsPage(){const its=S.items;const withId=its.filter(i=>i.devId||i.mac);
  <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="idQ" placeholder="Pesquisar ID, MAC ou referência…" value="${esc(IDF.q)}">
   <div class="seg"><button type="button" data-io="" aria-pressed="${!IDF.only}">Todos</button><button type="button" data-io="dup" aria-pressed="${IDF.only==="dup"}">Repetidos</button><button type="button" data-io="noid" aria-pressed="${IDF.only==="noid"}">Sem ID</button></div><span class="muted" style="font-size:13px">${L2.length} linhas</span></div>
  <div class="tbl"><table><thead><tr><th>ID</th><th>MAC</th><th>Ref.</th><th>Planta</th><th>Sistema</th><th>Etapa</th><th>Leitura</th><th></th></tr></thead><tbody>
- ${L2.slice(0,800).map(i=>`<tr class="click${dm[i.id]?" dup":""}" data-item="${esc(i.id)}"><td class="mono"><b>${esc(i.devId)||`<span class="muted">—</span>`}</b></td><td class="mono">${esc(i.mac)}</td><td class="mono">${esc(i.code)}</td><td>${esc(planName(i.planId))}</td><td>${esc(tOf(i.type).n)}</td><td><span class="stchip" style="--c:${sOf(i.stage).c}">${sOf(i.stage).n}</span></td><td class="muted" style="font-size:12px">${esc(i.readConf==="alta"?"Confirmado":i.readConf?"A confirmar":i.devId?"Manual":"")}</td><td>${dm[i.id]?`<span class="stchip" style="--c:var(--bad)">Repetido ×${dm[i.id]}</span>`:""}</td></tr>`).join("")||`<tr><td colspan="8" class="empty2">Sem resultados.</td></tr>`}</tbody></table></div></div>`}
+ ${L2.slice(0,800).map(i=>`<tr class="click${dm[i.id]?" dup":""}" data-item="${esc(i.id)}"><td class="mono"><b>${esc(i.devId)||`<span class="muted">—</span>`}</b></td><td class="mono">${esc(i.mac)}</td><td class="mono">${esc(i.code)}</td><td>${esc(planName(i.planId))}</td><td>${esc(tOf(i.type).n)}</td><td><span class="stchip" style="--c:${sOf(i.stage).c}">${sOf(i.stage).n}</span></td><td class="muted" style="font-size:12px">${(()=>{const st=readStateOf(i);return st&&st!=="ok"?`<span class="rs rs-${st}">${RS_N[st]}</span>`:esc(i.readConf==="alta"?"Confirmado":i.readConf?"A confirmar":i.devId?"Manual":"")})()}</td><td>${dm[i.id]?`<span class="stchip" style="--c:var(--bad)">Repetido ×${dm[i.id]}</span>`:""}</td></tr>`).join("")||`<tr><td colspan="8" class="empty2">Sem resultados.</td></tr>`}</tbody></table></div></div>`}
 function wireIds(){const q=$("idQ");q.oninput=()=>{IDF.q=q.value;const pos=q.selectionStart;renderPage("ids");$("idQ").focus();try{$("idQ").setSelectionRange(pos,pos)}catch(x){}};
  document.querySelectorAll("[data-io]").forEach(b=>b.onclick=()=>{IDF.only=b.dataset.io;renderPage("ids")});
  $("idK3").onclick=()=>{IDF.only="dup";renderPage("ids")};$("idK4").onclick=()=>{IDF.only="noid";renderPage("ids")};$("idK1").onclick=$("idK2").onclick=()=>{IDF.only="";renderPage("ids")};
@@ -2315,15 +2385,15 @@ function issuesPage(){const L2=issueList();const open=S.issues.filter(x=>x.statu
   <div class="seg"><button type="button" data-ist="open" aria-pressed="${ISF.st==="open"}">Abertas</button><button type="button" data-ist="done" aria-pressed="${ISF.st==="done"}">Resolvidas</button><button type="button" data-ist="all" aria-pressed="${ISF.st==="all"}">Todas</button></div>
   <select id="isP"><option value="">Todas as prioridades</option>${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${ISF.prio===k?" selected":""}>${n}</option>`).join("")}</select>
   <select id="isW"><option value="">Todos</option><option value="-"${ISF.who==="-"?" selected":""}>Sem responsável</option>${ppl.map(id=>`<option value="${esc(id)}"${ISF.who===id?" selected":""}>${esc(nameOf(id))}</option>`).join("")}</select>
-  <select id="isPl"><option value="">Todas as plantas</option>${S.plans.map(p=>`<option value="${esc(p.id)}"${ISF.plan===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}</select></div>
- <div class="tbl"><table><thead><tr><th>Prioridade</th><th>Descrição</th><th>Equipamento</th><th>Planta</th><th>Responsável</th><th>Prazo</th><th>Estado</th><th>Registada</th></tr></thead><tbody>
+  <select id="isPl"><option value="">Todas as plantas</option>${S.plans.map(p=>`<option value="${esc(p.id)}"${ISF.plan===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}</select>${vToggle(pageView("is"))}</div>
+ ${pageView("is")==="grid"?isGrid(L2):`<div class="tbl"><table><thead><tr><th>Prioridade</th><th>Descrição</th><th>Equipamento</th><th>Planta</th><th>Responsável</th><th>Prazo</th><th>Estado</th><th>Registada</th></tr></thead><tbody>
  ${L2.map(x=>{const it=S.items.find(i=>i.id===x.itemId);const late=x.status!=="resolvida"&&x.due&&x.due<td;const can=S.canWrite;
   return`<tr${it?` class="click" data-item="${esc(it.id)}"`:""}><td>${can?`<select data-iprio="${esc(x.id)}">${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${(x.prio||"media")===k?" selected":""}>${n}</option>`).join("")}</select>`:`<span class="prio ${x.prio||"media"}">${PRIO[x.prio||"media"]}</span>`}</td>
   <td style="max-width:340px">${x.photo?`<img data-ref="${esc(x.photo)}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:6px;float:left;margin-right:8px">`:""}${esc(x.text)}</td><td class="mono">${it?esc(it.devId||it.code):`<span class="muted">Geral</span>`}</td><td>${esc(planName(x.planId))}</td>
   <td>${x.assignee?esc(nameOf(x.assignee)):`<span class="muted">—</span>`}</td><td>${can?`<input type="date" data-idue="${esc(x.id)}" value="${esc(x.due||"")}"${late?' style="color:var(--bad);border-color:var(--bad)"':""}>`:x.due?fmtDay(x.due):""}</td>
   <td>${can?`<select data-ist2="${esc(x.id)}"><option value="aberta"${x.status==="aberta"||!x.status?" selected":""}>Aberta</option><option value="curso"${x.status==="curso"?" selected":""}>Em curso</option><option value="resolvida"${x.status==="resolvida"?" selected":""}>Resolvida</option></select>`:esc(x.status||"aberta")}</td>
-  <td style="font-size:12px">${esc(nameOf(x.createdBy))}<div class="muted">${fmtDate(x.createdAt)}</div></td></tr>`}).join("")||`<tr><td colspan="8" class="empty2">Sem pendências ${ISF.st==="open"?"abertas":""}.</td></tr>`}</tbody></table></div></div>`}
-function wireIssues(){const q=$("isQ");q.oninput=()=>{ISF.q=q.value;const pos=q.selectionStart;renderPage("issues");$("isQ").focus();try{$("isQ").setSelectionRange(pos,pos)}catch(x){}};
+  <td style="font-size:12px">${esc(nameOf(x.createdBy))}<div class="muted">${fmtDate(x.createdAt)}</div></td></tr>`}).join("")||`<tr><td colspan="8" class="empty2">Sem pendências ${ISF.st==="open"?"abertas":""}.</td></tr>`}</tbody></table></div>`}</div>`}
+function wireIssues(){wireVT("is","issues");const q=$("isQ");q.oninput=()=>{ISF.q=q.value;const pos=q.selectionStart;renderPage("issues");$("isQ").focus();try{$("isQ").setSelectionRange(pos,pos)}catch(x){}};
  document.querySelectorAll("[data-ist]").forEach(b=>b.onclick=()=>{ISF.st=b.dataset.ist;renderPage("issues")});
  $("isP").onchange=e=>{ISF.prio=e.target.value;renderPage("issues")};$("isW").onchange=e=>{ISF.who=e.target.value;renderPage("issues")};$("isPl").onchange=e=>{ISF.plan=e.target.value;renderPage("issues")};
  $("isK1").onclick=()=>{ISF.st="open";ISF.prio="";renderPage("issues")};$("isK3").onclick=()=>{ISF.st="open";ISF.prio="alta";renderPage("issues")};$("isK4").onclick=()=>{ISF.st="done";renderPage("issues")};$("isK2").onclick=()=>{ISF.st="open";renderPage("issues")};
@@ -2390,9 +2460,9 @@ async function diaryPdf(d){if(!window.jspdf){toast("Gerador de PDF indisponível
 function docsPage(){const q=docF.q.trim().toLowerCase();const all=docsAll();const L2=all.filter(d=>(!docF.cat||d.cat===docF.cat)&&(!q||String(d.name).toLowerCase().includes(q)));
  return pageHead("Documentos","Documentos","Projeto, fichas técnicas, certificados, atas e outros ficheiros da obra. Ficam disponíveis para toda a equipa e podem ser ligados aos equipamentos.",S.canWrite?`<select id="docCat">${DOC_CATS.map(c=>`<option>${c}</option>`).join("")}</select><label class="btn primary" for="docUp">+ Carregar documentos</label><input type="file" id="docUp" multiple hidden>`:"")+`
  <div class="ptabs">${["",...DOC_CATS].map(c=>`<button type="button" data-dc="${esc(c)}" class="${docF.cat===c?"on":""}">${c||"Todos"} <span class="muted">${(c?all.filter(d=>d.cat===c):all).length}</span></button>`).join("")}</div>
- <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="docQ" placeholder="Pesquisar documento…" value="${esc(docF.q)}"></div>
- <div class="doclist">${L2.map(d=>{const n=(d.items||[]).length,tp=(d.types||[]).map(t=>tOf(t).n);return docRow(d,`${n||tp.length?`<span class="muted" style="font-size:12px">${n?n+" equip.":""}${tp.length?" "+tp.join(", "):""}</span>`:""}<button class="btn sm" data-dopen="${esc(d.id)}">Abrir</button>${S.canWrite&&(S.isCoord||d.by===S.meId)?`<button class="btn sm danger" data-ddel="${esc(d.id)}">Apagar</button>`:""}`)}).join("")||`<div class="empty2">Ainda não há documentos${docF.cat?" nesta categoria":""}.</div>`}</div></div>`}
-function wireDocs(){const q=$("docQ");q.oninput=()=>{docF.q=q.value;const pos=q.selectionStart;renderPage("docs");$("docQ").focus();try{$("docQ").setSelectionRange(pos,pos)}catch(x){}};
+ <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="docQ" placeholder="Pesquisar documento…" value="${esc(docF.q)}"><span class="muted" style="font-size:13px">${L2.length} documento${L2.length===1?"":"s"}</span>${vToggle(pageView("doc"))}</div>
+ <div class="${pageView("doc")==="grid"?"docgrid":"doclist"}">${L2.map(d=>{if(pageView("doc")==="grid")return docTile(d);const n=(d.items||[]).length,tp=(d.types||[]).map(t=>tOf(t).n);return docRow(d,`${n||tp.length?`<span class="muted" style="font-size:12px">${n?n+" equip.":""}${tp.length?" "+tp.join(", "):""}</span>`:""}<button class="btn sm" data-dopen="${esc(d.id)}">Abrir</button>${S.canWrite&&(S.isCoord||d.by===S.meId)?`<button class="btn sm danger" data-ddel="${esc(d.id)}">Apagar</button>`:""}`)}).join("")||`<div class="empty2">Ainda não há documentos${docF.cat?" nesta categoria":""}.</div>`}</div></div>`}
+function wireDocs(){wireVT("doc","docs");const q=$("docQ");q.oninput=()=>{docF.q=q.value;const pos=q.selectionStart;renderPage("docs");$("docQ").focus();try{$("docQ").setSelectionRange(pos,pos)}catch(x){}};
  document.querySelectorAll("[data-dc]").forEach(b=>b.onclick=()=>{docF.cat=b.dataset.dc;renderPage("docs")});
  document.querySelectorAll("[data-dopen]").forEach(b=>b.onclick=()=>openDoc(b.dataset.dopen));
  document.querySelectorAll("[data-ddel]").forEach(b=>b.onclick=()=>{if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Confirmar";return}api.del("meta",b.dataset.ddel);toast("Documento apagado")});
@@ -2404,7 +2474,8 @@ function settingsPage(){return pageHead("Configurações","Configurações","Pro
   <label class="f">Cliente / dono de obra<input id="stClient" value="${esc(S.meta.client||"")}"></label><label class="f">Morada<input id="stAddr" value="${esc(S.meta.address||"")}"></label>
   <div class="toolrow"><button class="btn primary" id="stSave">Guardar</button></div></div></section>`:""}
  ${notifCard()}${mailSection()}${aiSection()}${dataSection()}${offlineSection()}`}
-function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=()=>{api.set("meta","project",{...S.meta,name:$("stName").value.trim(),client:$("stClient").value.trim(),address:$("stAddr").value.trim()});toast("Projeto guardado.")};
+function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const row={name:$("stName").value.trim()||S.meta.name||"Obra",client:$("stClient").value.trim(),address:$("stAddr").value.trim()};
+  await saveProjectRow(row);api.set("meta","project",{...S.meta,...row});toast("Projeto guardado.")};
  wireNotif(W);wireMail(W);wireAi(W);wireData(W)}
 /* menu "Ações" na barra da planta (agrupa as opções menos usadas) */
 (()=>{const bar=document.querySelector("#viewObra .bar");if(!bar)return;const w=document.createElement("div");w.className="actwrap";
@@ -2419,7 +2490,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=()=>{api.set("met
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="16";
+const APP_VER="19";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -2465,5 +2536,393 @@ setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyVa
  // ao abrir a ficha de um equipamento num ecrã pequeno, a lista de plantas fecha-se
  document.addEventListener("click",e=>{if(st.pl&&innerWidth<1100&&e.target.closest("#plansPane [data-pl]")){st.pl=false;save();apply()}});
  apply()})();
+
+/* =========================================================
+   ObraFlow · Projetos e plantas
+   1) ao entrar aparecem os projetos a que a pessoa tem acesso;
+   2) ao escolher um projeto aparecem as plantas e as pastas desse projeto;
+   apresentação em grelha ou em lista; carregar ficheiros e criar pastas.
+   ========================================================= */
+PAGE_VIEWS.push("projects","plans");
+const PJ_ST={em_curso:"Em curso",pausa:"Em pausa",concluido:"Concluído"};
+const PST={};                                   // estatísticas por projeto {plans,items,tested}
+(async()=>{try{Object.assign(PST,(await IDBX.get("kv","pstats"))||{})}catch(e){}})();
+let pstTimer=null;function savePst(){clearTimeout(pstTimer);pstTimer=setTimeout(()=>IDBX.put("kv","pstats",PST).catch(()=>{}),800)}
+function curProject(){return S.projects.find(p=>p.id===S.projectId)||null}
+/* no servidor com projetos manda a tabela de projetos; sem ela (ou na demonstração) manda o nome guardado nos dados da obra */
+function syncMetaName(){const p=curProject();if(!p)return;
+ if(S.mp&&!S.demo){if(p.name)S.meta={...S.meta,name:p.name,client:p.client||S.meta.client||"",address:p.address||S.meta.address||""};return}
+ if(S.meta.name&&S.meta.name!==p.name){p.name=S.meta.name;IDBX.put("kv","projects",S.projects).catch(()=>{})}
+ else if(!S.meta.name&&p.name)S.meta={...S.meta,name:p.name}}
+const isAdminRole=()=>S.isAdmin||S.role==="admin"||S.demo;
+
+/* ---------- carregar a lista de projetos ---------- */
+async function loadProjects(){let list=null;
+ if(S.demo){list=(await IDBX.get("kv","projects").catch(()=>null))||[{id:"p0",name:"Obra de demonstração",client:"",address:"",status:"em_curso"}];S.mp=true}
+ else if(sb&&S.session&&navigator.onLine){
+  try{const r=await sb.from("projects").select("id,name,client,address,status,created_at").order("created_at",{ascending:true});
+   if(r.error)throw r.error;S.mp=true;list=r.data||[];
+   const m=await sb.from("project_members").select("project_id,user_id");S.pm=m.error?[]:(m.data||[]);IDBX.put("kv","pm",S.pm).catch(()=>{})}
+  catch(e){S.mp=false;list=null}
+  IDBX.put("kv","mp",S.mp).catch(()=>{})}
+ else{S.mp=!!(await IDBX.get("kv","mp").catch(()=>false));S.pm=(await IDBX.get("kv","pm").catch(()=>null))||[];list=await IDBX.get("kv","projects").catch(()=>null)}
+ if(!list||!S.mp&&!S.demo){   // servidor sem a atualização 3: há um só projeto
+  const m=await IDBX.get("docs","p0|meta|project").catch(()=>null);const c=list&&list[0];
+  list=[{id:"p0",name:(m&&m.data&&m.data.name)||(c&&c.name)||"A minha obra",client:(m&&m.data&&m.data.client)||"",address:(m&&m.data&&m.data.address)||"",status:"em_curso"}]}
+ S.projects=list;IDBX.put("kv","projects",list).catch(()=>{});
+ if(S.projectId&&!list.some(p=>p.id===S.projectId)){S.projectId=null;await loadLocal();COLS.forEach(c=>emit(c));if(S.view!=="projects")S.view="projects"}
+ syncMetaName();loadRemoteStats();return list}
+let statsBusy=false;
+async function loadRemoteStats(){if(statsBusy||S.demo||!S.mp||!sb||!S.session||!navigator.onLine)return;statsBusy=true;
+ try{for(const p of S.projects){if(p.id===S.projectId)continue;
+   const base=c=>sb.from("docs").select("id",{count:"exact",head:true}).eq("project",p.id).eq("col",c).eq("deleted",false);
+   const[a,b,t]=await Promise.all([base("plans"),base("items"),base("items").in("data->>stage",["testado","validado","aceite"])]);
+   if(a.error||b.error)continue;PST[p.id]={plans:a.count||0,items:b.count||0,tested:(t&&!t.error&&t.count)||0}}
+  savePst();if(S.view==="projects")render()}
+ catch(e){}finally{statsBusy=false}}
+function curStats(){if(!S.projectId)return;const its=S.items;const o={plans:S.plans.length,items:its.length,tested:its.filter(i=>sIdx(i.stage)>=3).length};
+ const p=PST[S.projectId];if(!p||p.plans!==o.plans||p.items!==o.items||p.tested!==o.tested){PST[S.projectId]=o;savePst()}}
+
+/* ---------- abrir um projeto ---------- */
+async function openProject(id,view){if(!S.projects.some(p=>p.id===id))return;
+ if(S.projectId!==id){S.projectId=id;try{localStorage.setItem("of-last-project",id)}catch(e){}
+  S.planId=null;S.sel=null;S.draw=null;loadedPlan=null;plFolder=null;plQ2="";autoDone=false;
+  await loadLocal();COLS.forEach(c=>emit(c));syncMetaName()}
+ go(view||"plans");syncNow().then(()=>{autoStageAll&&autoStageAll();setTimeout(bgScan,1500)})}
+
+/* sem projeto escolhido só se pode estar na lista de projetos */
+const goBase=go;
+go=function(v){if(!S.projectId&&v!=="projects"&&v!=="more")v="projects";goBase(v)};
+
+/* ---------- moldura: estado da vista de projetos ---------- */
+const renderShellBase=renderShell;
+renderShell=function(){renderShellBase();const v=S.view;document.body.dataset.view=v;
+ const pc=$("sideProj");if(pc)pc.textContent=(curProject()||{}).name||S.meta.name||"Escolher projeto";
+ const cp=$("cnt_plans");if(cp){cp.hidden=!S.plans.length;cp.textContent=S.plans.length}
+ curStats()};
+const renderPageBase=renderPage;
+renderPage=function(v){if(v==="projects")return renderProjects();if(v==="plans")return renderPlansPage();return renderPageBase(v)};
+/* o "Projeto ›" da planta volta à lista de plantas */
+document.addEventListener("click",e=>{const b=e.target.closest('#oHead [data-go="home"]');if(b){e.stopImmediatePropagation();e.preventDefault();go("plans")}},true);
+
+/* ---------- ícones e botões de apresentação ---------- */
+const IC={grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+ list:'<path d="M9 6h12M9 12h12M9 18h12"/><rect x="3" y="4.5" width="3" height="3" rx=".8"/><rect x="3" y="10.5" width="3" height="3" rx=".8"/><rect x="3" y="16.5" width="3" height="3" rx=".8"/>',
+ folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+ fplus:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/>',
+ up:'<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+ dots:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+ users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',back:'<path d="M15 18l-6-6 6-6"/>'};
+const ico=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>`;
+const getPref=(k,d)=>{try{return localStorage.getItem(k)||d}catch(e){return d}},setPref=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+function vToggle(cur){return`<div class="vtog" role="group" aria-label="Apresentação"><button type="button" data-vt="grid" aria-pressed="${cur==="grid"}" title="Grelha">${ico("grid")}<span>Grelha</span></button><button type="button" data-vt="list" aria-pressed="${cur==="list"}" title="Lista">${ico("list")}<span>Lista</span></button></div>`}
+function hueOf(s){let h=0;for(const ch of String(s))h=(h*31+ch.charCodeAt(0))%360;return h}
+function initials(n){const w=String(n||"?").replace(/[^\p{L}\p{N} ]/gu," ").split(/\s+/).filter(x=>x&&!/^(de|da|do|das|dos|e|-)$/i.test(x));return((w[0]||"?")[0]+((w[1]||"")[0]||"")).toUpperCase()}
+function peopleIn(pid){if(!S.mp||S.demo)return null;return new Set(S.pm.filter(x=>x.project_id===pid).map(x=>x.user_id)).size}
+
+/* ---------- página: projetos ---------- */
+let pjQ="";
+function renderProjects(){const W=$("pageWrap");const v=getPref("of-pj-view","grid");const q=pjQ.trim().toLowerCase();
+ const list=S.projects.filter(p=>!q||[p.name,p.client,p.address].join(" ").toLowerCase().includes(q));
+ const first=String((S.me&&S.me.name)||"").split(/[\s@]/)[0];
+ const canNew=S.isCoord&&(S.mp||S.demo);
+ W.innerHTML=`<div class="pjhead"><div><span class="pjk">ObraFlow</span><h2>Os meus projetos</h2><p>${first?`Olá ${esc(first)}. `:""}Escolhe a obra para veres as plantas.</p></div>
+  ${canNew?`<button type="button" class="btn primary bigb" id="pjNew">${ico("plus")}Novo projeto</button>`:""}</div>
+ <div class="ftool"><label class="fsearch">${ico("search")}<input id="pjQ" type="search" placeholder="Procurar projeto, cliente ou morada…" value="${esc(pjQ)}" aria-label="Procurar projeto"></label><span class="fcount">${list.length} projeto${list.length===1?"":"s"}</span>${vToggle(v)}</div>
+ ${list.length?(v==="grid"?`<div class="pjgrid">${list.map(pjCard).join("")}</div>`:`<div class="pjlist card"><div class="pjr pjrh"><span></span><span>Projeto</span><span>Plantas</span><span>Equipam.</span><span>Testado</span><span>Estado</span><span></span></div>${list.map(pjRow).join("")}</div>`)
+  :`<div class="empty3">${ico("folder")}<b>${q?"Nenhum projeto encontrado.":"Ainda não tens acesso a nenhum projeto."}</b><span>${q?"Experimenta outra pesquisa.":S.isCoord?"Cria o primeiro projeto para começar.":"Pede à coordenação para te dar acesso a uma obra."}</span></div>`}
+ ${!S.mp&&!S.demo&&S.isCoord?`<div class="msg warn" style="margin-top:14px">Para criar mais projetos e escolher quem tem acesso a cada um, corre no Supabase o ficheiro <b>supabase/atualizacao-3-projetos.sql</b> (ver LEIA-ME).</div>`:""}`;
+ const qi=$("pjQ");qi.oninput=e=>{pjQ=e.target.value;const pos=e.target.selectionStart;renderProjects();const n=$("pjQ");n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}};
+ W.querySelectorAll("[data-vt]").forEach(b=>b.onclick=()=>{setPref("of-pj-view",b.dataset.vt);renderProjects()});
+ W.querySelectorAll("[data-pj]").forEach(el=>{el.onclick=e=>{if(e.target.closest("[data-pjedit],[data-pjacc]"))return;openProject(el.dataset.pj)};el.onkeydown=e=>{if(e.key==="Enter")openProject(el.dataset.pj)}});
+ W.querySelectorAll("[data-pjedit]").forEach(b=>b.onclick=e=>{e.stopPropagation();projDialog(b.dataset.pjedit)});
+ W.querySelectorAll("[data-pjacc]").forEach(b=>b.onclick=e=>{e.stopPropagation();accessDialog(b.dataset.pjacc)});
+ const nb=$("pjNew");if(nb)nb.onclick=()=>projDialog(null)}
+function pjCard(p){const st=PST[p.id]||{},pc=st.items?Math.round(st.tested/st.items*100):0,np=peopleIn(p.id),cur=p.id===S.projectId;
+ const manage=S.isCoord&&(S.mp||S.demo);
+ return`<div class="pjc${cur?" on":""}" data-pj="${esc(p.id)}" role="button" tabindex="0" aria-label="Abrir ${esc(p.name)}">
+  <div class="pjcov" style="--h:${hueOf(p.id+p.name)}"><span class="pjini">${esc(initials(p.name))}</span><span class="pjst s-${esc(p.status||"em_curso")}">${PJ_ST[p.status]||"Em curso"}</span>${cur?`<span class="pjcur">Aberto</span>`:""}</div>
+  <div class="pjb"><b>${esc(p.name)}</b><small>${esc([p.client,p.address].filter(Boolean).join(" · ")||"Sem cliente definido")}</small>
+   <div class="pjstats"><span><b>${st.plans??"–"}</b>plantas</span><span><b>${st.items??"–"}</b>equipamentos</span><span><b>${st.items?pc+"%":"–"}</b>testado</span></div>
+   <div class="pjbar"><i style="width:${pc}%"></i></div>
+   <div class="pjfoot">${np!=null?`<span class="pjm">${ico("users")}${np} pessoa${np===1?"":"s"}</span>`:"<span></span>"}
+    ${manage?`<span class="pjbtns"><button type="button" class="btn sm" data-pjacc="${esc(p.id)}"${S.demo?" hidden":""}>Acessos</button><button type="button" class="btn sm" data-pjedit="${esc(p.id)}">Editar</button></span>`:""}</div></div></div>`}
+function pjRow(p){const st=PST[p.id]||{},pc=st.items?Math.round(st.tested/st.items*100):0,manage=S.isCoord&&(S.mp||S.demo);
+ return`<div class="pjr${p.id===S.projectId?" on":""}" data-pj="${esc(p.id)}" role="button" tabindex="0">
+  <span class="pjdot" style="--h:${hueOf(p.id+p.name)}">${esc(initials(p.name))}</span>
+  <span class="pjn"><b>${esc(p.name)}</b><small>${esc([p.client,p.address].filter(Boolean).join(" · ")||"—")}</small></span>
+  <span data-l="Plantas">${st.plans??"–"}</span><span data-l="Equipam.">${st.items??"–"}</span>
+  <span class="pjpc" data-l="Testado"><span class="pjbar"><i style="width:${pc}%"></i></span>${st.items?pc+"%":"–"}</span>
+  <span><span class="pjst s-${esc(p.status||"em_curso")}">${PJ_ST[p.status]||"Em curso"}</span></span>
+  <span class="pjbtns">${manage?`<button type="button" class="btn sm" data-pjacc="${esc(p.id)}"${S.demo?" hidden":""}>Acessos</button><button type="button" class="btn sm" data-pjedit="${esc(p.id)}">Editar</button>`:""}</span></div>`}
+
+/* ---------- diálogos: projeto e acessos ---------- */
+(()=>{const d=document.createElement("dialog");d.id="dlgProj";d.innerHTML=`<form class="dlg" method="dialog" id="pjForm">
+  <h3 id="pjTitle">Novo projeto</h3>
+  <label class="f">Nome da obra<input id="pjName" required placeholder="ex.: HCI - FIT-OUT SEDE CGD - LISBOA"></label>
+  <label class="f">Cliente / dono de obra<input id="pjClient" placeholder="opcional"></label>
+  <label class="f">Morada<input id="pjAddr" placeholder="opcional"></label>
+  <label class="f">Estado<select id="pjStatus"><option value="em_curso">Em curso</option><option value="pausa">Em pausa</option><option value="concluido">Concluído</option></select></label>
+  <div class="msg err" id="pjMsg" hidden></div>
+  <div class="toolrow" style="justify-content:space-between"><button type="button" class="btn danger" id="pjDel" hidden>Apagar projeto</button><span style="flex:1"></span><button type="button" class="btn" id="pjCancel">Cancelar</button><button type="submit" class="btn primary" id="pjSave">Guardar</button></div></form>`;
+ document.body.appendChild(d);
+ const a=document.createElement("dialog");a.id="dlgAcc";a.innerHTML=`<div class="dlg"><h3 id="acTitle">Acessos</h3><p class="muted" style="margin:0">Escolhe quem pode ver e trabalhar neste projeto. O Administrador vê sempre todos os projetos.</p>
+  <label class="fsearch">${ico("search")}<input id="acQ" type="search" placeholder="Procurar pessoa…"></label><div class="aclist" id="acList"></div><div class="msg err" id="acMsg" hidden></div>
+  <div class="toolrow" style="justify-content:flex-end"><button type="button" class="btn" id="acCancel">Cancelar</button><button type="button" class="btn primary" id="acSave">Guardar acessos</button></div></div>`;
+ document.body.appendChild(a);
+ $("pjCancel").onclick=()=>d.close();$("acCancel").onclick=()=>a.close()})();
+let pjEdit=null,pjDelArmed=false;
+function projDialog(id){pjEdit=id;pjDelArmed=false;const p=id&&S.projects.find(x=>x.id===id);
+ $("pjTitle").textContent=p?"Editar projeto":"Novo projeto";$("pjName").value=p?p.name:"";$("pjClient").value=p?p.client||"":"";$("pjAddr").value=p?p.address||"":"";$("pjStatus").value=p?p.status||"em_curso":"em_curso";
+ $("pjMsg").hidden=true;const del=$("pjDel");del.hidden=!p||!isAdminRole()||S.projects.length<2;del.textContent="Apagar projeto";del.classList.remove("armed");
+ $("dlgProj").showModal();setTimeout(()=>$("pjName").focus(),50)}
+$("pjForm").onsubmit=async e=>{e.preventDefault();const name=$("pjName").value.trim();const m=$("pjMsg");if(!name){m.hidden=false;m.textContent="Escreve o nome da obra.";return}
+ const row={name,client:$("pjClient").value.trim(),address:$("pjAddr").value.trim(),status:$("pjStatus").value};const btn=$("pjSave");btn.disabled=true;
+ try{let id=pjEdit;
+  if(S.demo){let list=S.projects.slice();if(id)list=list.map(p=>p.id===id?{...p,...row}:p);else{id=uid();list.push({id,...row})}S.projects=list;await IDBX.put("kv","projects",list)}
+  else{if(!navigator.onLine||!S.session)throw new Error("precisas de ligação à internet para criar ou alterar projetos");
+   if(id){const{error}=await sb.from("projects").update(row).eq("id",id);if(error)throw error}
+   else{id=uid();const{error}=await sb.from("projects").insert({id,...row});if(error)throw error}
+   await loadProjects()}
+  if(id===S.projectId){syncMetaName();if(S.canWrite)api.set("meta","project",{...S.meta,...row})}
+  $("dlgProj").close();toast(pjEdit?"Projeto guardado.":"Projeto criado: "+name);
+  if(!pjEdit)openProject(id);else render()}
+ catch(err){m.hidden=false;m.textContent="Não foi possível guardar: "+(/row-level|permission/i.test(err.message||"")?"não tens permissão.":err.message)}
+ finally{btn.disabled=false}};
+$("pjDel").onclick=async()=>{const p=S.projects.find(x=>x.id===pjEdit);if(!p)return;const b=$("pjDel");
+ if(!pjDelArmed){pjDelArmed=true;b.classList.add("armed");b.textContent="Confirmar: apagar "+p.name+" e todos os dados";return}
+ try{if(S.demo){S.projects=S.projects.filter(x=>x.id!==p.id);await IDBX.put("kv","projects",S.projects)}
+  else{const{error}=await sb.from("projects").delete().eq("id",p.id);if(error)throw error;await loadProjects()}
+  if(S.projectId===p.id){S.projectId=null;await loadLocal();COLS.forEach(c=>emit(c))}
+  $("dlgProj").close();toast("Projeto apagado.");go("projects")}
+ catch(err){$("pjMsg").hidden=false;$("pjMsg").textContent="Não foi possível apagar: "+err.message}};
+let acFor=null,acSel=new Set();
+function accessDialog(pid){if(!S.mp||S.demo)return;acFor=pid;const p=S.projects.find(x=>x.id===pid);$("acTitle").textContent="Acessos · "+(p?p.name:"");
+ acSel=new Set(S.pm.filter(x=>x.project_id===pid).map(x=>x.user_id));$("acQ").value="";$("acMsg").hidden=true;drawAcc();$("dlgAcc").showModal()}
+function drawAcc(){const q=$("acQ").value.trim().toLowerCase();
+ const ppl=members.filter(m=>m.role!=="pendente"&&(!q||(m.name+" "+m.email).toLowerCase().includes(q))).sort((a,b)=>String(a.name).localeCompare(String(b.name),"pt"));
+ $("acList").innerHTML=ppl.map(m=>{const adm=m.role==="admin";return`<label class="acrow"><input type="checkbox" data-u="${esc(m.user_id)}"${adm||acSel.has(m.user_id)?" checked":""}${adm?" disabled":""}><span class="ini">${esc(initials(m.name||m.email))}</span><span><b>${esc(m.name||m.email)}</b><small>${esc(ROLE_N[m.role]||m.role)}${adm?" · vê todos os projetos":""} · ${esc(m.email||"")}</small></span></label>`}).join("")||`<div class="empty">Ninguém encontrado.</div>`;
+ $("acList").querySelectorAll("[data-u]").forEach(c=>c.onchange=()=>{if(c.checked)acSel.add(c.dataset.u);else acSel.delete(c.dataset.u)})}
+$("acQ").oninput=drawAcc;
+$("acSave").onclick=async()=>{const before=new Set(S.pm.filter(x=>x.project_id===acFor).map(x=>x.user_id));
+ const add=[...acSel].filter(u=>!before.has(u)),rem=[...before].filter(u=>!acSel.has(u)&&u!==S.meId);const b=$("acSave");b.disabled=true;
+ try{if(add.length){const{error}=await sb.from("project_members").insert(add.map(u=>({project_id:acFor,user_id:u})));if(error)throw error}
+  for(const u of rem){const{error}=await sb.from("project_members").delete().eq("project_id",acFor).eq("user_id",u);if(error)throw error}
+  await loadProjects();$("dlgAcc").close();toast("Acessos guardados.");render()}
+ catch(err){$("acMsg").hidden=false;$("acMsg").textContent="Não foi possível guardar: "+err.message}finally{b.disabled=false}};
+
+/* nome, cliente e morada alterados nas Configurações também mudam na lista de projetos */
+async function saveProjectRow(row){const id=S.projectId;if(!id)return;
+ S.projects=S.projects.map(p=>p.id===id?{...p,...row}:p);IDBX.put("kv","projects",S.projects).catch(()=>{});
+ if(!S.demo&&S.mp&&sb&&S.session&&navigator.onLine){const{error}=await sb.from("projects").update(row).eq("id",id);if(error)toast("A lista de projetos não foi atualizada: "+error.message)}
+ syncMetaName()}
+
+/* ---------- página: plantas e pastas do projeto ---------- */
+let plFolder=null,plQ2="";
+function renderPlansPage(){const W=$("pageWrap");const v=getPref("of-pl-view","grid");const fs=folders();
+ if(plFolder&&!fs.some(f=>f.id===plFolder))plFolder=null;const f=plFolder&&fs.find(x=>x.id===plFolder);
+ const q=plQ2.trim().toLowerCase();const pj=curProject();
+ const showF=!plFolder&&!q?fs:[];
+ const plans=q?S.plans.filter(p=>String(p.name).toLowerCase().includes(q)):plansIn(plFolder);
+ const its=S.items,openI=S.issues.filter(x=>x.status!=="resolvida");
+ const fCard=x=>{const ps=plansIn(x.id),n=ps.length,pi=its.filter(i=>ps.some(p=>p.id===i.planId)),pc=counts(pi);
+  return v==="grid"?`<div class="fcard" data-fo="${esc(x.id)}" role="button" tabindex="0"><span class="fic">${ico("folder")}</span>
+    <span class="fthumbs">${ps.slice(0,3).map(p=>`<span><img data-thumb="${esc(p.img||"")}" alt=""></span>`).join("")}</span>
+    <b>${esc(x.name)}</b><small>${n} planta${n===1?"":"s"} · ${pc.total} equip. · ${pct(pc.ge(3),pc.total)}% testado</small>
+    ${S.isCoord?`<button type="button" class="fmenu" data-fedit="${esc(x.id)}" aria-label="Renomear ou apagar a pasta">${ico("dots")}</button>`:""}</div>`
+   :`<div class="lrow" data-fo="${esc(x.id)}" role="button" tabindex="0"><span class="lic fold">${ico("folder")}</span><span class="ln"><b>${esc(x.name)}</b><small>Pasta · ${n} planta${n===1?"":"s"}</small></span><span data-l="Equipam.">${pc.total} equip.</span><span data-l="Progresso" class="lst">${stackBar(pi)}</span><span data-l="Testado">${pct(pc.ge(3),pc.total)}%</span><span class="lact">${S.isCoord?`<button type="button" class="btn sm" data-fedit="${esc(x.id)}">Renomear</button>`:""}</span></div>`};
+ const moveSel=p=>S.canWrite&&fs.length?`<select class="pmove" data-move="${esc(p.id)}" aria-label="Mover para a pasta"><option value="">Sem pasta</option>${fs.map(x=>`<option value="${esc(x.id)}"${p.folder===x.id?" selected":""}>${esc(x.name)}</option>`).join("")}</select>`:"";
+ const pCard=p=>{const pi=its.filter(i=>i.planId===p.id),pc=counts(pi),oi=openI.filter(x=>x.planId===p.id).length,st=(p.close&&p.close.status)||"aberto";
+  return v==="grid"?`<div class="pcard" data-open="${esc(p.id)}" tabindex="0" role="button" aria-label="Abrir ${esc(p.name)}">
+   <div class="pthumb"><img data-thumb="${esc(p.img||"")}" alt=""><span class="pdoc">${p.pdf?"PDF":"IMG"}</span>${oi?`<span class="pbad">${oi} anomalia${oi>1?"s":""}</span>`:""}</div>
+   <div class="pbody"><b>${esc(p.name)}</b>${stackBar(pi)}<div class="pmeta"><span>${pc.total} equip.</span><span>${pct(pc.ge(3),pc.total)}% testado</span>${st!=="aberto"?`<span>${FLOOR_ST[st]}</span>`:""}${q&&p.folder&&folderName(p.folder)?`<span>${ico("folder")}${esc(folderName(p.folder))}</span>`:""}</div>${moveSel(p)}</div></div>`
+   :`<div class="lrow" data-open="${esc(p.id)}" role="button" tabindex="0"><span class="lic"><img data-thumb="${esc(p.img||"")}" alt=""></span><span class="ln"><b>${esc(p.name)}</b><small>${p.pdf?"PDF":"Imagem"}${p.folder&&folderName(p.folder)?" · "+esc(folderName(p.folder)):""}${oi?` · <span class="bad">${oi} anomalia${oi>1?"s":""}</span>`:""}</small></span>
+    <span data-l="Equipam.">${pc.total} equip.</span><span data-l="Progresso" class="lst">${stackBar(pi)}</span><span data-l="Testado">${pct(pc.ge(3),pc.total)}%</span><span class="lact">${moveSel(p)}</span></div>`};
+ const nP=plans.length,nF=showF.length;
+ W.innerHTML=`<div class="crumb"><button type="button" data-go="projects">Projetos</button><span>›</span>${f?`<button type="button" id="plRoot">${esc(pj?pj.name:S.meta.name||"Obra")}</button><span>›</span><b>${esc(f.name)}</b>`:`<b>${esc(pj?pj.name:S.meta.name||"Obra")}</b>`}</div>
+ <div class="pjhead"><div>${f?`<button type="button" class="backb" id="plBack">${ico("back")}Todas as plantas</button>`:""}<h2>${f?esc(f.name):"Plantas"}</h2><p>${S.plans.length} planta${S.plans.length===1?"":"s"}${fs.length?` · ${fs.length} pasta${fs.length===1?"":"s"}`:""} · ${its.length} equipamentos</p></div>
+  ${S.canWrite?`<div class="pjact"><button type="button" class="btn bigb" id="plNewF">${ico("fplus")}Nova pasta</button><button type="button" class="btn primary bigb" id="plUp">${ico("up")}Carregar ficheiro</button></div>`:""}</div>
+ <div class="ftool"><label class="fsearch">${ico("search")}<input id="plQ2" type="search" placeholder="Procurar planta…" value="${esc(plQ2)}" aria-label="Procurar planta"></label><span class="fcount">${q?`${nP} resultado${nP===1?"":"s"}`:`${nF?nF+" pasta"+(nF===1?"":"s")+" · ":""}${nP} planta${nP===1?"":"s"}`}</span>${vToggle(v)}</div>
+ <div class="msg busy" id="plBusy" hidden></div>
+ <div class="dropz" id="plDrop">
+ ${nF||nP?(v==="grid"?`${nF?`<div class="fgrid">${showF.map(fCard).join("")}</div>`:""}${nP?`${nF?`<div class="gsub">Plantas ${f?"nesta pasta":"sem pasta"}</div>`:""}<div class="pgrid">${plans.map(pCard).join("")}</div>`:""}`
+   :`<div class="llist card"><div class="lrow lrh"><span></span><span>Nome</span><span>Equipam.</span><span class="lst">Progresso</span><span>Testado</span><span></span></div>${showF.map(fCard).join("")}${plans.map(pCard).join("")}</div>`)
+  :`<div class="empty3">${ico(q?"search":"up")}<b>${q?"Nenhuma planta encontrada.":f?"Esta pasta está vazia.":"Ainda não há plantas neste projeto."}</b><span>${q?"Experimenta outra pesquisa.":S.canWrite?"Carrega plantas em PDF ou imagem (podes escolher vários ficheiros) ou arrasta-os para aqui.":"Quando a equipa carregar plantas, aparecem aqui."}</span>${!q&&S.canWrite?`<button type="button" class="btn primary bigb" id="plUp2">${ico("up")}Carregar ficheiro</button>`:""}</div>`}
+ </div>`;
+ W.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+ const back=()=>{plFolder=null;renderPlansPage()};const r0=$("plRoot");if(r0)r0.onclick=back;const bb=$("plBack");if(bb)bb.onclick=back;
+ W.querySelectorAll("[data-vt]").forEach(b=>b.onclick=()=>{setPref("of-pl-view",b.dataset.vt);renderPlansPage()});
+ const qi=$("plQ2");qi.oninput=e=>{plQ2=e.target.value;const pos=e.target.selectionStart;renderPlansPage();const n=$("plQ2");n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}};
+ W.querySelectorAll("[data-fo]").forEach(el=>{el.onclick=e=>{if(e.target.closest("[data-fedit]"))return;plFolder=el.dataset.fo;plQ2="";renderPlansPage();$("pageWrap").scrollIntoView({block:"start"})};el.onkeydown=e=>{if(e.key==="Enter")el.click()}});
+ W.querySelectorAll("[data-fedit]").forEach(b=>b.onclick=e=>{e.stopPropagation();openFolder(b.dataset.fedit)});
+ W.querySelectorAll("[data-open]").forEach(el=>{el.onclick=e=>{if(e.target.closest("select"))return;openPlan(el.dataset.open)};el.onkeydown=e=>{if(e.key==="Enter")openPlan(el.dataset.open)}});
+ W.querySelectorAll("[data-move]").forEach(s=>{s.onclick=e=>e.stopPropagation();s.onchange=()=>{api.update("plans",s.dataset.move,{folder:s.value||null});toast(s.value?"Planta movida para "+folderName(s.value):"Planta sem pasta")}});
+ const up=()=>{replacing=null;uploadFolder=plFolder;$("planIn").click()};["plUp","plUp2"].forEach(id=>{const b=$(id);if(b)b.onclick=up});
+ const nf=$("plNewF");if(nf)nf.onclick=()=>openFolder(null);
+ hydrateThumbs(W);syncBusy()}
+/* arrastar ficheiros para a página de plantas */
+(()=>{const W=$("pageWrap");let dep=0;
+ W.addEventListener("dragenter",e=>{if(S.view!=="plans"||!S.canWrite||!e.dataTransfer||![...e.dataTransfer.types].includes("Files"))return;dep++;const z=$("plDrop");if(z)z.classList.add("over")});
+ W.addEventListener("dragleave",()=>{dep=Math.max(0,dep-1);if(!dep){const z=$("plDrop");if(z)z.classList.remove("over")}});
+ W.addEventListener("dragover",e=>{if(S.view==="plans"&&S.canWrite)e.preventDefault()});
+ W.addEventListener("drop",e=>{if(S.view!=="plans"||!S.canWrite)return;e.preventDefault();dep=0;const z=$("plDrop");if(z)z.classList.remove("over");
+  const fl=[...(e.dataTransfer.files||[])].filter(f=>/^image\/|application\/pdf/.test(f.type)||/\.(pdf|png|jpe?g|webp)$/i.test(f.name));if(!fl.length){toast("Só PDF ou imagens.");return}
+  replacing=null;uploadFolder=plFolder;const dt=new DataTransfer();fl.forEach(f=>dt.items.add(f));const inp=$("planIn");inp.files=dt.files;inp.dispatchEvent(new Event("change"))})})();
+/* progresso do carregamento também visível na página de plantas */
+function syncBusy(){const b=$("busy"),p=$("plBusy");if(!b||!p)return;p.hidden=b.hidden;p.textContent=b.textContent}
+new MutationObserver(syncBusy).observe($("busy"),{attributes:true,childList:true,characterData:true,subtree:true});
+/* a pasta criada a partir da página de plantas fica logo aberta? não: a lista mostra-a */
+
+/* =========================================================
+   ObraFlow · Lista de IDs de referência (PDF, Excel, CSV ou texto)
+   - compara os IDs lidos nas etiquetas com a lista do projeto;
+   - a leitura passa a usar a lista: confirma IDs e corrige erros de 1 carácter;
+   - os equipamentos inconclusivos voltam a ser lidos com a ajuda da lista.
+   ========================================================= */
+function idRef(){const r=L.meta&&L.meta.idref;return r&&Array.isArray(r.ids)&&r.ids.length?r:null}
+let refKey="",refS=null,refT=null;
+function refSet(){const r=idRef();if(!r)return null;const k=(r.at||"")+"|"+r.ids.length;
+ if(k!==refKey){refKey=k;refS=new Set(r.ids.map(x=>x.id));refT=new Map(r.ids.map(x=>[x.id,x.t||""]))}return refS}
+function refText(id){refSet();return(refT&&refT.get(id))||""}
+/* distância de edição (para no limite) */
+function editDist(a,b,max){if(a===b)return 0;if(Math.abs(a.length-b.length)>max)return max+1;
+ let prev=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){const cur=[i];let best=i;
+  for(let j=1;j<=b.length;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));if(cur[j]<best)best=cur[j]}
+  if(best>max)return max+1;prev=cur}return prev[b.length]}
+function usedIds(exceptItem){const m=new Set();for(const i of S.items)if(i.id!==exceptItem&&i.devId)m.add(String(i.devId).toUpperCase());return m}
+/* IDs da lista parecidos com o lido (1 carácter de diferença; 2 em IDs compridos), de preferência ainda não usados */
+function nearRef(v,itemId,maxD){const R=refSet();if(!R)return[];v=String(v||"").toUpperCase();if(!v)return[];const used=usedIds(itemId);
+ const md=maxD!=null?maxD:v.length>=8?2:1;const out=[];
+ for(const x of R){if(Math.abs(x.length-v.length)>md)continue;const d=editDist(v,x,md);if(d<=md)out.push({id:x,d,used:used.has(x)})}
+ return out.sort((a,b)=>a.d-b.d||a.used-b.used)}
+/* aplica a lista aos candidatos da leitura */
+function refFix(cands,itemId){const R=refSet();if(!R)return cands;const out=[];const used=usedIds(itemId);
+ for(const c of cands){if(c.k!=="id"){out.push(c);continue}
+  if(R.has(c.v)){out.push({...c,s:c.s+6-(used.has(c.v)?4:0),ref:used.has(c.v)?"":"ok"});continue}
+  const near=nearRef(c.v,itemId,1).filter(x=>!x.used);
+  if(near.length===1)out.push({k:"id",v:near[0].id,s:c.s+3,ref:"fix",from:c.v});
+  out.push({...c,s:c.s-3})}
+ const m={};for(const c of out){const k=c.k+"|"+c.v;if(!m[k]||m[k].s<c.s)m[k]=c}return Object.values(m).sort((a,b)=>b.s-a.s)}
+
+/* ---------- ler o ficheiro da lista ---------- */
+const XLSX_URL="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+async function fileLines(f,onStep){const name=f.name.toLowerCase();
+ if(f.type==="application/pdf"||name.endsWith(".pdf")){
+  if(!window.pdfjsLib)throw new Error("leitor de PDF indisponível");initPdf();
+  const doc=await openPdf(await f.arrayBuffer());const n=Math.min(doc.numPages,300);let lines=[],tokens=0;
+  for(let p=1;p<=n;p++){onStep&&onStep(`A ler a página ${p} de ${n}…`);const pg=await doc.getPage(p);const tc=await pg.getTextContent();
+   const rows=new Map();for(const it of tc.items){const s=String(it.str||"").trim();if(!s)continue;tokens++;const y=Math.round(it.transform[5]/3);
+    if(!rows.has(y))rows.set(y,[]);rows.get(y).push({x:it.transform[4],s})}
+   [...rows.entries()].sort((a,b)=>b[0]-a[0]).forEach(([,r])=>lines.push(r.sort((a,b)=>a.x-b.x).map(x=>x.s).join(" ")))}
+  if(tokens<10){   // PDF digitalizado (só imagem): lê o texto das páginas com o leitor do aparelho
+   lines=[];const P=await pool();const m=Math.min(n,40);
+   for(let p=1;p<=m;p++){onStep&&onStep(`PDF digitalizado: a reconhecer o texto da página ${p} de ${m} (pode demorar)…`);
+    const pg=await doc.getPage(p);const vp=pg.getViewport({scale:1});const sc=Math.min(3,2400/Math.max(vp.width,vp.height));const v2=pg.getViewport({scale:sc});
+    const cv=document.createElement("canvas");cv.width=Math.round(v2.width);cv.height=Math.round(v2.height);const cx=cv.getContext("2d");cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);
+    await pg.render({canvasContext:cx,viewport:v2}).promise;const r=await P.a[0].recognize(cv);lines.push(...String(r.data.text||"").split(/\n/))}}
+  return lines}
+ if(/\.(xlsx|xlsm|xls|ods)$/.test(name)){onStep&&onStep("A abrir a folha de cálculo…");await loadScript(XLSX_URL);
+  const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});const lines=[];
+  for(const sn of wb.SheetNames){const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:""});for(const r of rows)lines.push(r.map(x=>String(x).trim()).filter(Boolean).join(" | "))}
+  return lines}
+ return String(await f.text()).split(/\r?\n/)}
+/* tira os IDs das linhas: hexadecimais com o comprimento dos IDs da obra (ex.: 6) */
+function idsFromLines(lines){const P=idPattern();const found=new Map();const byLen={};
+ const toks=[];for(const raw of lines){const line=String(raw||"").replace(/\s+/g," ").trim();if(!line)continue;
+  for(const w of line.toUpperCase().split(/[^0-9A-Z]+/)){if(w.length<5||w.length>10||!/^[0-9A-F]+$/.test(w)||!/\d/.test(w))continue;
+   if(/^(19|20)\d{2}(0[1-9]|1[0-2])\d{0,2}$/.test(w))continue;     // datas
+   if(/^\d+$/.test(w)&&/(total|data|date|p[áa]g|page|tel|nif|contrib|c[óo]digo postal|qtd|quant)/i.test(line))continue;   // totais, datas, telefones
+   toks.push({w,line});byLen[w.length]=(byLen[w.length]||0)+(/[A-F]/.test(w)?3:1)}}
+ // comprimento: o dos IDs já registados na obra; senão o mais frequente (com letras pesa mais)
+ const len=S.items.filter(i=>i.devId).length>=3?P.len:+(Object.entries(byLen).sort((a,b)=>b[1]-a[1])[0]||[6])[0];
+ let sel=toks.filter(t=>t.w.length===len);
+ const digits=sel.filter(t=>/^\d+$/.test(t.w)).length;
+ // muitos números só com algarismos: são provavelmente outros números (endereços, quantidades) e não IDs
+ let dropped=0;if(sel.length&&digits/sel.length>.3){dropped=new Set(sel.filter(t=>/^\d+$/.test(t.w)).map(t=>t.w)).size;sel=sel.filter(t=>/[A-F]/.test(t.w))}
+ for(const t of sel)if(!found.has(t.w))found.set(t.w,t.line.replace(new RegExp(t.w,"i"),"").replace(/\s*\|\s*\|\s*/g," | ").replace(/^[\s|·:-]+|[\s|·:-]+$/g,"").slice(0,140));
+ return{ids:[...found.entries()].map(([id,t])=>({id,t})),len,dropped}}
+
+/* ---------- diálogo de confirmação ---------- */
+(()=>{const d=document.createElement("dialog");d.id="dlgRef";d.innerHTML=`<div class="dlg"><h3>Lista de IDs</h3><div id="rfBody"></div>
+ <div class="toolrow" style="justify-content:flex-end"><button type="button" class="btn" id="rfCancel">Cancelar</button><button type="button" class="btn primary" id="rfOk">Usar esta lista</button></div></div>`;
+ document.body.appendChild(d);$("rfCancel").onclick=()=>d.close();
+ const inp=document.createElement("input");inp.type="file";inp.id="refIn";inp.hidden=true;inp.accept=".pdf,.xlsx,.xls,.xlsm,.ods,.csv,.txt,application/pdf,text/csv,text/plain";document.body.appendChild(inp);
+ inp.onchange=async()=>{const f=inp.files[0];inp.value="";if(!f)return;const msg=$("refMsg");const show=t=>{if(msg){msg.hidden=false;msg.className="msg busy";msg.textContent=t}};
+  try{show("A abrir "+f.name+"…");const lines=await fileLines(f,show);const r=idsFromLines(lines);if(msg)msg.hidden=true;
+   if(!r.ids.length){if(msg){msg.hidden=false;msg.className="msg err";msg.textContent=`Não encontrei IDs em ${f.name}. Se o PDF for uma digitalização pouco nítida, exporta a lista em Excel ou CSV.`}return}
+   const sample=r.ids.slice(0,8).map(x=>x.id).join(", ");const R0=new Set(r.ids.map(x=>x.id));const its=S.items.filter(i=>i.devId);const ok=its.filter(i=>R0.has(String(i.devId).toUpperCase())).length;
+   $("rfBody").innerHTML=`<p style="margin:0">Encontrei <b>${r.ids.length} IDs</b> com ${r.len} caracteres em <b>${esc(f.name)}</b>.</p>
+    <p class="muted" style="margin:0">Exemplos: <span class="mono">${esc(sample)}${r.ids.length>8?"…":""}</span></p>
+    ${r.dropped?`<p class="muted" style="margin:0;font-size:12px">Ignorei ${r.dropped} números só com algarismos (parecem endereços ou quantidades).</p>`:""}
+    ${its.length?`<div class="msg ${ok===its.length?"ok":"warn"}">${ok} de ${its.length} IDs já lidos na obra constam desta lista.</div>`:""}
+    <p class="muted" style="margin:0;font-size:13px">Ao usar a lista, a leitura das etiquetas passa a confirmar os IDs por ela, corrige erros de um carácter e volta a tentar os equipamentos com leitura inconclusiva.</p>`;
+   $("rfOk").onclick=async()=>{d.close();await api.set("meta","idref",{name:f.name,at:now(),by:S.meId,len:r.len,ids:r.ids});toast(`Lista de IDs carregada: ${r.ids.length} IDs.`);
+    setTimeout(()=>{refResolve();retryInconclusive();render()},300)};d.showModal()}
+  catch(e){if(msg){msg.hidden=false;msg.className="msg err";msg.textContent="Não foi possível ler o ficheiro: "+(e.message||e)}}}})();
+
+/* inconclusivos com uma leitura que bate certo com a lista (e ainda não usada) ficam resolvidos */
+async function refResolve(){const R=refSet();if(!R||!S.canWrite)return 0;let n=0;const used=usedIds(null);
+ for(const it of S.items){if(readStateOf(it)!=="inconclusivo")continue;
+  const hits=[...new Set((it.readCands||[]).filter(c=>c.k==="id").flatMap(c=>R.has(c.v)?[c.v]:nearRef(c.v,it.id,1).filter(x=>!x.used).map(x=>x.id)))].filter(v=>!used.has(v));
+  if(hits.length===1){const v=hits[0];used.add(v);const patch={devId:v,readConf:"alta",readState:"ok",readNote:`ID ${v} confirmado pela lista de IDs (a leitura estava inconclusiva).`,updatedAt:now(),updatedBy:S.meId};
+   logPatch(it,patch,"ID "+v+" (lista de IDs)");await api.update("items",it.id,patch);n++}}
+ if(n)toast(`${n} equipamento${n>1?"s":""} com leitura inconclusiva ficaram resolvidos pela lista de IDs.`);return n}
+function retryInconclusive(){if(!S.canWrite)return;let n=0;for(const it of S.items){if(readStateOf(it)==="inconclusivo"&&!RQ.some(x=>x.id===it.id)){RQ.push({id:it.id,overwrite:false,blobs:null,opts:{deep:true},pid:S.projectId});n++}}if(n){bgBadge();runRQ()}return n}
+
+/* ---------- cartão na Lista de IDs ---------- */
+let REFV="";
+function refCard(){const r=idRef();const its=S.items;const R=refSet();
+ const inc=its.filter(i=>["inconclusivo","a_ler","pendente"].includes(readStateOf(i)));
+ if(!r)return`<section class="card refc"><div class="refh"><div><h3>Verificar com a lista de IDs do projeto</h3><p class="muted">Carrega o PDF (ou Excel/CSV) com todos os IDs da instalação para ver se as etiquetas lidas batem certo. A leitura passa também a usar esta lista para corrigir erros e resolver leituras inconclusivas.</p></div>
+  ${S.canWrite?`<button type="button" class="btn primary bigb" id="refUp">Carregar lista de IDs</button>`:""}</div>
+  ${inc.length?`<div class="msg warn">${inc.length} equipamento${inc.length>1?"s":""} com foto ainda sem ID certo (leitura inconclusiva ou por ler). <button type="button" class="linkb" data-ref-tab="inc" id="refIncGo">Ver</button></div>`:""}
+  <div class="msg" id="refMsg" hidden></div>${REFV==="inc"?refTable("inc"):""}</section>`;
+ const withId=its.filter(i=>i.devId);const okI=withId.filter(i=>R.has(String(i.devId).toUpperCase()));const fora=withId.filter(i=>!R.has(String(i.devId).toUpperCase()));
+ const used=new Set(withId.map(i=>String(i.devId).toUpperCase()));const falta=r.ids.filter(x=>!used.has(x.id));
+ const tab=REFV||(fora.length?"fora":inc.length?"inc":"falta");
+ const tile=(k,c,n,l,s)=>`<button type="button" class="reft${tab===k?" on":""}" data-ref-tab="${k}" style="--c:${c}"><b>${n}</b><span>${l}</span><small>${s}</small></button>`;
+ return`<section class="card refc"><div class="refh"><div><h3>Lista de IDs: ${esc(r.name||"lista")}</h3><p class="muted">${r.ids.length} IDs · carregada ${fmtDate(r.at)}${r.by?" por "+esc(nameOf(r.by)):""}</p></div>
+  <div class="toolrow">${S.canWrite?`<button type="button" class="btn" id="refUp">Substituir lista</button>`:""}<button type="button" class="btn" id="refCsv">Exportar comparação</button>${S.isCoord?`<button type="button" class="btn danger" id="refDel">Remover</button>`:""}</div></div>
+  <div class="msg" id="refMsg" hidden></div>
+  <div class="refts">${tile("ok","var(--ok)",okI.length,"Batem certo","lidos e na lista")}${tile("fora","var(--bad)",fora.length,"Não constam da lista","ID lido a confirmar")}${tile("falta","#2563eb",falta.length,"Por encontrar","na lista, ainda sem equipamento")}${tile("inc","#d97706",inc.length,"Inconclusivos","foto sem ID certo")}</div>
+  ${refTable(tab,{okI,fora,falta,inc})}</section>`}
+function refTable(tab,D){const its=S.items;D=D||{inc:its.filter(i=>["inconclusivo","a_ler","pendente"].includes(readStateOf(i)))};
+ const open=i=>`<button type="button" class="btn sm" data-item="${esc(i.id)}">Abrir</button>`;
+ if(tab==="fora"){const rows=D.fora.slice(0,300).map(i=>{const nr=nearRef(i.devId,i.id).filter(x=>!x.used).slice(0,2);
+   return`<tr><td class="mono"><b class="bad">${esc(i.devId)}</b></td><td class="mono">${esc(i.code)}</td><td>${esc(planName(i.planId))}</td><td>${nr.length?nr.map(x=>`<button type="button" class="cand" data-fix="${esc(i.id)}" data-v="${esc(x.id)}" title="${esc(refText(x.id))}">Corrigir para ${esc(x.id)}</button>`).join(" "):`<span class="muted">sem ID parecido livre na lista</span>`}</td><td>${open(i)}</td></tr>`}).join("");
+  return`<div class="tbl"><table><thead><tr><th>ID lido</th><th>Ref.</th><th>Planta</th><th>Sugestão da lista</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="empty2">Todos os IDs lidos constam da lista.</td></tr>`}</tbody></table></div>`}
+ if(tab==="falta"){const rows=D.falta.slice(0,500).map(x=>`<tr><td class="mono"><b>${esc(x.id)}</b></td><td class="muted" style="font-size:12.5px">${esc(x.t||"")}</td></tr>`).join("");
+  return`<div class="tbl"><table><thead><tr><th>ID na lista</th><th>Descrição na lista</th></tr></thead><tbody>${rows||`<tr><td colspan="2" class="empty2">Todos os IDs da lista já têm equipamento.</td></tr>`}</tbody></table></div>${D.falta.length>500?`<p class="muted">… e mais ${D.falta.length-500}.</p>`:""}`}
+ if(tab==="ok"){const rows=D.okI.slice(0,500).map(i=>`<tr><td class="mono"><b>${esc(i.devId)}</b></td><td class="mono">${esc(i.code)}</td><td>${esc(planName(i.planId))}</td><td class="muted" style="font-size:12.5px">${esc(refText(String(i.devId).toUpperCase()))}</td></tr>`).join("");
+  return`<div class="tbl"><table><thead><tr><th>ID</th><th>Ref.</th><th>Planta</th><th>Descrição na lista</th></tr></thead><tbody>${rows||`<tr><td colspan="4" class="empty2">Ainda nenhum.</td></tr>`}</tbody></table></div>`}
+ const R=refSet();
+ const rows=D.inc.slice(0,300).map(i=>{const st=readStateOf(i);const cs=(i.readCands||[]).filter(c=>c.k==="id").slice(0,4);
+  return`<tr><td class="mono">${esc(i.code)}</td><td>${esc(planName(i.planId))}</td><td><span class="rs rs-${st}">${RS_N[st]}</span></td><td>${S.canWrite&&cs.length?cs.map(c=>`<button type="button" class="cand${R&&R.has(c.v)?" inref":""}" data-fix="${esc(i.id)}" data-v="${esc(c.v)}">Usar ${esc(c.v)}${R&&R.has(c.v)?" ✓":""}</button>`).join(" "):`<span class="muted">${st==="a_ler"||st==="pendente"?"na fila de leitura":"sem leituras: recorta a zona ou tira outra foto"}</span>`}</td><td>${open(i)}</td></tr>`}).join("");
+ return`<div class="tbl"><table><thead><tr><th>Ref.</th><th>Planta</th><th>Estado</th><th>Leituras possíveis</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="empty2">Sem leituras inconclusivas.</td></tr>`}</tbody></table></div>
+  ${S.canWrite&&D.inc.length?`<div class="toolrow"><button type="button" class="btn" id="refRetry">Ler de novo todos os inconclusivos</button></div>`:""}`}
+function wireRef(W){const up=$("refUp");if(up)up.onclick=()=>$("refIn").click();
+ W.querySelectorAll("[data-ref-tab]").forEach(b=>b.onclick=()=>{REFV=b.dataset.refTab;renderPage("ids")});
+ W.querySelectorAll("[data-fix]").forEach(b=>b.onclick=async e=>{e.stopPropagation();const it=S.items.find(i=>i.id===b.dataset.fix);if(!it)return;const v=b.dataset.v;
+  const o=findDup(it.id,"devId",v);const patch={devId:v,readConf:"alta",readState:"ok",readNote:`ID ${v} escolhido${refSet()&&refSet().has(v)?" (consta da lista de IDs)":""}.`,updatedAt:now(),updatedBy:S.meId};
+  logPatch(it,patch,"ID: "+v);await api.update("items",it.id,patch);toast(o?`ID ${v} guardado, mas está repetido com ${o.code}.`:`ID ${v} guardado em ${it.code}.`);renderPage("ids")});
+ const rr=$("refRetry");if(rr)rr.onclick=()=>{const n=retryInconclusive();toast(n?`${n} equipamento${n>1?"s":""} voltaram à fila de leitura (em segundo plano).`:"Já estão na fila.")};
+ const dl=$("refDel");if(dl)dl.onclick=async()=>{if(!dl.classList.contains("armed")){dl.classList.add("armed");dl.textContent="Confirmar remover";return}await api.del("meta","idref");REFV="";toast("Lista de IDs removida.");renderPage("ids")};
+ const cv=$("refCsv");if(cv)cv.onclick=()=>{const r=idRef();const R=refSet();const e=v=>{v=String(v??"");return/[;"\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};const rows=[["ID","Estado","Ref. equipamento","Planta","Descrição na lista"]];
+  const seen=new Set();for(const i of S.items.filter(i=>i.devId)){const v=String(i.devId).toUpperCase();seen.add(v);rows.push([v,R.has(v)?"Bate certo":"Não consta da lista",i.code,planName(i.planId),refText(v)])}
+  for(const x of r.ids)if(!seen.has(x.id))rows.push([x.id,"Por encontrar","","",x.t||""]);
+  for(const i of S.items.filter(i=>["inconclusivo","a_ler","pendente"].includes(readStateOf(i))))rows.push(["","Inconclusivo",i.code,planName(i.planId),""]);
+  saveFile(`Comparacao_IDs_${slug()}.csv`,"﻿"+rows.map(r=>r.map(e).join(";")).join("\r\n"))}}
+const idsPageBase=idsPage;
+idsPage=function(){const h=idsPageBase();const k='<div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="idQ"';const i=h.indexOf(k);return i<0?h+refCard():h.slice(0,i)+refCard()+h.slice(i)};
+const wireIdsBase=wireIds;
+wireIds=function(W){wireIdsBase(W);wireRef(W||$("pageWrap"))};
+
+/* ---------- filtro "Inconclusivos" na lista da planta ---------- */
+const inFilterBase=inFilter;
+inFilter=function(it,f){f=f||S.filter;if(f==="inc")return["inconclusivo","a_ler","pendente","fora"].includes(readStateOf(it));return inFilterBase(it,f)};
+(()=>{const all=document.querySelector('.filters .chip[data-f="all"]');if(!all)return;const b=document.createElement("button");b.className="chip";b.dataset.f="inc";b.setAttribute("aria-pressed","false");b.innerHTML="Inconclusivos <b></b>";
+ b.title="Fotos sem ID certo, IDs fora da lista e leituras em curso";all.before(b);b.onclick=()=>{S.filter="inc";render()}})();
 
 boot();

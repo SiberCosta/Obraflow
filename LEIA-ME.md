@@ -139,6 +139,20 @@ As regras são aplicadas no servidor: mesmo que alguém mexa na app, não conseg
 
 Avisos enviados: equipamento ou piso atribuído a ti; anomalia nova (coordenação e responsável) e anomalia resolvida (quem a registou); Testado → coordenação "para validar"; Validado → fiscalização "para aceitar"; Aceite → coordenação; plantas novas ou trocadas (opcional).
 
+## Atualização 3: vários projetos (obras) com acesso por pessoa
+
+Ao entrar com o email aparece primeiro a lista **Os meus projetos** — só as obras a que essa pessoa tem acesso. Ao escolher uma obra aparecem as **Plantas e pastas** dessa obra.
+
+**Instalar (uma vez):** no Supabase → **SQL Editor** → **New query** → cola o conteúdo de `supabase/atualizacao-3-projetos.sql` → **Run**. Tem de ser depois da atualização 2. Deve aparecer "Atualização 3 instalada: 1 projeto(s)". Os dados que já existem ficam no primeiro projeto, com acesso para todas as contas aprovadas.
+
+- **Novo projeto** (Administrador e Coordenação): nome da obra, cliente, morada e estado. Quem cria fica logo com acesso.
+- **Acessos** (no cartão do projeto): escolhe quem pode ver e trabalhar nessa obra. O Administrador vê sempre todas.
+- **Editar**: muda nome, cliente, morada ou estado (Em curso, Em pausa, Concluído). O Administrador pode apagar um projeto.
+- **Grelha ou Lista**: botões junto à pesquisa nos Projetos, Plantas e pastas, Equipamentos (cartões com a foto da etiqueta), Anomalias e Documentos. A escolha fica lembrada em cada aparelho.
+- **Plantas e pastas**: **Nova pasta** e **Carregar ficheiro** (PDF ou imagens, vários de uma vez; também se podem arrastar para a página). Dentro de uma pasta, o que se carrega fica nessa pasta. Cada planta tem a caixa "Mover para a pasta".
+- Para trocar de obra: no menu lateral toca no nome do projeto (**Trocar**).
+- Sem a atualização 3 a app continua a funcionar com um só projeto.
+
 ## Trocar a planta de um piso sem perder os IDs
 
 **Obra → Pisos… → Trocar planta (manter os IDs no sítio)** e escolhe o PDF ou imagem novo:
@@ -209,6 +223,22 @@ Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e o
 1. Leitura rápida da foto reduzida, em qualquer orientação (direita, de lado, de pernas para o ar), normal e pelo canal verde (placas verdes e fundos coloridos), com 2 leitores em paralelo quando o telemóvel aguenta.
 2. Onde aparece "ID" ou um código, a app recorta essa linha em alta resolução e lê-a várias vezes para confirmar.
 3. **Validação automática**: o código é comparado com o padrão dos IDs da obra (ex.: 6 caracteres hexadecimais) e o melhor fica gravado sozinho. As outras leituras ficam como botões para corrigir com um toque; só se nada for lido é que a app pede para escrever o ID (e põe o cursor no campo).
+
+## Leitura em segundo plano e "Leitura inconclusiva" (versão 18)
+
+- Depois de tirar a foto podes **fechar a ficha**: a leitura continua em segundo plano (aparece "A ler etiquetas" no topo). Fotos que ficaram por ler são encontradas e lidas sozinhas.
+- Se a 1.ª leitura não tiver certeza, a app lê **de novo com mais detalhe** (todas as fotos e orientações, em alta resolução).
+- Se mesmo assim não houver certeza (nada legível, duas leituras possíveis, ou ID que não consta da lista), o equipamento fica **Inconclusivo**: marcador com **?** laranja, filtro **Inconclusivos** na lista da planta, e as leituras possíveis aparecem para escolher com um toque.
+
+## Verificar com a lista de IDs (PDF, Excel ou CSV)
+
+Em **Lista de IDs** → **Carregar lista de IDs**: escolhe o PDF (ou Excel/CSV) com todos os IDs da instalação. A app mostra quantos IDs encontrou e alguns exemplos antes de usar a lista.
+- **Batem certo**: IDs lidos que constam da lista.
+- **Não constam da lista**: IDs lidos que não existem na lista, com sugestão "Corrigir para…" (ID da lista com 1 carácter de diferença e ainda livre).
+- **Por encontrar**: IDs da lista que ainda não têm equipamento (com a descrição da linha do PDF).
+- **Inconclusivos**: fotos sem ID certo, com as leituras possíveis (✓ = consta da lista) e **Ler de novo todos os inconclusivos**.
+- A leitura passa a usar a lista: confirma IDs, corrige erros de 1 carácter e resolve sozinha os inconclusivos quando só uma leitura bate certo.
+- **Exportar comparação** gera um CSV para Excel. PDF digitalizado (só imagem) também funciona, mas é mais lento; se possível usa o PDF original ou Excel.
 
 ## Leitura com IA (opcional, gratuita)
 
