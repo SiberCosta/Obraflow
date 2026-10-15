@@ -2491,7 +2491,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="22";
+const APP_VER="23";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -3039,16 +3039,59 @@ $("exGo").onclick=async()=>{const p=plan();if(!p)return;const btn=$("exGo");btn.
    const px=pv.getContext("2d");px.drawImage(cv,0,0,pv.width,pv.height);drawLayout(px,cv._labels,cv._mk,sc,mode);
    $("exPrev").src=pv.toDataURL("image/jpeg",.75);$("exPrev").hidden=false;
    btn.textContent="A preparar o PDF…";name=base+".pdf";
-   try{blob=await vecPlanPdf(p,its,mode,colorMode,fmt==="pdf",!!(p.ov&&$("exOv").value==="1"))}
-   catch(e){console.warn("PDF vetorial",e);if(!window.jspdf){toast("Gerador de PDF indisponível. Escolhe PNG ou JPG.");return}blob=await planPdf(p,cv,its,mode,fmt==="pdf")}}
+   const wOv=!!(p.ov&&$("exOv").value==="1");let how="";
+   try{blob=await vecPlanPdf(p,its,mode,colorMode,fmt==="pdf",wOv);how=p.pdf?"vetor":"imagem original"}
+   catch(e){console.warn("PDF vetorial",e);const why=e&&e.message||"erro";
+    try{if(!window.jspdf)throw new Error("gerador de PDF indisponível");blob=await rasterPlanPdf(p,its,mode,colorMode,fmt==="pdf",wOv,t=>{btn.textContent=t});how="alta resolução ("+why+")"}
+    catch(e2){console.warn("PDF alta resolução",e2);if(!window.jspdf){toast("Gerador de PDF indisponível. Escolhe PNG ou JPG.");return}blob=await planPdf(p,cv,its,mode,fmt==="pdf");how="simples"}}
+   setTimeout(()=>toast(how==="vetor"?"PDF com o desenho original em vetor (nítido com qualquer zoom).":how==="imagem original"?"PDF com a imagem original da planta.":how.startsWith("alta")?"PDF com a planta em alta resolução (300 ppp). Não foi possível usar o desenho em vetor: "+how.slice(16,-1)+".":"PDF simples."),1500)}
   await saveBlob(name,blob)}
  catch(e){toast("Não foi possível gerar: "+(e.message||"erro"))}finally{btn.disabled=false;btn.textContent="Gerar e descarregar";window.__lblScale=1}};
 
+/* ---------- alternativa: planta desenhada em alta resolução (300 ppp, em mosaico), mesma folha, sem margens ---------- */
+async function rasterPlanPdf(p,its,mode,colorMode,withList,withOv,onStep){const{jsPDF}=window.jspdf;let VW,VH,tiles=[];
+ const pg=await pdfPage(p).catch(()=>null);
+ if(pg){const v1=pg.getViewport({scale:1});VW=v1.width;VH=v1.height;
+  let sc=300/72;const maxPx=90e6;if(VW*VH*sc*sc>maxPx)sc=Math.sqrt(maxPx/(VW*VH));const vp=pg.getViewport({scale:sc});const TW=3072;
+  const nx=Math.ceil(vp.width/TW),ny=Math.ceil(vp.height/TW);let n=0;
+  for(let ty=0;ty<ny;ty++)for(let tx=0;tx<nx;tx++){n++;onStep&&onStep(`A desenhar a planta em alta resolução (${n} de ${nx*ny})…`);
+   const x0=tx*TW,y0=ty*TW,w=Math.min(TW,Math.ceil(vp.width-x0)),h=Math.min(TW,Math.ceil(vp.height-y0));const c=document.createElement("canvas");c.width=w;c.height=h;const cx=c.getContext("2d");cx.fillStyle="#fff";cx.fillRect(0,0,w,h);
+   await pg.render({canvasContext:cx,viewport:vp,transform:[1,0,0,1,-x0,-y0]}).promise;tiles.push({u:c.toDataURL("image/jpeg",.93),x:x0/sc,y:y0/sc,w:w/sc,h:h/sc});c.width=c.height=1}}
+ else{const b=await blobOf(p.img);const bm=await createImageBitmap(b);const L=841*72/25.4,s2=L/Math.max(bm.width,bm.height);VW=bm.width*s2;VH=bm.height*s2;
+  tiles.push({u:await blobToDataUrl(b),x:0,y:0,w:VW,h:VH,fmt:/png/.test(b.type)?"PNG":"JPEG"})}
+ const doc=new jsPDF({orientation:VW>=VH?"landscape":"portrait",unit:"pt",format:[VW,VH],compress:true});
+ for(const t of tiles)doc.addImage(t.u,t.fmt||"JPEG",t.x,t.y,t.w+.4,t.h+.4,undefined,"FAST");
+ const wantMk=typeof marksFor==="function"&&marksFor(p.id).length&&($("exMk")?$("exMk").value==="1":true);
+ if((withOv&&p.ov)||wantMk){const kk=Math.min(1,3000/Math.max(p.w,p.h));const oc=document.createElement("canvas");oc.width=Math.round(p.w*kk);oc.height=Math.round(p.h*kk);if(withOv&&p.ov)await drawOvOn(oc,p);if(wantMk)drawMarksOn(oc,p);doc.addImage(oc.toDataURL("image/png"),"PNG",0,0,VW,VH)}
+ // texto do desenho (invisível) para Ctrl+F
+ if(pg){try{const v1=pg.getViewport({scale:1});const tc=await pg.getTextContent();doc.setFont("helvetica","normal");
+  for(const it of tc.items){const str=String(it.str||"").trim();if(!str)continue;const tr=pdfjsLib.Util.transform(v1.transform,it.transform);const fh=Math.hypot(tr[2],tr[3]);if(!fh)continue;
+   try{doc.setFontSize(fh*.95);doc.text(str,tr[4],tr[5],{renderingMode:"invisible",angle:Math.round(-Math.atan2(tr[1],tr[0])*180/Math.PI)})}catch(e){}}}catch(e){}}
+ // marcadores em vetor
+ const LW=4000,s=VW/LW,LH=Math.round(VH/s);const lc=document.createElement("canvas");lc.width=LW;lc.height=LH;const cv=drawMarkers(lc,its,mode,colorMode,"layout");const L=cv._labels||[],MK=cv._mk;
+ const fsPt=MK.fs*s,padPt=MK.pad*s,lw=Math.max(.3,MK.fs/9*s);
+ for(const q of L){if(!q.b)continue;doc.setDrawColor(255,255,255);doc.setLineWidth(lw*2.2);doc.line(q.hx*s,q.hy*s,q.lx*s,q.ly*s);doc.setDrawColor(...hexRgb(q.col));doc.setLineWidth(lw);doc.line(q.hx*s,q.hy*s,q.lx*s,q.ly*s)}
+ doc.setFont("courier","bold");doc.setFontSize(fsPt);
+ for(const q of L){const b=q.b;if(!b)continue;const tw=doc.getTextWidth(q.t);const bw=Math.max((b.x1-b.x0)*s,tw+padPt*2),bh=(b.y1-b.y0)*s;doc.setLineWidth(Math.max(.4,MK.fs/7*s));
+  if(q.dup){doc.setFillColor(194,64,47);doc.setDrawColor(194,64,47)}else{doc.setFillColor(255,255,255);doc.setDrawColor(...hexRgb(q.col))}doc.rect(b.x0*s,b.y0*s,bw,bh,"FD");
+  if(q.dup)doc.setTextColor(255,255,255);else doc.setTextColor(17,17,17);doc.text(q.t,b.x0*s+padPt,b.y0*s+bh/2,{baseline:"middle"})}
+ doc.setTextColor(0);
+ for(const q of L){const ph=MK.ph*s,R=ph*.36,x=q.x*s,tip=q.y*s,cy=tip-ph+R;doc.setFillColor(...hexRgb(q.col));doc.setDrawColor(255,255,255);doc.setLineWidth(Math.max(.3,R*.18));
+  doc.triangle(x-R*.82,cy+R*.45,x+R*.82,cy+R*.45,x,tip,"F");doc.circle(x,cy,R,"FD");if(q.iss)doc.setFillColor(194,64,47);else doc.setFillColor(255,255,255);doc.circle(x,cy,R*.42,"F")}
+ doc.setFont("helvetica","normal");for(const it of its){if(it.x==null)continue;try{doc.setFontSize(Math.max(1,fsPt*.5));doc.text([it.devId,it.mac,it.code].filter(Boolean).join(" "),it.x*VW,it.y*VH,{renderingMode:"invisible"})}catch(e){}}
+ doc.setProperties({title:`${S.meta.name?S.meta.name+" · ":""}${p.name}`,creator:"ObraFlow",subject:"Planta com equipamentos e IDs",keywords:its.map(i=>i.devId||i.mac||i.code).filter(Boolean).join(" ")});
+ if(withList){doc.addPage("a4","portrait");let y=50;doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text(`Lista de equipamentos · ${p.name}`,40,y);y+=24;
+  const cols=[["Ref.",40],["ID",135],["MAC",215],["Tipo",335],["Etapa",450],["Leitura",520]];const head=()=>{doc.setFont("helvetica","bold");doc.setFontSize(9);cols.forEach(([t,x])=>doc.text(t,x,y));y+=6;doc.setDrawColor(180);doc.line(40,y,555,y);y+=12;doc.setFont("helvetica","normal")};head();
+  for(const it of its){if(y>800){doc.addPage("a4","portrait");y=50;head()}const st=typeof readStateOf==="function"?readStateOf(it):"";[it.code,it.devId||"",it.mac||"",tOf(it.type).n,sOf(it.stage).n,st&&st!=="ok"?RS_N[st]:""].forEach((t,c)=>doc.text(String(t).slice(0,c===3?22:20),cols[c][1],y));y+=14}}
+ return doc.output("blob")}
 /* ---------- PDF "limpo": a planta original em vetor (sem perder qualidade), sem margens nem faixas extra,
    com pinos, ligações e etiquetas em vetor e o texto pesquisável ---------- */
-async function vecPlanPdf(p,its,mode,colorMode,withList,withOv){await loadScript("vendor/pdf-lib.min.js");const{PDFDocument,StandardFonts,rgb,degrees}=window.PDFLib;
+async function loadPdfLib(){if(window.PDFLib)return;try{await loadScript("vendor/pdf-lib.min.js")}catch(e){}if(!window.PDFLib)await loadScript("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js").catch(()=>{});
+ if(!window.PDFLib)throw new Error("falta o ficheiro vendor/pdf-lib.min.js no GitHub")}
+async function vecPlanPdf(p,its,mode,colorMode,withList,withOv){await loadPdfLib();const{PDFDocument,StandardFonts,rgb,degrees}=window.PDFLib;
  const out=await PDFDocument.create();let VW,VH,page;
  if(p.pdf){const bytes=new Uint8Array(await (await blobOf(p.pdf)).arrayBuffer());const src=await PDFDocument.load(bytes,{ignoreEncryption:true,updateMetadata:false});
+  if(src.isEncrypted)throw new Error("o PDF original está protegido (encriptado) e não pode ser copiado em vetor");
   const sp=src.getPage(Math.min((p.page||1),src.getPageCount())-1);const cb=sp.getCropBox(),mb=sp.getMediaBox();
   const l=Math.max(cb.x,mb.x),b=Math.max(cb.y,mb.y),r=Math.min(cb.x+cb.width,mb.x+mb.width),t=Math.min(cb.y+cb.height,mb.y+mb.height);
   const W0=r-l,H0=t-b,rot=((sp.getRotation().angle%360)+360)%360;const ep=await out.embedPage(sp,{left:l,bottom:b,right:r,top:t});
