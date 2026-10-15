@@ -1259,7 +1259,7 @@ function exportItems(){const w=$("exWhich").value;let its=planItems().filter(i=>
 function labelOf(it,mode){const id=it.devId||it.mac;return mode==="ref"?it.code:mode==="both"?(id?`${id} · ${it.code}`:it.code):(id||it.code)}
 function pinPath(cx,x,y,h){const R=h*.36,cy=y-h+R;cx.beginPath();cx.moveTo(x,y);cx.bezierCurveTo(x-R*.3,y-R*.9,x-R,cy+R*.85,x-R,cy);cx.arc(x,cy,R,Math.PI,0);cx.bezierCurveTo(x+R,cy+R*.85,x+R*.3,y-R*.9,x,y);cx.closePath();return{R,cy}}
 function drawMarkers(cv,its,mode,colorMode,noText){const cx=cv.getContext("2d"),W=cv.width,H=cv.height;const Lg=Math.max(W,H);
- const fs=Math.max(12,Math.round(Lg/260)),ph=Math.round(fs*1.9),pad=Math.round(fs*.32);cx.font=`700 ${fs}px Consolas, "IBM Plex Mono", monospace`;cx.textBaseline="middle";
+ const fs=Math.max(12,Math.round(Lg/260*(window.__lblScale||1))),ph=Math.round(fs*1.9),pad=Math.round(fs*.32);cx.font=`700 ${fs}px Consolas, "IBM Plex Mono", monospace`;cx.textBaseline="middle";
  const PR=ph*.36;const colOf=it=>colorMode==="one"?"#d9480f":(STAGE_HEX[it.stage]||STAGE_HEX.instalado);
  const pts=its.map(it=>{const x=it.x*W,y=it.y*H;return{it,x,y,hx:x,hy:y-ph+PR,t:labelOf(it,mode),col:colOf(it)}});
  const pins=pts.map(q=>({x0:q.x-PR-2,x1:q.x+PR+2,y0:q.y-ph-2,y1:q.y+1}));const boxes=[],lines=[];
@@ -1278,6 +1278,7 @@ function drawMarkers(cv,its,mode,colorMode,noText){const cx=cv.getContext("2d"),
    if(sc<bs){bs=sc;best=b}}
   q.box=best;boxes.push(best);const[ex,ey]=near(best,q.hx,q.hy);q.lx=ex;q.ly=ey;lines.push([q.hx,q.hy,ex,ey])}
  // 1) ligações, 2) etiquetas com a cor do pino, 3) pinos (ponta = posição exata)
+ if(noText!=="layout"){
  for(const q of pts){cx.strokeStyle="#fff";cx.lineWidth=Math.max(3,fs/4);cx.beginPath();cx.moveTo(q.hx,q.hy);cx.lineTo(q.lx,q.ly);cx.stroke();
   cx.strokeStyle=q.col;cx.lineWidth=Math.max(1.5,fs/9);cx.beginPath();cx.moveTo(q.hx,q.hy);cx.lineTo(q.lx,q.ly);cx.stroke()}
  for(const q of pts){const b=q.box,rr=fs*.25,dp=isDup(q.it);cx.fillStyle=dp?"#c2402f":"#fff";cx.strokeStyle=dp?"#c2402f":q.col;cx.lineWidth=Math.max(2,fs/7);cx.beginPath();
@@ -1285,8 +1286,8 @@ function drawMarkers(cv,its,mode,colorMode,noText){const cx=cv.getContext("2d"),
   cx.fillStyle=dp?"#fff":"#111";if(!noText)cx.fillText(q.t,b.x0+pad,(b.y0+b.y1)/2+1)}
  for(const q of pts.slice().sort((a,b)=>a.y-b.y)){cx.save();cx.shadowColor="rgba(0,0,0,.35)";cx.shadowBlur=fs*.3;cx.shadowOffsetY=fs*.08;const{R,cy}=pinPath(cx,q.x,q.y,ph);cx.fillStyle=q.col;cx.fill();cx.restore();
   pinPath(cx,q.x,q.y,ph);cx.lineWidth=Math.max(1.5,fs/8);cx.strokeStyle="#fff";cx.stroke();
-  cx.beginPath();cx.arc(q.x,cy,R*.42,0,7);cx.fillStyle=hasIssue(q.it)?"#c2402f":"#fff";cx.fill()}
- cv._labels=pts.map(q=>({t:q.t,b:q.box,fs,pad}));return cv}
+  cx.beginPath();cx.arc(q.x,cy,R*.42,0,7);cx.fillStyle=hasIssue(q.it)?"#c2402f":"#fff";cx.fill()}}
+ cv._labels=pts.map(q=>({t:q.t,b:q.box,x:q.x,y:q.y,hx:q.hx,hy:q.hy,lx:q.lx,ly:q.ly,col:q.col,dup:isDup(q.it),iss:hasIssue(q.it)}));cv._mk={fs,pad,ph,PR,W,H};return cv}
 $("exGo").onclick=async()=>{const p=plan();if(!p)return;const btn=$("exGo");btn.disabled=true;const fmt=$("exFmt").value,mode=$("exLbl").value,colorMode=$("exColor").value;
  try{const its=exportItems();if(!its.length&&!marksFor(p.id).length){toast("Não há equipamentos nem marcações para incluir.");return}
   btn.textContent="A desenhar a planta…";const base0=await planCanvas(p);if(p.ov&&$("exOv").value==="1")await drawOvOn(base0,p);const cv=drawMarkers(base0,its,mode,colorMode);
@@ -2490,7 +2491,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="20";
+const APP_VER="21";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -2972,28 +2973,51 @@ function showPlanText(h){openPlan(h.plan);ptxHL={...h};
  setTimeout(()=>tryShow(0),120)}
 setInterval(()=>{const el=$("ptxHl");if(el&&!el.hidden){const p=plan();if(!p||!ptxHL||p.id!==ptxHL.plan||S.view!=="obra")el.hidden=true}},800);
 
-/* ---------- planta em PDF com texto pesquisável ---------- */
+/* ---------- planta em PDF: marcadores e etiquetas em vetor (nítidos com qualquer zoom) e texto pesquisável ---------- */
+/* tamanho do texto das etiquetas, escolhido no diálogo de descarregar */
+(()=>{const l=$("exLbl");if(!l)return;const lab=l.closest("label");const w=document.createElement("label");w.className="f";
+ w.innerHTML=`Tamanho do texto das etiquetas<select id="exSize"><option value="1">Normal</option><option value="1.4">Grande</option><option value="1.9">Muito grande</option><option value="0.75">Pequeno (plantas muito cheias)</option></select>`;
+ (lab||l).after(w);try{const v=localStorage.getItem("of-exsize");if(v)$("exSize").value=v}catch(e){}
+ $("exSize").onchange=()=>{try{localStorage.setItem("of-exsize",$("exSize").value)}catch(e){}}})();
+function hexRgb(h){h=String(h||"#d9480f").replace("#","");if(h.length===3)h=h.split("").map(c=>c+c).join("");const n=parseInt(h,16);return[(n>>16)&255,(n>>8)&255,n&255]}
+/* desenha os marcadores (a partir da disposição calculada) num canvas — usado na pré-visualização */
+function drawLayout(cx,L,M,s,mode){cx.save();cx.scale(s,s);const fs=M.fs,pad=M.pad;cx.font=`700 ${fs}px Consolas, "IBM Plex Mono", monospace`;cx.textBaseline="middle";
+ for(const q of L){cx.strokeStyle=q.col;cx.lineWidth=Math.max(1.5,fs/9);cx.beginPath();cx.moveTo(q.hx,q.hy);cx.lineTo(q.lx,q.ly);cx.stroke()}
+ for(const q of L){const b=q.b;if(!b)continue;cx.fillStyle=q.dup?"#c2402f":"#fff";cx.strokeStyle=q.dup?"#c2402f":q.col;cx.lineWidth=Math.max(2,fs/7);cx.beginPath();cx.rect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0);cx.fill();cx.stroke();cx.fillStyle=q.dup?"#fff":"#111";cx.fillText(q.t,b.x0+pad,(b.y0+b.y1)/2+1)}
+ for(const q of L){const{R,cy}=pinPath(cx,q.x,q.y,M.ph);cx.fillStyle=q.col;cx.fill();cx.lineWidth=Math.max(1.5,fs/8);cx.strokeStyle="#fff";cx.stroke();cx.beginPath();cx.arc(q.x,cy,R*.42,0,7);cx.fillStyle=q.iss?"#c2402f":"#fff";cx.fill()}
+ cx.restore()}
 planPdf=async function(p,cv,its,mode,withList){const{jsPDF}=window.jspdf;const land=cv.width>=cv.height;
- const doc=new jsPDF({orientation:land?"landscape":"portrait",unit:"mm",format:"a3",compress:true});const PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),M=10;
+ const L=cv._labels||[],MK=cv._mk||{fs:14,pad:4,ph:27,PR:10};
+ // folha: A3 por defeito; plantas grandes com muitas etiquetas vão para A1 para o texto ficar legível impresso
+ const big=its.length>60||(window.__lblScale||1)>1.3;const fmt=big?"a1":"a3";
+ const doc=new jsPDF({orientation:land?"landscape":"portrait",unit:"mm",format:fmt,compress:true});const PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),M=10;
  doc.setProperties({title:`${S.meta.name?S.meta.name+" · ":""}${p.name}`,subject:"Planta com equipamentos e IDs",creator:"ObraFlow",keywords:its.map(i=>i.devId||i.mac||i.code).filter(Boolean).join(" ")});
- doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text(`${S.meta.name?S.meta.name+" · ":""}${p.name}`,M,M+4);
- doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text(`${its.length} equipamentos · gerado em ${new Date().toLocaleString("pt-PT")} · texto pesquisável (Ctrl+F)`,M,M+9);doc.setTextColor(0);
- const top=M+13,aw=PW-2*M,ah=PH-top-M,k=Math.min(aw/cv.width,ah/cv.height),iw=cv.width*k,ih=cv.height*k,ox=M+(aw-iw)/2,oy=top+(ah-ih)/2;
- doc.addImage(cv.toDataURL("image/jpeg",.92),"JPEG",ox,oy,iw,ih,undefined,"FAST");
- const PT=72/25.4;const inv=(t,x,y,sizeMm,ang)=>{try{doc.setFontSize(Math.max(1,sizeMm*PT));doc.text(String(t),x,y,{renderingMode:"invisible",baseline:"alphabetic",angle:ang||0})}catch(e){}};
- // 1) texto do desenho original (PDF vetorial): nomes de salas, IDs escritos no projeto…
- let nTxt=0;if(p.pdf){try{const pg=await pdfPage(p);if(pg){const v1=pg.getViewport({scale:1});const s=cv.width/v1.width;if(Math.abs(cv.height/v1.height-s)/s<.02){
+ doc.setFont("helvetica","bold");doc.setFontSize(big?20:13);doc.text(`${S.meta.name?S.meta.name+" · ":""}${p.name}`,M,M+5);
+ doc.setFont("helvetica","normal");doc.setFontSize(big?12:9);doc.setTextColor(90);doc.text(`${its.length} equipamentos · gerado em ${new Date().toLocaleString("pt-PT")} · texto pesquisável (Ctrl+F)`,M,M+(big?12:10));doc.setTextColor(0);
+ const top=M+(big?18:14),aw=PW-2*M,ah=PH-top-M,k=Math.min(aw/cv.width,ah/cv.height),iw=cv.width*k,ih=cv.height*k,ox=M+(aw-iw)/2,oy=top+(ah-ih)/2;
+ doc.addImage(cv.toDataURL("image/jpeg",.9),"JPEG",ox,oy,iw,ih,undefined,"FAST");
+ const X=v=>ox+v*k,Y=v=>oy+v*k,PT=72/25.4;
+ const inv=(t,x,y,sizeMm,ang)=>{try{doc.setFontSize(Math.max(1,sizeMm*PT));doc.text(String(t),x,y,{renderingMode:"invisible",baseline:"alphabetic",angle:ang||0})}catch(e){}};
+ // 1) texto do desenho original (invisível, por cima do desenho): permite procurar salas, IDs do projeto…
+ if(p.pdf){try{const pg=await pdfPage(p);if(pg){const v1=pg.getViewport({scale:1});const s=cv.width/v1.width;if(Math.abs(cv.height/v1.height-s)/s<.02){
    const tc=await pg.getTextContent();doc.setFont("helvetica","normal");
    for(const it of tc.items){const str=String(it.str||"").trim();if(!str)continue;const tr=pdfjsLib.Util.transform(v1.transform,it.transform);const fh=Math.hypot(tr[2],tr[3]);if(!fh)continue;
-    const ang=-Math.atan2(tr[1],tr[0])*180/Math.PI;inv(str,ox+tr[4]*s*k,oy+tr[5]*s*k,fh*s*k*.95,Math.round(ang));nTxt++}}}}catch(e){console.warn("texto do PDF",e)}}
- // 2) etiquetas dos equipamentos (ID · referência) exatamente por cima das caixas desenhadas
- doc.setFont("courier","bold");
- for(const L of cv._labels||[]){if(!L.b)continue;const hMm=(L.b.y1-L.b.y0)*k;inv(L.t,ox+(L.b.x0+L.pad)*k,oy+((L.b.y0+L.b.y1)/2)*k+hMm*.28,L.fs*k*.95,0)}
- // 3) também ao lado de cada pino, a referência e o ID (útil quando a etiqueta mostra só um deles)
- for(const it of its){if(it.x==null)continue;const extra=[it.devId,it.mac,it.code].filter(Boolean).join(" ");inv(extra,ox+it.x*cv.width*k,oy+it.y*cv.height*k,1.2,0)}
- doc.setFont("helvetica","normal");
+    inv(str,X(tr[4]*s),Y(tr[5]*s),fh*s*k*.95,Math.round(-Math.atan2(tr[1],tr[0])*180/Math.PI))}}}}catch(e){console.warn("texto do PDF",e)}}
+ // 2) marcadores em vetor: ligação, caixa da etiqueta, texto real (visível e pesquisável), pino
+ const fsMm=MK.fs*k,padMm=MK.pad*k,lw=Math.max(.12,MK.fs/9*k);
+ for(const q of L){if(!q.b)continue;doc.setDrawColor(255,255,255);doc.setLineWidth(lw*2.2);doc.line(X(q.hx),Y(q.hy),X(q.lx),Y(q.ly));doc.setDrawColor(...hexRgb(q.col));doc.setLineWidth(lw);doc.line(X(q.hx),Y(q.hy),X(q.lx),Y(q.ly))}
+ doc.setFont("courier","bold");doc.setFontSize(fsMm*PT);
+ for(const q of L){const b=q.b;if(!b)continue;const tw=doc.getTextWidth(q.t);const bw=Math.max((b.x1-b.x0)*k,tw+padMm*2),bh=(b.y1-b.y0)*k;
+  doc.setLineWidth(Math.max(.15,MK.fs/7*k));if(q.dup){doc.setFillColor(194,64,47);doc.setDrawColor(194,64,47)}else{doc.setFillColor(255,255,255);doc.setDrawColor(...hexRgb(q.col))}
+  doc.roundedRect(X(b.x0),Y(b.y0),bw,bh,bh*.18,bh*.18,"FD");
+  if(q.dup)doc.setTextColor(255,255,255);else doc.setTextColor(17,17,17);
+  doc.text(q.t,X(b.x0)+padMm,Y(b.y0)+bh/2,{baseline:"middle"})}
+ doc.setTextColor(0);
+ for(const q of L){const ph=MK.ph*k,R=ph*.36,cx0=X(q.x),tip=Y(q.y),cy=tip-ph+R;doc.setFillColor(...hexRgb(q.col));doc.setDrawColor(255,255,255);doc.setLineWidth(Math.max(.12,R*.18));
+  doc.triangle(cx0-R*.82,cy+R*.45,cx0+R*.82,cy+R*.45,cx0,tip,"F");doc.circle(cx0,cy,R,"FD");if(q.iss)doc.setFillColor(194,64,47);else doc.setFillColor(255,255,255);doc.circle(cx0,cy,R*.42,"F")}
+ // 3) ID, MAC e referência junto a cada pino (invisível) — Ctrl+F encontra qualquer um deles
+ doc.setFont("helvetica","normal");for(const it of its){if(it.x==null)continue;inv([it.devId,it.mac,it.code].filter(Boolean).join(" "),X(it.x*cv.width),Y(it.y*cv.height),Math.max(1,fsMm*.6),0)}
  if(!withList)return doc.output("blob");
- // lista de equipamentos (texto normal)
  doc.addPage("a4","portrait");const W2=doc.internal.pageSize.getWidth(),H2=doc.internal.pageSize.getHeight();let y=M+6;
  const cols=[["Ref.",M],["ID",M+34],["MAC",M+62],["Tipo",M+104],["Etapa",M+144],["Leitura",M+170]];
  const head=()=>{doc.setFont("helvetica","bold");doc.setFontSize(9);cols.forEach(([t,x])=>doc.text(t,x,y));y+=2;doc.setDrawColor(180);doc.line(M,y,W2-M,y);y+=5;doc.setFont("helvetica","normal")};
@@ -3001,5 +3025,22 @@ planPdf=async function(p,cv,its,mode,withList){const{jsPDF}=window.jspdf;const l
  for(const it of its){if(y>H2-M){doc.addPage("a4","portrait");y=M+6;head()}const st=typeof readStateOf==="function"?readStateOf(it):"";
   const row=[it.code,it.devId||"",it.mac||"",tOf(it.type).n,sOf(it.stage).n,st&&st!=="ok"?RS_N[st]:""];doc.setFontSize(9);row.forEach((t,c)=>doc.text(String(t).slice(0,c===0?20:c===3?24:22),cols[c][1],y));y+=5.2}
  return doc.output("blob")};
+/* gerar: no PDF a planta vai limpa e os marcadores em vetor; PNG/JPG continuam como imagem */
+$("exGo").onclick=async()=>{const p=plan();if(!p)return;const btn=$("exGo");btn.disabled=true;const fmt=$("exFmt").value,mode=$("exLbl").value,colorMode=$("exColor").value;
+ window.__lblScale=+(($("exSize")||{}).value||1);
+ try{const its=exportItems();if(!its.length&&!(typeof marksFor==="function"&&marksFor(p.id).length)){toast("Não há equipamentos nem marcações para incluir.");return}
+  btn.textContent="A desenhar a planta…";const base0=await planCanvas(p);if(p.ov&&$("exOv").value==="1")await drawOvOn(base0,p);
+  const base=`Planta_${(p.name||"piso").replace(/[^\p{L}\p{N}]+/gu,"_").slice(0,50)}_${new Date().toISOString().slice(0,10)}`;let blob,name;
+  if(fmt==="png"||fmt==="jpg"){const cv=drawMarkers(base0,its,mode,colorMode);btn.textContent="A preparar o ficheiro…";
+   const prevUrl=await new Promise(r=>cv.toBlob(b=>r(URL.createObjectURL(b)),"image/jpeg",.7));$("exPrev").src=prevUrl;$("exPrev").hidden=false;
+   blob=await new Promise(r=>cv.toBlob(r,fmt==="png"?"image/png":"image/jpeg",.92));name=base+"."+fmt}
+  else{if(!window.jspdf){toast("Gerador de PDF indisponível. Escolhe PNG ou JPG.");return}
+   const cv=drawMarkers(base0,its,mode,colorMode,"layout");   // só calcula onde ficam as etiquetas
+   const sc=Math.min(1,1600/Math.max(cv.width,cv.height));const pv=document.createElement("canvas");pv.width=Math.round(cv.width*sc);pv.height=Math.round(cv.height*sc);
+   const px=pv.getContext("2d");px.drawImage(cv,0,0,pv.width,pv.height);drawLayout(px,cv._labels,cv._mk,sc,mode);
+   $("exPrev").src=pv.toDataURL("image/jpeg",.75);$("exPrev").hidden=false;
+   btn.textContent="A preparar o PDF…";blob=await planPdf(p,cv,its,mode,fmt==="pdf");name=base+".pdf"}
+  await saveBlob(name,blob)}
+ catch(e){toast("Não foi possível gerar: "+(e.message||"erro"))}finally{btn.disabled=false;btn.textContent="Gerar e descarregar";window.__lblScale=1}};
 
 boot();
