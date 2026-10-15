@@ -1258,7 +1258,7 @@ function exportItems(){const w=$("exWhich").value;let its=planItems().filter(i=>
  return its.sort((a,b)=>String(a.code).localeCompare(String(b.code),"pt",{numeric:true}))}
 function labelOf(it,mode){const id=it.devId||it.mac;return mode==="ref"?it.code:mode==="both"?(id?`${id} · ${it.code}`:it.code):(id||it.code)}
 function pinPath(cx,x,y,h){const R=h*.36,cy=y-h+R;cx.beginPath();cx.moveTo(x,y);cx.bezierCurveTo(x-R*.3,y-R*.9,x-R,cy+R*.85,x-R,cy);cx.arc(x,cy,R,Math.PI,0);cx.bezierCurveTo(x+R,cy+R*.85,x+R*.3,y-R*.9,x,y);cx.closePath();return{R,cy}}
-function drawMarkers(cv,its,mode,colorMode){const cx=cv.getContext("2d"),W=cv.width,H=cv.height;const Lg=Math.max(W,H);
+function drawMarkers(cv,its,mode,colorMode,noText){const cx=cv.getContext("2d"),W=cv.width,H=cv.height;const Lg=Math.max(W,H);
  const fs=Math.max(12,Math.round(Lg/260)),ph=Math.round(fs*1.9),pad=Math.round(fs*.32);cx.font=`700 ${fs}px Consolas, "IBM Plex Mono", monospace`;cx.textBaseline="middle";
  const PR=ph*.36;const colOf=it=>colorMode==="one"?"#d9480f":(STAGE_HEX[it.stage]||STAGE_HEX.instalado);
  const pts=its.map(it=>{const x=it.x*W,y=it.y*H;return{it,x,y,hx:x,hy:y-ph+PR,t:labelOf(it,mode),col:colOf(it)}});
@@ -1282,11 +1282,11 @@ function drawMarkers(cv,its,mode,colorMode){const cx=cv.getContext("2d"),W=cv.wi
   cx.strokeStyle=q.col;cx.lineWidth=Math.max(1.5,fs/9);cx.beginPath();cx.moveTo(q.hx,q.hy);cx.lineTo(q.lx,q.ly);cx.stroke()}
  for(const q of pts){const b=q.box,rr=fs*.25,dp=isDup(q.it);cx.fillStyle=dp?"#c2402f":"#fff";cx.strokeStyle=dp?"#c2402f":q.col;cx.lineWidth=Math.max(2,fs/7);cx.beginPath();
   cx.roundRect?cx.roundRect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0,rr):cx.rect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0);cx.fill();cx.stroke();
-  cx.fillStyle=dp?"#fff":"#111";cx.fillText(q.t,b.x0+pad,(b.y0+b.y1)/2+1)}
+  cx.fillStyle=dp?"#fff":"#111";if(!noText)cx.fillText(q.t,b.x0+pad,(b.y0+b.y1)/2+1)}
  for(const q of pts.slice().sort((a,b)=>a.y-b.y)){cx.save();cx.shadowColor="rgba(0,0,0,.35)";cx.shadowBlur=fs*.3;cx.shadowOffsetY=fs*.08;const{R,cy}=pinPath(cx,q.x,q.y,ph);cx.fillStyle=q.col;cx.fill();cx.restore();
   pinPath(cx,q.x,q.y,ph);cx.lineWidth=Math.max(1.5,fs/8);cx.strokeStyle="#fff";cx.stroke();
   cx.beginPath();cx.arc(q.x,cy,R*.42,0,7);cx.fillStyle=hasIssue(q.it)?"#c2402f":"#fff";cx.fill()}
- return cv}
+ cv._labels=pts.map(q=>({t:q.t,b:q.box,fs,pad}));return cv}
 $("exGo").onclick=async()=>{const p=plan();if(!p)return;const btn=$("exGo");btn.disabled=true;const fmt=$("exFmt").value,mode=$("exLbl").value,colorMode=$("exColor").value;
  try{const its=exportItems();if(!its.length&&!marksFor(p.id).length){toast("Não há equipamentos nem marcações para incluir.");return}
   btn.textContent="A desenhar a planta…";const base0=await planCanvas(p);if(p.ov&&$("exOv").value==="1")await drawOvOn(base0,p);const cv=drawMarkers(base0,its,mode,colorMode);
@@ -2192,7 +2192,7 @@ function gSearch(q){q=q.trim().toLowerCase();if(q.length<2)return[];const out=[]
  for(const x of S.issues)if(String(x.text).toLowerCase().includes(q))out.push({k:"issue",id:x.id,t:String(x.text).slice(0,60),s:"Anomalia · "+(x.status==="resolvida"?"resolvida":"aberta"),score:4});
  return out.sort((a,b)=>a.score-b.score).slice(0,14)}
 function renderGres(){const R=$("gres");if(!gHits.length){R.innerHTML=`<div class="empty">Sem resultados.</div>`;R.hidden=false;return}
- const lab={item:"Equipamentos",plan:"Plantas",doc:"Documentos",issue:"Anomalias"},icn={item:"ID",plan:"PL",doc:"DOC",issue:"!"};let last="";
+ const lab={item:"Equipamentos",plan:"Plantas",doc:"Documentos",issue:"Anomalias",ptext:"Texto nas plantas (PDF)"},icn={item:"ID",plan:"PL",doc:"DOC",issue:"!",ptext:"TXT"};let last="";
  R.innerHTML=gHits.map((h,i)=>{const hd=h.k!==last?`<h5>${lab[h.k]}</h5>`:"";last=h.k;return hd+`<button type="button" data-g="${i}" class="${i===gSel?"on":""}"><span class="gi">${icn[h.k]}</span><span><b>${esc(h.t)}</b><small>${esc(h.s)}</small></span></button>`}).join("");
  R.hidden=false;R.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>gOpen(gHits[+b.dataset.g]))}
 function gOpen(h){if(!h)return;$("gres").hidden=true;$("gq").value="";$("gq").blur();
@@ -2490,7 +2490,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="19";
+const APP_VER="20";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -2924,5 +2924,82 @@ const inFilterBase=inFilter;
 inFilter=function(it,f){f=f||S.filter;if(f==="inc")return["inconclusivo","a_ler","pendente","fora"].includes(readStateOf(it));return inFilterBase(it,f)};
 (()=>{const all=document.querySelector('.filters .chip[data-f="all"]');if(!all)return;const b=document.createElement("button");b.className="chip";b.dataset.f="inc";b.setAttribute("aria-pressed","false");b.innerHTML="Inconclusivos <b></b>";
  b.title="Fotos sem ID certo, IDs fora da lista e leituras em curso";all.before(b);b.onclick=()=>{S.filter="inc";render()}})();
+
+/* =========================================================
+   ObraFlow · PDF com texto pesquisável
+   1) a planta descarregada em PDF leva o texto (IDs das etiquetas, referências e o texto do
+      desenho original) como texto real: no leitor de PDF, Ctrl+F encontra os IDs;
+   2) a pesquisa da app procura também no texto das plantas em PDF (ex.: IDs escritos no desenho).
+   ========================================================= */
+/* texto de uma página de PDF com posições na imagem (0–1) */
+const PTX={};
+async function planText(p){if(!p||!p.pdf)return null;const key="ptx:"+p.pdf+"|"+(p.page||1);if(PTX[key])return PTX[key];
+ let a=await IDBX.get("kv",key).catch(()=>null);
+ if(!a){const pg=await pdfPage(p);if(!pg)return null;const vp=pg.getViewport({scale:1});const tc=await pg.getTextContent();a=[];
+  for(const it of tc.items){const s=String(it.str||"").replace(/\s+/g," ").trim();if(!s)continue;
+   const tr=pdfjsLib.Util.transform(vp.transform,it.transform);const fh=Math.hypot(tr[2],tr[3])||8;const ang=Math.atan2(tr[1],tr[0]);
+   const w=Math.max(fh*s.length*.5,(it.width||0)*vp.scale);
+   a.push({t:s,x:tr[4]/vp.width,y:(tr[5]-fh*.85)/vp.height,w:w/vp.width,h:fh/vp.height,r:Math.round(ang*180/Math.PI)})}
+  IDBX.put("kv",key,a).catch(()=>{})}
+ PTX[key]=a;return a}
+const normQ=s=>String(s||"").toUpperCase().replace(/[\s:._\-\/]/g,"");
+/* procura em todas as plantas com PDF (a atual primeiro) */
+async function planTextHits(q,limit){const Q=normQ(q);if(Q.length<3)return[];const out=[];const cur=plan();
+ const ps=S.plans.filter(p=>p.pdf).sort((a,b)=>(b.id===(cur&&cur.id))-(a.id===(cur&&cur.id)));
+ for(const p of ps){let a=null;try{a=await planText(p)}catch(e){}if(!a)continue;
+  for(const t of a){if(normQ(t.t).includes(Q)){out.push({k:"ptext",id:p.id,plan:p.id,x:t.x,y:t.y,w:t.w,h:t.h,t:t.t,s:`Texto no desenho · ${p.name}`,score:5});if(out.length>=(limit||12))return out}}}
+ return out}
+/* pesquisa global: junta os resultados do texto das plantas */
+(()=>{const g=$("gq");if(!g)return;let tok=0;
+ g.addEventListener("input",()=>{const q=g.value;const my=++tok;if(normQ(q).length<3||!S.projectId)return;
+  setTimeout(async()=>{if(my!==tok)return;const h=await planTextHits(q,10);if(my!==tok||!h.length||g.value!==q)return;
+   gHits=gHits.filter(x=>x.k!=="ptext").concat(h);renderGres()},250)})})();
+const renderGresBase=renderGres;
+renderGres=function(){renderGresBase();const R=$("gres");if(!R)return;
+};
+const gOpenBase=gOpen;
+gOpen=function(h){if(h&&h.k==="ptext"){$("gres").hidden=true;$("gq").value="";$("gq").blur();showPlanText(h);return}gOpenBase(h)};
+/* abre a planta e destaca o texto encontrado */
+let ptxHL=null;
+function showPlanText(h){openPlan(h.plan);ptxHL={...h};
+ const tryShow=(n)=>{const p=plan();if(!p||p.id!==h.plan||!p.w||!$("planImg").naturalWidth){if(n<40)setTimeout(()=>tryShow(n+1),150);return}
+  let el=$("ptxHl");if(!el){el=document.createElement("div");el.id="ptxHl";el.className="ptxhl";$("stage").appendChild(el)}
+  const pad=Math.max(6,h.h*p.h*.6);el.style.left=(h.x*p.w-pad)+"px";el.style.top=(h.y*p.h-pad)+"px";el.style.width=(h.w*p.w+pad*2)+"px";el.style.height=(h.h*p.h+pad*2)+"px";
+  el.hidden=false;el.classList.remove("blink");void el.offsetWidth;el.classList.add("blink");
+  centerOn({x:h.x+h.w/2,y:h.y+h.h/2});const r=viewer.getBoundingClientRect();
+  const z=Math.min(4,Math.max(view.z,Math.min(r.width,r.height)/(Math.max(h.w*p.w,h.h*p.h)*10)));view.z=z;view.x=r.width/2-(h.x+h.w/2)*p.w*z;view.y=r.height/2-(h.y+h.h/2)*p.h*z;applyView();
+  toast(`Encontrado no desenho: "${h.t}"`)};
+ setTimeout(()=>tryShow(0),120)}
+setInterval(()=>{const el=$("ptxHl");if(el&&!el.hidden){const p=plan();if(!p||!ptxHL||p.id!==ptxHL.plan||S.view!=="obra")el.hidden=true}},800);
+
+/* ---------- planta em PDF com texto pesquisável ---------- */
+planPdf=async function(p,cv,its,mode,withList){const{jsPDF}=window.jspdf;const land=cv.width>=cv.height;
+ const doc=new jsPDF({orientation:land?"landscape":"portrait",unit:"mm",format:"a3",compress:true});const PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight(),M=10;
+ doc.setProperties({title:`${S.meta.name?S.meta.name+" · ":""}${p.name}`,subject:"Planta com equipamentos e IDs",creator:"ObraFlow",keywords:its.map(i=>i.devId||i.mac||i.code).filter(Boolean).join(" ")});
+ doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text(`${S.meta.name?S.meta.name+" · ":""}${p.name}`,M,M+4);
+ doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text(`${its.length} equipamentos · gerado em ${new Date().toLocaleString("pt-PT")} · texto pesquisável (Ctrl+F)`,M,M+9);doc.setTextColor(0);
+ const top=M+13,aw=PW-2*M,ah=PH-top-M,k=Math.min(aw/cv.width,ah/cv.height),iw=cv.width*k,ih=cv.height*k,ox=M+(aw-iw)/2,oy=top+(ah-ih)/2;
+ doc.addImage(cv.toDataURL("image/jpeg",.92),"JPEG",ox,oy,iw,ih,undefined,"FAST");
+ const PT=72/25.4;const inv=(t,x,y,sizeMm,ang)=>{try{doc.setFontSize(Math.max(1,sizeMm*PT));doc.text(String(t),x,y,{renderingMode:"invisible",baseline:"alphabetic",angle:ang||0})}catch(e){}};
+ // 1) texto do desenho original (PDF vetorial): nomes de salas, IDs escritos no projeto…
+ let nTxt=0;if(p.pdf){try{const pg=await pdfPage(p);if(pg){const v1=pg.getViewport({scale:1});const s=cv.width/v1.width;if(Math.abs(cv.height/v1.height-s)/s<.02){
+   const tc=await pg.getTextContent();doc.setFont("helvetica","normal");
+   for(const it of tc.items){const str=String(it.str||"").trim();if(!str)continue;const tr=pdfjsLib.Util.transform(v1.transform,it.transform);const fh=Math.hypot(tr[2],tr[3]);if(!fh)continue;
+    const ang=-Math.atan2(tr[1],tr[0])*180/Math.PI;inv(str,ox+tr[4]*s*k,oy+tr[5]*s*k,fh*s*k*.95,Math.round(ang));nTxt++}}}}catch(e){console.warn("texto do PDF",e)}}
+ // 2) etiquetas dos equipamentos (ID · referência) exatamente por cima das caixas desenhadas
+ doc.setFont("courier","bold");
+ for(const L of cv._labels||[]){if(!L.b)continue;const hMm=(L.b.y1-L.b.y0)*k;inv(L.t,ox+(L.b.x0+L.pad)*k,oy+((L.b.y0+L.b.y1)/2)*k+hMm*.28,L.fs*k*.95,0)}
+ // 3) também ao lado de cada pino, a referência e o ID (útil quando a etiqueta mostra só um deles)
+ for(const it of its){if(it.x==null)continue;const extra=[it.devId,it.mac,it.code].filter(Boolean).join(" ");inv(extra,ox+it.x*cv.width*k,oy+it.y*cv.height*k,1.2,0)}
+ doc.setFont("helvetica","normal");
+ if(!withList)return doc.output("blob");
+ // lista de equipamentos (texto normal)
+ doc.addPage("a4","portrait");const W2=doc.internal.pageSize.getWidth(),H2=doc.internal.pageSize.getHeight();let y=M+6;
+ const cols=[["Ref.",M],["ID",M+34],["MAC",M+62],["Tipo",M+104],["Etapa",M+144],["Leitura",M+170]];
+ const head=()=>{doc.setFont("helvetica","bold");doc.setFontSize(9);cols.forEach(([t,x])=>doc.text(t,x,y));y+=2;doc.setDrawColor(180);doc.line(M,y,W2-M,y);y+=5;doc.setFont("helvetica","normal")};
+ doc.setFont("helvetica","bold");doc.setFontSize(12);doc.text(`Lista de equipamentos · ${p.name}`,M,y);y+=8;head();
+ for(const it of its){if(y>H2-M){doc.addPage("a4","portrait");y=M+6;head()}const st=typeof readStateOf==="function"?readStateOf(it):"";
+  const row=[it.code,it.devId||"",it.mac||"",tOf(it.type).n,sOf(it.stage).n,st&&st!=="ok"?RS_N[st]:""];doc.setFontSize(9);row.forEach((t,c)=>doc.text(String(t).slice(0,c===0?20:c===3?24:22),cols[c][1],y));y+=5.2}
+ return doc.output("blob")};
 
 boot();

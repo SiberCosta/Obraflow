@@ -1090,5 +1090,8 @@ body[data-view=projects] .mainc{padding-bottom:0!important}
 .dta{display:flex;gap:6px;margin-top:6px}
 @media (max-width:700px){.eqgrid,.docgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.eqph{height:100px}.isgrid{grid-template-columns:1fr}.toolrow .vtog{margin-left:0}}
 .eqt b{white-space:nowrap}@media (max-width:700px){.eqt span{display:none}}
+.ptxhl{position:absolute;border:3px solid #e8a317;border-radius:6px;background:rgba(232,163,23,.18);box-shadow:0 0 0 4px rgba(232,163,23,.25);pointer-events:none;z-index:3}
+.ptxhl.blink{animation:ptxb 1.2s ease-in-out 3}
+@keyframes ptxb{50%{box-shadow:0 0 0 14px rgba(232,163,23,0)}}
 
-:root{--cp-ver:"19"}
+:root{--cp-ver:"20"}

@@ -240,6 +240,11 @@ Em **Lista de IDs** → **Carregar lista de IDs**: escolhe o PDF (ou Excel/CSV) 
 - A leitura passa a usar a lista: confirma IDs, corrige erros de 1 carácter e resolve sozinha os inconclusivos quando só uma leitura bate certo.
 - **Exportar comparação** gera um CSV para Excel. PDF digitalizado (só imagem) também funciona, mas é mais lento; se possível usa o PDF original ou Excel.
 
+## Pesquisar IDs nas plantas e PDF pesquisável (versão 20)
+
+- **Na app:** a pesquisa do topo procura também no **texto das plantas em PDF** (ex.: IDs ou referências escritos no desenho do projeto). O resultado aparece em "Texto nas plantas (PDF)"; ao tocar, a planta abre com o texto destacado a laranja. Funciona com PDF de texto (vetorial, exportado do CAD); uma planta digitalizada ou carregada como imagem não tem texto para procurar.
+- **No PDF descarregado** (Ações → Descarregar planta → PDF): os IDs, as referências e o texto do desenho original ficam como **texto pesquisável** — no leitor de PDF usa **Ctrl+F** (ou "Procurar" no telemóvel) e escreve o ID. A versão "planta + lista" junta também a tabela dos equipamentos em texto.
+
 ## Leitura com IA (opcional, gratuita)
 
 O leitor do telemóvel funciona sem rede, mas falha com fotos desfocadas ou tiradas a um ecrã. Para leituras muito mais fiáveis quando há rede:
