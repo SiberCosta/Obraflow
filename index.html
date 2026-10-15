@@ -14,25 +14,33 @@
 <meta name="apple-mobile-web-app-title" content="CostaPlan">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="auth" class="auth" hidden></div>
 <header class="top">
-  <div class="brand"><h1>CostaPlan</h1><span class="proj" id="projName"></span></div>
+  <button type="button" class="hamb" id="sideTog" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#e8a317"/><path d="M16 6.5c-4.2 0-7.5 3.2-7.5 7.3 0 5.3 6.2 12.3 7 13.2.3.3.7.3 1 0 .8-.9 7-7.9 7-13.2 0-4.1-3.3-7.3-7.5-7.3z" fill="#1d2421"/><circle cx="16" cy="13.8" r="2.9" fill="#e8a317"/></svg><h1>CostaPlan</h1><span class="proj" id="projName"></span></div>
   <div class="tabs" role="tablist">
-    <button id="tabHome" role="tab" aria-selected="true">Início</button>
-    <button id="tabObra" role="tab" aria-selected="false">Obra</button>
-    <button id="tabCoord" role="tab" aria-selected="false">Coordenação</button>
+    <button id="tabHome" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Início</button>
+    <button id="tabObra" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/></svg>Obra</button>
+    <button id="tabCoord" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.6-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.6 4V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.6 1.6 0 0 0 20.4 9H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>Coordenação</button>
   </div>
+  <div class="gsearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="gq" type="search" placeholder="Pesquisar ID, MAC, equipamento, planta…" autocomplete="off" aria-label="Pesquisar"><div id="gres" class="gres" hidden></div></div>
+  <button type="button" class="bell" id="bell" aria-label="Notificações"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><b id="bellN" hidden></b></button>
+  <div class="feed" id="feed" hidden></div>
   <button type="button" class="sync" id="syncBox" title="Sincronizar agora"></button>
   <div class="me" id="meBox"></div>
 </header>
 <div class="banner" id="banner" hidden></div>
 
+<div class="shell">
+<nav class="side" id="side" aria-label="Menu"><span class="sk">Projeto</span><div class="projc"><svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/></svg><span id="sideProj">A minha obra</span></div><span class="sk">Navegação</span><button type="button" class="nv" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Visão geral</span><span class="cnt" id="cnt_home" hidden></span></button><button type="button" class="nv" data-nav="obra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2z"/><path d="M9 3v16M15 5v16"/></svg><span>Plantas e equipamentos</span><span class="cnt" id="cnt_obra" hidden></span></button><button type="button" class="nv" data-nav="equip"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="3"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/></svg><span>Equipamentos</span><span class="cnt" id="cnt_equip" hidden></span></button><button type="button" class="nv" data-nav="ids"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span>Lista de IDs</span><span class="cnt" id="cnt_ids" hidden></span></button><button type="button" class="nv" data-nav="issues"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg><span>Anomalias e pendências</span><span class="cnt" id="cnt_issues" hidden></span></button><button type="button" class="nv" data-nav="diary"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg><span>Diário de obra</span><span class="cnt" id="cnt_diary" hidden></span></button><button type="button" class="nv" data-nav="coord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Relatórios</span><span class="cnt" id="cnt_coord" hidden></span></button><button type="button" class="nv" data-nav="docs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span>Documentos</span><span class="cnt" id="cnt_docs" hidden></span></button><button type="button" class="nv" data-nav="team"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c3 0 5 2 5 5"/></svg><span>Equipa</span><span class="cnt" id="cnt_team" hidden></span></button><button type="button" class="nv" data-nav="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span>Configurações</span><span class="cnt" id="cnt_settings" hidden></span></button><div class="grow"></div><div class="tip" id="sideTip"><b>Trabalhe mais rápido</b><span>Fotografe a etiqueta: o ID é lido e o equipamento passa logo a Endereçado.</span></div><div class="foot">CostaPlan 2.0 · funciona sem rede</div></nav>
+<div class="mainc">
 <!-- ================= OBRA ================= -->
 <div id="viewObra" style="display:contents">
+  <div class="ohead" id="oHead"></div>
   <div class="bar">
     <select id="planSel" class="btn" aria-label="Piso"></select>
     <label class="btn primary" for="planIn" id="btnNewFloor" title="Carregar a planta de um ou mais pisos (PDF ou imagem)">+ Novo piso</label>
@@ -50,6 +58,7 @@
     <button class="btn" id="btnFloor">Pisos…</button>
   </div>
   <main class="obra">
+    <aside class="plans" id="plansPane"></aside>
     <section class="viewer" id="viewer" aria-label="Planta do piso">
       <canvas id="hi" hidden></canvas>
       <div class="stage" id="stage"><img id="planImg" alt="Planta do piso"><img id="ovImg" alt="" hidden><img id="fwImg" alt="" hidden></div>
@@ -85,6 +94,7 @@
       <div class="list" id="list"></div>
     </aside>
   </main>
+  <div class="sbar" id="sBar"></div>
 </div>
 <input id="planIn" type="file" accept="image/*,application/pdf" multiple hidden>
 <input id="phCam" type="file" accept="image/*" capture="environment" hidden>
@@ -100,6 +110,9 @@
 <main class="coord" id="viewCoord" hidden>
   <div class="wrap" id="coordWrap"></div>
 </main>
+<main class="page" id="viewPage" hidden><div class="wrap" id="pageWrap"></div></main>
+</div></div>
+<nav class="bnav" id="bnav"><button type="button" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Início</span></button><button type="button" data-nav="obra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2z"/><path d="M9 3v16M15 5v16"/></svg><span>Planta</span></button><button type="button" data-nav="equip"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="3"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/></svg><span>Equipam.</span></button><button type="button" data-nav="issues"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg><span>Anomalias</span></button><button type="button" data-nav="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span>Mais</span></button></nav>
 
 <dialog id="dlgPhoto"><div class="dlg">
   <h3 id="dpTitle">Foto do equipamento</h3>

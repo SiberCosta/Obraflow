@@ -151,7 +151,8 @@ setInterval(()=>{if(document.visibilityState==="visible")syncNow()},60000);
    para o Supabase Storage quando há rede
    ========================================================= */
 const urlCache={};
-function fileExt(t){return t==="application/pdf"?"pdf":t==="image/png"?"png":t==="image/webp"?"webp":"jpg"}
+function fileExt(t){t=t||"";if(t==="application/pdf")return"pdf";if(t==="image/png")return"png";if(t==="image/webp")return"webp";if(!t||/^image\/jpe?g$/.test(t))return"jpg";
+ return({"application/vnd.openxmlformats-officedocument.wordprocessingml.document":"docx","application/msword":"doc","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"xlsx","application/vnd.ms-excel":"xls","application/zip":"zip","text/plain":"txt","text/csv":"csv","image/gif":"gif","image/heic":"heic"})[t]||(t.startsWith("image/")?"img":"bin")}
 function srcOf(ref){return !ref?"":/^(data:|blob:)/.test(ref)?ref:(urlCache[ref]||"")}
 function dataUrlToBlob(u){const ci=u.indexOf(",");const h=u.slice(0,ci),b=u.slice(ci+1);if(!/;base64/i.test(h))return new Blob([decodeURIComponent(b)],{type:(h.match(/^data:([^;,]*)/)||[])[1]||"text/plain"});const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:(h.match(/:(.*?);/)||[])[1]||"application/octet-stream"})}
 const blobToDataUrl=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
@@ -315,16 +316,13 @@ function renderSync(){const el=$("syncBox");if(!el)return;
 function renderNow(){
  $("projName").textContent=S.meta.name||"";
  renderSync();
- const me=$("meBox");me.innerHTML=S.demo?"":S.me?`<span class="ini" style="--h:${hue(S.meId)}">${esc(initials(S.me.name))}</span><span class="mename">${esc(S.me.name||"")}</span><span class="merole">· ${esc(ROLE_N[S.role]||"")}</span><button class="btn sm" id="btnOut">Sair</button>`:"";
+ const me=$("meBox");me.innerHTML=S.me?`<span class="ini lg">${esc(initials(S.me.name))}</span><span class="who"><span class="mename">${esc(S.me.name||"")}</span><small>${esc(S.demo?"Modo demonstração":ROLE_N[S.role]||"")}</small></span>${S.demo?"":`<button class="btn sm" id="btnOut">Sair</button>`}`:"";
  const bo=$("btnOut");if(bo)bo.onclick=signOut;
  const b=$("banner");
  if(S.demo){b.hidden=false;b.innerHTML=`<span>Modo demonstração: os dados ficam só neste aparelho. Preenche o ficheiro <b>config.js</b> com os dados do Supabase para trabalhar em equipa (ver LEIA-ME).</span>`}
- else if(S.isCoord&&members.some(m=>m.role==="pendente")){const n=members.filter(m=>m.role==="pendente").length;b.hidden=false;b.innerHTML=`<span>${n} pessoa${n>1?"s":""} à espera de aprovação.</span><button class="btn sm" id="goTeam">Ver equipa</button>`;$("goTeam").onclick=()=>{S.view="coord";render();setTimeout(()=>{const t=$("teamSec");if(t)t.scrollIntoView({behavior:"smooth"})},80)}}
+ else if(S.isCoord&&members.some(m=>m.role==="pendente")){const n=members.filter(m=>m.role==="pendente").length;b.hidden=false;b.innerHTML=`<span>${n} pessoa${n>1?"s":""} à espera de aprovação.</span><button class="btn sm" id="goTeam">Ver equipa</button>`;$("goTeam").onclick=()=>go("team")}
  else b.hidden=true;
- $("tabHome").setAttribute("aria-selected",S.view==="home");$("tabObra").setAttribute("aria-selected",S.view==="obra");$("tabCoord").setAttribute("aria-selected",S.view==="coord");
- $("viewObra").style.display=S.view==="obra"?"contents":"none";$("viewCoord").hidden=S.view!=="coord";$("viewHome").hidden=S.view!=="home";
- document.body.dataset.view=S.view;
- if(S.view==="obra")renderObra();else if(S.view==="coord")renderCoord();else renderHome();
+ renderShell();
  saveHomeCache();
 }
 $("tabHome").onclick=()=>{S.view="home";render();window.scrollTo(0,0)};
@@ -617,7 +615,7 @@ function renderSheet(){
   <span class="muted" style="font-size:12px">${it.updatedAt?`Atualizado ${fmtDate(it.updatedAt)} por ${esc(nameOf(it.updatedBy))}`:""}</span>
   <button class="btn sm primary" id="edNext">Seguinte →</button>
  </div>`;
- wireSheet(it);renderPhotos(it);renderReadMsg(it);hydrate(box);
+ wireSheet(it);renderPhotos(it);renderReadMsg(it);hydrate(box);decorateSheet(box,it);
  if(!ro&&$("shAssign"))mountPicker($("shAssign"),it.assignee||null,id=>{api.update("items",it.id,logPatch(it,{assignee:id||null,updatedAt:now(),updatedBy:S.meId},id?"Atribuído a":"Responsável removido",id?{u:id}:null))},"Responsável…");
  else if($("shAssign"))$("shAssign").innerHTML=it.assignee?personChip(it.assignee):`<span class="none">Sem responsável</span>`;
  const sd=$("shDue");if(sd)sd.onchange=()=>api.update("items",it.id,logPatch(it,{due:sd.value||"",updatedAt:now(),updatedBy:S.meId},sd.value?"Prazo: "+fmtDay(sd.value):"Prazo removido"));
@@ -719,8 +717,15 @@ function loadScript(u){if(!libP[u])libP[u]=new Promise((res,rej)=>{const s=docum
  s.onerror=()=>{delete libP[u];s.remove();rej(new Error(navigator.onLine?"não foi possível carregar o leitor de etiquetas":"o leitor de etiquetas ainda não foi guardado neste aparelho. Abre a app uma vez com rede e carrega em Coordenação → Preparar para usar sem rede"))};document.head.appendChild(s)});return libP[u]}
 let tessP=null;
 const T_NORMAL={tessedit_pageseg_mode:"11",tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:-./# ",preserve_interword_spaces:"1"};
-function tess(){if(!tessP)tessP=(async()=>{await loadScript(LIB.tess);const w=await Tesseract.createWorker("eng",1);await w.setParameters(T_NORMAL);return w})().catch(e=>{tessP=null;throw e});return tessP}
-async function prepareReader(){await tess();try{await loadScript(LIB.zx)}catch(e){}}
+/* leitores em paralelo: 2 para a página inteira (se o aparelho aguentar) + 1 para linhas recortadas */
+const T_LINE={tessedit_pageseg_mode:"7",tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789: ",preserve_interword_spaces:"1"};
+let poolP=null;
+function pool(){if(!poolP)poolP=(async()=>{await loadScript(LIB.tess);
+  const n=(navigator.hardwareConcurrency||2)>=4&&(navigator.deviceMemory||4)>=3?2:1;
+  const mk=async P=>{const w=await Tesseract.createWorker("eng",1);await w.setParameters(P);return w};
+  const ws=await Promise.all([...Array(n)].map(()=>mk(T_NORMAL)).concat([mk(T_LINE)]));const line=ws.pop();return{a:ws,line}})().catch(e=>{poolP=null;throw e});return poolP}
+function tess(){return pool().then(P=>P.a[0])}
+async function prepareReader(){await pool();try{await loadScript(LIB.zx)}catch(e){}}
 function initSample(){}
 /* prepara a imagem para os códigos de barras: tamanho adequado, tons de cinzento e contraste */
 async function prepCanvas(blob,rot){const bm=await createImageBitmap(blob);const L=Math.max(bm.width,bm.height);const k=Math.min(2.2,Math.max(1,1700/L))*(L>2400?2400/L:1);
@@ -742,7 +747,11 @@ function adaptiveBW(cx,W,H,ch,winFrac,C){const im=cx.getImageData(0,0,W,H),d=im.
  for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);for(let x=0;x<W;x++){const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1);
   const sum=I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0];const m=sum/((x1-x0)*(y1-y0));const v=g[y*W+x]<m-C?0:255;const k=(y*W+x)*4;d[k]=d[k+1]=d[k+2]=v;d[k+3]=255}}
  cx.putImageData(im,0,0)}
-async function textCanvas(blob,rot,ch){const bm=await bitmapOf(blob);const L=Math.max(bm.width,bm.height);const k=1700/L;
+async function rotCanvas(blob,rot,maxL){const bm=await bitmapOf(blob);const L=Math.max(bm.width,bm.height);const k=Math.min(1,maxL/L);
+ const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");const sw=rot%180!==0;cv.width=sw?h:w;cv.height=sw?w:h;
+ const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality="high";
+ cx.translate(cv.width/2,cv.height/2);cx.rotate(rot*Math.PI/180);cx.drawImage(bm,-w/2,-h/2,w,h);return cv}
+async function textCanvas(blob,rot,ch,maxL){maxL=maxL||1700;const bm=await bitmapOf(blob);const L=Math.max(bm.width,bm.height);const k=maxL/L;
  const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");const sw=rot%180!==0;cv.width=sw?h:w;cv.height=sw?w:h;
  const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality="high";
  cx.translate(cv.width/2,cv.height/2);cx.rotate(rot*Math.PI/180);cx.drawImage(bm,-w/2,-h/2,w,h);cx.setTransform(1,0,0,1,0,0);
@@ -785,11 +794,47 @@ function candsFrom(text,codes){const C=[];
   const letters=/[A-F]/.test(v);if(/^(19|20)\d{4,6}$/.test(v))return;
   add("id",v,letters?(v.length===6?5:4):2)});
  return C.sort((a,b)=>b.s-a.s).slice(0,6)}
-async function readOne(blob,onStep){const codes=await readCodes(blob);
- const w=await tess();await w.setParameters(T_NORMAL);let text="",cands=candsFrom("",codes);if(cands.length&&cands[0].s>=8)return{cands,codes,text};
- // qualquer orientação: direita, deitada para um lado e para o outro, de pernas para o ar; em cada uma, leitura normal e pelo canal verde
- for(const rot of[0,90,270,180])for(const ch of["lum","g"]){onStep&&onStep(rot,ch);const cv=await textCanvas(blob,rot,ch);const r=await w.recognize(cv);text+="\n"+(r&&r.data&&r.data.text||"");
-  cands=candsFrom(text,codes);if(cands.length&&cands[0].s>=9)return{cands,codes,text}}
+/* padrão dos IDs desta obra (ex.: 6 caracteres hexadecimais) — serve para validar a leitura sozinha */
+function idPattern(){const L={};let hex=0,n=0;for(const i of S.items){const v=String(i.devId||"").trim().toUpperCase();if(!v)continue;n++;L[v.length]=(L[v.length]||0)+1;if(/^[0-9A-F]+$/.test(v))hex++}
+ const len=+(Object.entries(L).sort((a,b)=>b[1]-a[1])[0]||[6])[0];return{len:n>=3?len:6,hex:n<3||hex/n>.6}}
+function applyPattern(cands){const P=idPattern();const out=[];
+ for(const c of cands){if(c.k!=="id"){out.push(c);continue}let v=c.v,s=c.s;
+  if(P.hex&&/^[0-9A-F]+$/.test(v)&&v.length===P.len+1)out.push({k:"id",v:v.slice(0,P.len),s:s+2});   // um carácter a mais lido no fim
+  if(v.length===P.len&&(!P.hex||/^[0-9A-F]+$/.test(v)))s+=1.5;else if(Math.abs(v.length-P.len)>1)s-=1.5;
+  if(S.items.some(i=>String(i.devId||"").toUpperCase()===v))s-=.5;
+  out.push({...c,s})}
+ const m={};for(const c of out){const k=c.k+"|"+c.v;if(!m[k]||m[k].s<c.s)m[k]=c}return Object.values(m).sort((a,b)=>b.s-a.s).slice(0,6)}
+function wordsOf(d){if(d&&d.words&&d.words.length)return d.words;const out=[];for(const b of (d&&d.blocks)||[])for(const p of b.paragraphs||[])for(const l of p.lines||[])for(const w of l.words||[])out.push(w);return out}
+/* linha recortada em alta resolução, binarizada, para ler o valor do ID */
+function lineCut(full,box,H,ch,soft){const sw=box.x1-box.x0,sh=box.y1-box.y0;const W=Math.max(8,Math.round(sw*H/sh));const cv=document.createElement("canvas");cv.width=W;cv.height=H;
+ const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,W,H);cx.imageSmoothingQuality="high";
+ if(soft){const t=document.createElement("canvas");t.width=Math.max(4,Math.round(W/1.8));t.height=Math.max(4,Math.round(H/1.8));t.getContext("2d").drawImage(full,box.x0,box.y0,sw,sh,0,0,t.width,t.height);cx.drawImage(t,0,0,W,H)}
+ else cx.drawImage(full,box.x0,box.y0,sw,sh,0,0,W,H);
+ adaptiveBW(cx,W,H,ch,.6*H/Math.max(W,H),10);return cv}
+function lineVotes(t,votes,wgt){t=String(t||"").toUpperCase();
+ for(const m of t.matchAll(/[I1L|]?[D0O]?\s*[:;.]\s*([0-9A-Z]{5,10})(?![0-9A-Z])/g)){const r=idVal(m[1]);if(/^[0-9A-F]{5,9}$/.test(r.v))votes[r.v]=(votes[r.v]||0)+wgt*1.5}
+ for(const m of t.matchAll(/(?:^|[^0-9A-Z])([0-9A-Z]{6,8})(?![0-9A-Z])/g)){const v=hexFixId(m[1]);if(/^[0-9A-F]{6,8}$/.test(v)&&/\d/.test(v)&&!/^[I1L]D/.test(m[1]))votes[v]=(votes[v]||0)+wgt}}
+async function refineAt(P,full,k,w,votes){const b=w.bbox||{};const h=(b.y1-b.y0)*k;if(!(h>4))return;const isId=/^[I1l|][DO0]/.test(w.text||"");
+ const box={x0:Math.max(0,b.x0*k-h*.5),y0:Math.max(0,b.y0*k-h*.6),x1:Math.min(full.width,(isId?b.x0*k+h*11:b.x1*k+h*.6)),y1:Math.min(full.height,b.y1*k+h*.6)};
+ if(box.x1-box.x0<h||box.y1-box.y0<4)return;
+ for(const[H,ch,soft]of[[56,"lum",0],[56,"g",0],[80,"lum",1]]){const r=await P.line.recognize(lineCut(full,box,H,ch,soft));lineVotes(r.data&&r.data.text,votes,1)}}
+async function readOne(blob,onStep){const codes=await readCodes(blob);let cands=applyPattern(candsFrom("",codes));if(cands.length&&cands[0].s>=9)return{cands,codes,text:""};
+ const P=await pool();let text="";const votes={};
+ const strongNow=()=>{const best=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];return best&&best[1]>=2.5};
+ // 1) leitura rápida da foto inteira (imagem reduzida) em cada orientação, normal e pelo canal verde, em paralelo
+ for(const rot of[0,90,270,180]){onStep&&onStep(rot,"");
+  const run=async(ch,w)=>(await w.recognize(await textCanvas(blob,rot,ch,1000),{},{text:true,blocks:true})).data;
+  let ds=[];if(P.a.length>1)ds=await Promise.all(["lum","g"].map((ch,i)=>run(ch,P.a[i])));else{ds.push(await run("lum",P.a[0]));if(!/(?:^|[^A-Za-z])[I1l][DO0]\s*[:;.]/.test(ds[0].text||""))ds.push(await run("g",P.a[0]))}
+  for(const d of ds)text+="\n"+(d.text||"");
+  // 2) onde aparece "ID" ou um código, recorta essa linha em alta resolução e lê de novo (várias vezes) para confirmar
+  const anchors=[];for(const d of ds)for(const w of wordsOf(d)){const t=String(w.text||"");const c=t.replace(/[^0-9A-Za-z]/g,"");
+   if(/^[I1l|][DO0]/.test(t)||(/^[0-9A-FOILS]{5,9}$/i.test(c)&&/\d/.test(c)))anchors.push(w)}
+  if(anchors.length){onStep&&onStep(rot,"zoom");const full=await rotCanvas(blob,rot,2400);const k=full.width/(await textCanvas(blob,rot,"lum",1000)).width;const seen=[];
+   for(const w of anchors.sort((a,b)=>(/^[I1l|][DO0]/.test(b.text)?1:0)-(/^[I1l|][DO0]/.test(a.text)?1:0)).slice(0,3)){const b=w.bbox||{};if(seen.some(q=>Math.abs(q.y0-b.y0)<(b.y1-b.y0)&&Math.abs(q.x0-b.x0)<(b.y1-b.y0)*6))continue;seen.push(b);await refineAt(P,full,k,w,votes);if(strongNow())break}}
+  cands=applyPattern([...candsFrom(text,codes),...Object.entries(votes).map(([v,n])=>({k:"id",v,s:n>=2.5?10.5:n>=1.5?8:6}))]);
+  if(cands.length&&cands[0].s>=10)return{cands,codes,text}}
+ // 3) último recurso: foto inteira em alta resolução, direita
+ for(const ch of["lum","g"]){onStep&&onStep(0,ch);const r=await P.a[0].recognize(await textCanvas(blob,0,ch,1700));text+="\n"+(r.data.text||"");cands=applyPattern([...candsFrom(text,codes),...Object.entries(votes).map(([v,n])=>({k:"id",v,s:n>=2.5?10.5:n>=1.5?8:6}))]);if(cands.length&&cands[0].s>=10)break}
  return{cands,codes,text}}
 /* zona recortada (só a linha do ID): várias leituras com tamanhos e nitidez diferentes, e votação */
 function lineCanvas(bm,Ht,soft){const s=Ht/bm.height;const w=Math.max(8,Math.round(bm.width*s));const cv=document.createElement("canvas");cv.width=w;cv.height=Ht;
@@ -882,24 +927,24 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
      const sc=o.confianca==="alta"?11:o.confianca==="baixa"?6:8.5;if(val(o.id))all.push({k:"id",v:val(o.id),s:sc});if(val(o.mac))all.push({k:"mac",v:normMac(val(o.mac)),s:sc});aiObs=typeof o.obs==="string"?o.obs.trim():""}}
    catch(e){aiErr=e.message||"erro"}}
   if(!all.length){src="local";
-   if(!tessP)setReadMsgFor(id,navigator.onLine?"A preparar o leitor (só na primeira vez, pode demorar um pouco)…":"A preparar o leitor…","busy");
+   if(!poolP)setReadMsgFor(id,navigator.onLine?"A preparar o leitor (só na primeira vez, pode demorar um pouco)…":"A preparar o leitor…","busy");
    for(let k=0;k<blobs.length;k++){const r=opts.crop?await readCrop(blobs[k],(a,n)=>setReadMsgFor(id,`A ler a zona recortada (${a} de ${n})…`,"busy"))
-     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="g"?" · realce para fundo verde":""}…`,"busy"));
+     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="zoom"?" · a confirmar o código":""}…`,"busy"));
     for(const c of r.cands){const o=all.find(x=>x.k===c.k&&x.v===c.v);if(o)o.s=Math.max(o.s,c.s)+1;else all.push({...c})}}}
   all.sort((a,b)=>b.s-a.s);all=all.slice(0,6);
   const it=S.items.find(i=>i.id===id)||it0;
   const ids=all.filter(c=>c.k==="id"),macs=all.filter(c=>c.k==="mac");
-  const bestId=ids[0]&&(ids[0].s>=8||(ids[0].s>=4&&!ids.slice(1).some(c=>c.s>=4)))?ids[0]:null;
+  const bestId=ids[0]&&ids[0].s>=5?ids[0]:null;   // validação automática: fica o melhor candidato; os outros ficam para corrigir com um toque
   const bestMac=macs[0]&&macs[0].s>=8?macs[0]:null;
   const patch={},filled=[];let dup=null;
   const got={devId:bestId?bestId.v:"",mac:!bestId&&bestMac?bestMac.v:""};
   if(bestId&&bestMac&&!it.mac)got.mac=bestMac.v;
   for(const[k,v]of Object.entries(got))if(v&&(overwrite||!it[k])){const o=findDup(it.id,k,v);if(o&&!dup)dup={field:k,value:v,other:o};patch[k]=v;filled.push(k)}
-  const conf=bestId&&bestId.s>=9||(!bestId&&bestMac)?"alta":"media";
+  const conf=bestId&&bestId.s>=10||(!bestId&&bestMac)?"alta":"media";
   const txt=got.devId?"ID "+got.devId:got.mac?"MAC "+got.mac:"";
   patch.readCands=all.map(({k,v,s})=>({k,v,s}));patch.readAt=now();patch.readConf=txt?conf:"baixa";
   const by=src==="ai"?"Lido pela IA":"Lido no aparelho";
-  patch.readNote=txt?`${by}: ${txt}`+(conf!=="alta"?". Confirma com a etiqueta.":"."):all.length?"Não tenho a certeza de qual é o ID. Escolhe abaixo o valor certo, ou escreve-o.":opts.crop?"Não consegui ler a zona recortada. Escreve o ID, ou tira outra foto mais nítida.":"Não consegui ler o ID nesta foto. Recorta a zona do ID, tira outra foto mais perto e nítida, ou escreve o ID.";
+  patch.readNote=txt?`${by}: ${txt}`+(conf!=="alta"?". Se não estiver certo, toca na leitura correta abaixo ou escreve o ID.":" (validado automaticamente)."):all.length?"Não tenho a certeza de qual é o ID. Escolhe abaixo o valor certo, ou escreve-o.":opts.crop?"Não consegui ler a zona recortada. Escreve o ID, ou tira outra foto mais nítida.":"Não consegui ler o ID nesta foto. Recorta a zona do ID, tira outra foto mais perto e nítida, ou escreve o ID.";
   if(dup)patch.readNote=`${by}: ${dup.field==="mac"?"MAC":"ID"} ${dup.value}. Atenção: está repetido com ${dup.other.code}.`;
   if(src==="ai"&&aiObs)patch.readNote+=" "+aiObs;
   if(aiErr)patch.readNote+=` (Leitura com IA indisponível: ${aiErr}.)`;
@@ -908,7 +953,8 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
   if(!txt)lastReadErr="none";
   await api.update("items",id,patch);readMsg=null;
   if(dup)toast(`${dup.field==="mac"?"MAC":"ID"} ${dup.value} repetido com ${dup.other.code}. Ficou guardado e marcado a vermelho.`);
-  if(S.sel===id){sheetFor=null;render();requestAnimationFrame(()=>requestAnimationFrame(()=>filled.forEach(k=>{const el=$("ed_"+k);if(el)el.classList.add("auto")})))}
+  if(S.sel===id){sheetFor=null;S.shTab="det";render();requestAnimationFrame(()=>requestAnimationFrame(()=>{filled.forEach(k=>{const el=$("ed_"+k);if(el)el.classList.add("auto")});
+   if(!txt){const el=$("ed_devId");if(el){el.focus();el.classList.add("need")}}}))}
  }catch(e){lastReadErr="error";setReadMsgFor(id,(aiErr?`A leitura com IA falhou (${aiErr}) e o leitor do telemóvel também: `:"Não foi possível ler a etiqueta: ")+(e.message||"erro")+". Escreve o ID ou tenta mais tarde.","err")}
  finally{readingId=null;const b2=$("btnRead");if(b2)b2.disabled=false}}
 async function askPermission(){}
@@ -1446,7 +1492,7 @@ function renderCoord(){
    <td style="white-space:nowrap">${it?`<button class="btn sm" data-goto="${esc(it.id)}">Ver</button>`:""} ${S.canWrite?`<button class="btn sm" data-resolve="${esc(x.id)}">Resolvida</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="6" class="muted">Sem anomalias abertas.</td></tr>`}
   </tbody></table></div>
  </section>
- ${teamSection()}${mailSection()}${aiSection()}${dataSection()}${offlineSection()}
+ 
  <section class="block"><h2><span>Relatório para o cliente</span>
   <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="rpCsv">Descarregar CSV</button><button class="btn primary" id="rpHtml">Descarregar relatório</button></span></h2>
   <div class="rfilters">
@@ -1753,31 +1799,43 @@ function renderHome(){const W=$("homeWrap");const its=S.items,c=counts(its),open
    <div class="pthumb"><img data-thumb="${esc(p.img||"")}" alt=""><span class="pdoc">${p.pdf?"PDF":"IMG"}</span>${oi?`<span class="pbad">${oi} anomalia${oi>1?"s":""}</span>`:""}</div>
    <div class="pbody"><b>${esc(p.name)}</b>${stackBar(pi)}<div class="pmeta"><span>${pc.total} equip.</span><span>${pct(pc.ge(3),pc.total)}% testado</span>${st!=="aberto"?`<span>${FLOOR_ST[st]}</span>`:""}</div>
    ${S.canWrite&&fs.length?`<select class="pmove" data-move="${esc(p.id)}" aria-label="Mover para a pasta"><option value="">Sem pasta</option>${fs.map(f=>`<option value="${esc(f.id)}"${p.folder===f.id?" selected":""}>${esc(f.name)}</option>`).join("")}</select>`:""}</div></div>`};
+ const withId=its.filter(i=>String(i.devId||"").trim()||String(i.mac||"").trim()).length,noId=c.total-withId,photos=its.filter(i=>(i.photos||[]).length).length;
+ const td=today(),newToday=its.filter(i=>dayOf(i.createdAt)===td).length,late=its.filter(isLate).length;
  W.innerHTML=`
- <section class="hero">
-  <div class="htop"><div><span class="hk">Projeto</span><h2>${esc(S.meta.name||"A minha obra")}</h2>
-   <p>${S.plans.length} planta${S.plans.length===1?"":"s"}${fs.length?` em ${fs.length} pasta${fs.length===1?"":"s"}`:""} · ${c.total} equipamentos · ${S.me&&S.me.name&&!S.demo?esc(S.me.name)+" · "+esc(ROLE_N[S.role]||""):"Neste aparelho"}</p></div>
-   ${last?`<button class="btn primary" id="hmGo">Abrir ${esc(last.name)} →</button>`:""}</div>
-  <div class="htiles">
-   <div><span>Testados</span><b>${pct(c.ge(3),c.total)}%</b><small>${c.ge(3)} de ${c.total}</small></div>
-   <div><span>Aceites</span><b>${pct(c.aceite,c.total)}%</b><small>${c.aceite} de ${c.total}</small></div>
-   <button type="button" class="${mine?"warn":""}" id="hmMine"><span>Os meus por fazer</span><b>${mine}</b><small>ver lista</small></button>
-   <button type="button" class="${openI.length?"bad":""}" id="hmIss"><span>Anomalias abertas</span><b>${openI.length}</b><small>${un?un+" por colocar":"ver lista"}</small></button>
-  </div>${stackBar(its)}
- </section>
+ <div class="crumb"><span>Projetos</span><span>›</span><b>${esc(S.meta.name||"A minha obra")}</b></div>
+ <div class="phead"><div><h2>${esc(S.meta.name||"A minha obra")} <span class="stchip">${c.total&&c.aceite===c.total?"Entregue":"Em andamento"}</span></h2>
+   <p>${S.plans.length} planta${S.plans.length===1?"":"s"} · ${c.total} equipamentos${fs.length?` · ${fs.length} pasta${fs.length===1?"":"s"}`:""}${S.me&&!S.demo?` · ${esc(S.me.name||"")} · ${esc(ROLE_N[S.role]||"")}`:""}</p></div>
+  <div class="toolrow">${last?`<button class="btn" id="hmGo">Abrir ${esc(last.name)} →</button>`:""}${S.canWrite?`<button class="btn primary" id="hmNewP2">+ Nova planta</button>`:""}</div></div>
+ <div class="kpis">
+  ${kpi("var(--accent)",'<path d="M4 6h16M4 12h16M4 18h10"/>',"Total de equipamentos",c.total,newToday?`+${newToday} hoje`:"&nbsp;",null,"hmK1")}
+  ${kpi("var(--ok)",'<path d="M20 6L9 17l-5-5"/>',"Com ID identificado",withId,`${pct(withId,c.total)}% do total`,pct(withId,c.total),"hmK2")}
+  ${kpi("#9333ea",'<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',"Pendentes de ID",noId,`${pct(noId,c.total)}% do total`,pct(noId,c.total),"hmK3")}
+  ${kpi("var(--warn)",'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',"Anomalias abertas",openI.length,"ver lista",null,"hmIss")}
+  ${kpi("#0891b2",'<rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/>',"Com fotos",photos,`${pct(photos,c.total)}% do total`,pct(photos,c.total),"hmK5")}
+ </div>
+ <div class="homegrid">
+  <div class="card hcard"><h3>Progresso por etapa</h3>${stackBar(its)}
+   <div class="stlegend">${STAGES.map(st=>`<span style="--c:${st.c}"><i></i>${st.n} <b>${c[st.k]||0}</b></span>`).join("")}</div>
+   <div class="hmini"><button type="button" class="${mine?"warn":""}" id="hmMine"><span>Os meus por fazer</span><b>${mine}</b></button><div><span>Em atraso</span><b class="${late?"bad":""}">${late}</b></div><div><span>Por colocar na planta</span><b>${un}</b></div><div><span>Testados</span><b>${pct(c.ge(3),c.total)}%</b></div></div></div>
+  <div class="card hcard"><h3><span>Atividade recente</span><button class="linkb" id="hmFeed">ver tudo</button></h3><div class="hfeed">${feedItems().slice(0,6).map(e=>`<div class="fe" data-fit="${esc(e.item||"")}"><span class="ini" style="--h:${hue(e.by||"x")}">${esc(initials(nameOf(e.by)))}</span><div><b>${esc(nameOf(e.by))}</b> ${esc(e.t)}<small>${esc(e.code||"")}${e.code?" · ":""}${fmtDate(e.at)}</small></div></div>`).join("")||`<div class="empty">Sem atividade ainda.</div>`}</div></div>
+ </div>
  <section class="block"><h2><span>Pastas e plantas</span>${S.canWrite?`<span class="hacts"><button class="btn" id="hmNewF">+ Nova pasta</button><button class="btn primary" id="hmNewP">+ Planta</button></span>`:""}</h2>
   ${!S.plans.length?`<div class="empty">Ainda não há plantas. ${S.canWrite?"Cria uma pasta (ex.: <b>Piso 3</b>, <b>AVAC</b>, <b>Incêndio</b>) e carrega as plantas em PDF ou imagem.":""}</div>`:""}
   ${groups.map(g=>{const closed=!!homeOpen[g.id||"_"];return`<div class="folder${closed?" closed":""}">
    <div class="fhead"><button type="button" class="ftog" data-tog="${esc(g.id||"_")}" aria-expanded="${!closed}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.3l2 2h8.7A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg><b>${esc(g.name)}</b><span class="fcount">${g.plans.length}</span></button>
     ${S.canWrite?`<span class="facts">${g.id?`<button class="btn sm" data-fedit="${esc(g.id)}">Renomear</button>`:""}<button class="btn sm" data-fadd="${esc(g.id)}">+ Planta</button></span>`:""}</div>
    <div class="pgrid">${g.plans.map(card).join("")||`<div class="none">Pasta vazia. ${S.canWrite?"Carrega em + Planta para juntar plantas.":""}</div>`}</div></div>`}).join("")}
- </section>${notifCard()}`;
- hydrateThumbs(W);wireNotif(W);
- const go=id=>{S.planId=id;S.sel=null;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
- W.querySelectorAll("[data-open]").forEach(el=>{el.onclick=e=>{if(e.target.closest("select"))return;go(el.dataset.open)};el.onkeydown=e=>{if(e.key==="Enter")go(el.dataset.open)}});
- const hg=$("hmGo");if(hg)hg.onclick=()=>go(last.id);
+ </section>`;
+ hydrateThumbs(W);
+ W.querySelectorAll("[data-fit]").forEach(el=>el.onclick=()=>{if(el.dataset.fit)openItem(el.dataset.fit)});
+ const hf=$("hmFeed");if(hf)hf.onclick=e=>{e.stopPropagation();openFeed()};
+ const np2=$("hmNewP2");if(np2)np2.onclick=()=>{uploadFolder=null;replacing=null;$("planIn").click()};
+ $("hmK1").onclick=()=>go("equip");$("hmK2").onclick=()=>go("ids");$("hmK3").onclick=()=>{IDF.only="noid";go("ids")};$("hmK5").onclick=()=>go("equip");
+ const goP=id=>{S.planId=id;S.sel=null;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
+ W.querySelectorAll("[data-open]").forEach(el=>{el.onclick=e=>{if(e.target.closest("select"))return;goP(el.dataset.open)};el.onkeydown=e=>{if(e.key==="Enter")goP(el.dataset.open)}});
+ const hg=$("hmGo");if(hg)hg.onclick=()=>goP(last.id);
  $("hmMine").onclick=()=>{S.filter="mine";const m=its.find(i=>i.assignee===S.meId&&isTodo(i));if(m)S.planId=m.planId;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
- $("hmIss").onclick=()=>{S.filter=openI.length?"issues":"unplaced";const x=openI[0];if(x)S.planId=x.planId;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)};
+ $("hmIss").onclick=()=>go("issues");
  W.querySelectorAll("[data-tog]").forEach(b=>b.onclick=()=>{const k=b.dataset.tog;homeOpen[k]=!homeOpen[k];try{localStorage.setItem("cp-folders-closed",JSON.stringify(homeOpen))}catch(e){}b.closest(".folder").classList.toggle("closed",!!homeOpen[k]);b.setAttribute("aria-expanded",!homeOpen[k])});
  W.querySelectorAll("[data-move]").forEach(s=>{s.onclick=e=>e.stopPropagation();s.onchange=()=>{api.update("plans",s.dataset.move,{folder:s.value||null});toast(s.value?"Planta movida para "+folderName(s.value):"Planta tirada da pasta")}});
  W.querySelectorAll("[data-fadd]").forEach(b=>b.onclick=()=>{uploadFolder=b.dataset.fadd||null;replacing=null;$("planIn").click()});
@@ -1800,6 +1858,8 @@ $("fdDel").onclick=async()=>{const n=plansIn(fdFor).length;if(!fdArmed){fdArmed=
  $("btnFloor").onclick=()=>{open0();const p=plan();const sel=$("flFolder");sel.innerHTML=`<option value="">Sem pasta</option>`+folders().map(f=>`<option value="${esc(f.id)}">${esc(f.name)}</option>`).join("");sel.value=p&&p.folder||"";sel.disabled=!p;$("flFolderWrap").hidden=!folders().length};
  $("flClose").onclick=()=>{const p=plan(),v=$("flFolder").value||null;if(p&&(p.folder||null)!==v&&folders().length)api.update("plans",p.id,{folder:v});close0()};
  $("flAdd").onclick=()=>{replacing=null;const p=plan();uploadFolder=p&&p.folder||null}})();
+
+function kpi(c,ic,label,val,sub,bar,id){return`<button type="button" class="kpi" id="${id}" style="--c:${c}"><span class="ki"><svg viewBox="0 0 24 24">${ic}</svg></span><span class="kb"><span>${label}</span><b>${val}</b><small>${sub}</small>${bar!=null?`<span class="kbar"><i style="width:${bar}%"></i></span>`:""}</span></button>`}
 
 /* =========================================================
    Trocar a planta de um piso sem perder a posição dos IDs
@@ -2009,5 +2069,317 @@ document.addEventListener("keydown",e=>{if(!S.draw||e.target.matches("input,text
  if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();$("mkUndo")&&$("mkUndo").click()}});
 function mkHint(){const t=S.draw.tool;return t==="select"?`<b>Assinalar · Selecionar:</b> toca numa marcação para lhe juntar uma nota, mudar a cor ou apagar. Arrasta fora das marcações para mover a planta.`
  :t==="text"?`<b>Assinalar · Texto:</b> toca na planta onde queres escrever.`:`<b>Assinalar:</b> desenha na planta com o dedo ou o rato. Para mover a planta escolhe <b>Selecionar</b> (seta) ou usa os botões + e −.`}
+
+/* =========================================================
+   CostaPlan 2 · moldura: menu lateral, pesquisa global, notificações,
+   páginas de gestão (equipamentos, IDs, anomalias, diário, documentos,
+   equipa, configurações) e a área de trabalho da planta em 3 colunas
+   ========================================================= */
+const PAGE_VIEWS=["equip","ids","issues","diary","docs","team","settings"];
+function go(v){if(v==="more"){document.body.classList.toggle("sideopen");return}
+ if(v!=="obra")S.draw=null;S.view=v;document.body.classList.remove("sideopen");$("gres").hidden=true;$("feed").hidden=true;render();
+ const pg=$("viewPage");if(pg)pg.scrollTop=0;if(v==="obra")setTimeout(fit,50)}
+document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=e=>{e.stopPropagation();go(b.dataset.nav)});
+$("sideTog").onclick=e=>{e.stopPropagation();document.body.classList.toggle("sideopen")};
+document.addEventListener("click",e=>{if(document.body.classList.contains("sideopen")&&!e.target.closest("#side,#sideTog"))document.body.classList.remove("sideopen");
+ if(!e.target.closest(".gsearch"))$("gres").hidden=true;if(!e.target.closest("#feed,#bell"))$("feed").hidden=true});
+function openItem(id){const it=S.items.find(i=>i.id===id);if(!it)return;S.planId=it.planId;S.view="obra";loadedPlan=null;S.draw=null;
+ if(S.filter!=="all"&&!inFilter(it))S.filter="all";S.sel=id;render();setTimeout(()=>{fit();centerOn(it)},90)}
+function openPlan(pid){S.planId=pid;S.sel=null;S.view="obra";loadedPlan=null;render();setTimeout(fit,60)}
+function renderShell(){const v=S.view;
+ $("tabHome").setAttribute("aria-selected",v==="home");$("tabObra").setAttribute("aria-selected",v==="obra");$("tabCoord").setAttribute("aria-selected",v==="coord");
+ $("viewObra").style.display=v==="obra"?"contents":"none";$("viewCoord").hidden=v!=="coord";$("viewHome").hidden=v!=="home";$("viewPage").hidden=!PAGE_VIEWS.includes(v);
+ document.body.dataset.view=v;document.querySelectorAll("[data-nav]").forEach(b=>b.classList.toggle("on",b.dataset.nav===v));
+ $("sideProj").textContent=S.meta.name||"A minha obra";
+ const oi=S.issues.filter(x=>x.status!=="resolvida").length,dc=dupCount();
+ const cnt=(k,n,bad)=>{const e=$("cnt_"+k);if(!e)return;e.hidden=!n;e.textContent=n;e.style.background=bad?"#dc2626":""};
+ cnt("issues",oi,oi>0);cnt("ids",dc,dc>0);cnt("equip",S.items.length);cnt("obra",S.plans.length);
+ const tip=$("sideTip");if(tip)tip.hidden=v==="settings";
+ if(v==="obra"){renderObra();renderObraExtras();warmReader()}else if(v==="coord")renderCoord();else if(v==="home")renderHome();else renderPage(v);
+ renderBell()}
+
+/* ---------- pesquisa global ---------- */
+let gSel=0,gHits=[];
+function gSearch(q){q=q.trim().toLowerCase();if(q.length<2)return[];const out=[];
+ for(const i of S.items){const hay=[i.devId,i.mac,i.code,i.model,i.serial,i.taskNo,i.maker].join(" ").toLowerCase();if(hay.includes(q))out.push({k:"item",id:i.id,t:i.devId||i.mac||i.code,s:`${i.code} · ${(S.plans.find(p=>p.id===i.planId)||{}).name||""} · ${sOf(i.stage).n}`,score:(String(i.devId||"").toLowerCase()===q?0:1)})}
+ for(const p of S.plans)if(String(p.name).toLowerCase().includes(q))out.push({k:"plan",id:p.id,t:p.name,s:`Planta · ${planItems(p.id).length} equipamentos`,score:2});
+ for(const d of docsAll())if(String(d.name).toLowerCase().includes(q))out.push({k:"doc",id:d.id,t:d.name,s:"Documento · "+d.cat,score:3});
+ for(const x of S.issues)if(String(x.text).toLowerCase().includes(q))out.push({k:"issue",id:x.id,t:String(x.text).slice(0,60),s:"Anomalia · "+(x.status==="resolvida"?"resolvida":"aberta"),score:4});
+ return out.sort((a,b)=>a.score-b.score).slice(0,14)}
+function renderGres(){const R=$("gres");if(!gHits.length){R.innerHTML=`<div class="empty">Sem resultados.</div>`;R.hidden=false;return}
+ const lab={item:"Equipamentos",plan:"Plantas",doc:"Documentos",issue:"Anomalias"},icn={item:"ID",plan:"PL",doc:"DOC",issue:"!"};let last="";
+ R.innerHTML=gHits.map((h,i)=>{const hd=h.k!==last?`<h5>${lab[h.k]}</h5>`:"";last=h.k;return hd+`<button type="button" data-g="${i}" class="${i===gSel?"on":""}"><span class="gi">${icn[h.k]}</span><span><b>${esc(h.t)}</b><small>${esc(h.s)}</small></span></button>`}).join("");
+ R.hidden=false;R.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>gOpen(gHits[+b.dataset.g]))}
+function gOpen(h){if(!h)return;$("gres").hidden=true;$("gq").value="";$("gq").blur();
+ if(h.k==="item")openItem(h.id);else if(h.k==="plan")openPlan(h.id);else if(h.k==="doc")openDoc(h.id);else{const x=S.issues.find(i=>i.id===h.id);if(x&&x.itemId)openItem(x.itemId);else go("issues")}}
+$("gq").oninput=e=>{gHits=gSearch(e.target.value);gSel=0;if(e.target.value.trim().length<2){$("gres").hidden=true;return}renderGres()};
+$("gq").onkeydown=e=>{if(e.key==="ArrowDown"){gSel=Math.min(gHits.length-1,gSel+1);renderGres();e.preventDefault()}else if(e.key==="ArrowUp"){gSel=Math.max(0,gSel-1);renderGres();e.preventDefault()}
+ else if(e.key==="Enter"){gOpen(gHits[gSel]);e.preventDefault()}else if(e.key==="Escape"){$("gres").hidden=true;e.target.blur()}};
+document.addEventListener("keydown",e=>{if(e.key==="/"&&!e.target.matches("input,textarea,select")){e.preventDefault();$("gq").focus()}});
+
+/* ---------- atividade recente (sino) ---------- */
+function feedItems(){const ev=[];
+ for(const it of S.items)for(const e of (it.log||[]).slice(-8))ev.push({at:e.at,by:e.by,t:e.t,code:it.devId||it.code,item:it.id});
+ for(const x of S.issues){ev.push({at:x.createdAt,by:x.createdBy,t:"registou anomalia: "+String(x.text).slice(0,60),code:(S.items.find(i=>i.id===x.itemId)||{}).code||"",item:x.itemId});
+  if(x.resolvedAt)ev.push({at:x.resolvedAt,by:x.resolvedBy,t:"resolveu anomalia: "+String(x.text).slice(0,60),code:(S.items.find(i=>i.id===x.itemId)||{}).code||"",item:x.itemId})}
+ for(const d of docsAll())ev.push({at:d.at,by:d.by,t:"juntou o documento "+d.name,code:d.cat,doc:d.id});
+ return ev.filter(e=>e.at).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,60)}
+let feedSeen=(()=>{try{return localStorage.getItem("cp-feed-seen")||""}catch(e){return""}})();
+function renderBell(){const n=feedItems().filter(e=>e.at>feedSeen&&e.by!==S.meId).length;const b=$("bellN");b.hidden=!n;b.textContent=n>99?"99+":n}
+function openFeed(){const F=$("feed");const ev=feedItems();const seen=feedSeen;
+ F.innerHTML=`<h4><span>Atividade recente</span><button class="linkb" id="feedX">Fechar</button></h4>`+(ev.map((e,i)=>`<div class="fe${e.at>seen&&e.by!==S.meId?" new":""}" data-fe="${i}"><span class="ini" style="--h:${hue(e.by||"x")}">${esc(initials(nameOf(e.by)))}</span><div><b>${esc(nameOf(e.by))}</b> ${esc(e.t)}<small>${esc(e.code||"")}${e.code?" · ":""}${fmtDate(e.at)}</small></div></div>`).join("")||`<div class="empty">Sem atividade ainda.</div>`);
+ F.hidden=false;F.querySelectorAll("[data-fe]").forEach(el=>el.onclick=()=>{const e=ev[+el.dataset.fe];F.hidden=true;if(e.item)openItem(e.item);else if(e.doc)openDoc(e.doc)});$("feedX").onclick=()=>{F.hidden=true};
+ feedSeen=now();try{localStorage.setItem("cp-feed-seen",feedSeen)}catch(x){}renderBell()}
+$("bell").onclick=e=>{e.stopPropagation();if(!$("feed").hidden){$("feed").hidden=true;return}openFeed()};
+
+/* ---------- área da planta: cabeçalho, lista de plantas, barra de estado ---------- */
+let plQ="";
+function renderObraExtras(){const p=plan();const its=planItems();
+ const withId=its.filter(i=>String(i.devId||"").trim()||String(i.mac||"").trim()).length,oi=S.issues.filter(x=>x.planId===(p&&p.id)&&x.status!=="resolvida").length,ph=its.reduce((n,i)=>n+(i.photos||[]).length,0),tst=its.filter(i=>sIdx(i.stage)>=3).length;
+ $("oHead").innerHTML=p?`<div class="crumb"><button type="button" data-go="home">Projeto</button><span>›</span>${p.folder&&folderName(p.folder)?`<span>${esc(folderName(p.folder))}</span><span>›</span>`:""}<b>${esc(p.name)}</b></div>
+  <span class="stchip" style="--c:${(p.close&&p.close.status)==="entregue"?"var(--ok)":(p.close&&p.close.status)==="fecho"?"var(--warn)":"var(--info)"}">${FLOOR_ST[(p.close&&p.close.status)||"aberto"]}</span>`:"";
+ $("oHead").querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+ // lista de plantas
+ const P=$("plansPane");const q=plQ.trim().toLowerCase();const fs=folders();const grp=[];
+ fs.forEach(f=>{const ps=plansIn(f.id).filter(x=>!q||x.name.toLowerCase().includes(q));if(ps.length)grp.push([f.name,ps])});
+ const loose=plansIn(null).filter(x=>!q||x.name.toLowerCase().includes(q));if(loose.length)grp.push([fs.length?"Sem pasta":"",loose]);
+ const focused=P.contains(document.activeElement);
+ if(!focused||!P.querySelector("#plQ"))P.innerHTML=`<div class="ph"><b><span>Plantas</span>${S.canWrite?`<button class="btn sm primary" id="plAdd" title="Carregar plantas">+</button>`:""}</b><input type="search" id="plQ" placeholder="Pesquisar planta…" value="${esc(plQ)}"></div><div class="pl" id="plList"></div>`;
+ $("plList").innerHTML=grp.map(([n,ps])=>(n?`<div class="fgrp">${esc(n)}</div>`:"")+ps.map(x=>{const pi=planItems(x.id),pc=counts(pi);
+  return`<div class="prow${x.id===S.planId?" on":""}" data-pl="${esc(x.id)}" role="button" tabindex="0"><span class="pt"><img data-thumb="${esc(x.img||"")}" alt=""></span><span><b>${esc(x.name)}</b><small>${pi.length} equipamentos</small><span class="pp">${stackBar(pi)}<span>${pct(pc.ge(3),pc.total)}% testado</span></span></span></div>`}).join("")).join("")||`<div class="empty">Sem plantas.</div>`;
+ P.querySelectorAll("img[data-thumb]").forEach(im=>{const r=im.dataset.thumb;if(!r||im.dataset.done===r)return;im.dataset.done=r;thumbOf(r).then(u=>{im.src=u;im.parentElement.classList.add("ok")}).catch(()=>{})});
+ P.querySelectorAll("[data-pl]").forEach(el=>{el.onclick=()=>openPlan(el.dataset.pl);el.onkeydown=e=>{if(e.key==="Enter")openPlan(el.dataset.pl)}});
+ const pq=$("plQ");if(pq)pq.oninput=e=>{plQ=e.target.value;renderObraExtras()};
+ const pa=$("plAdd");if(pa)pa.onclick=()=>{replacing=null;uploadFolder=(p&&p.folder)||null;$("planIn").click()};
+ // barra de estado
+ $("sBar").innerHTML=p?`<b style="color:var(--ink)">${esc(p.name)}</b><span class="sc" style="--c:var(--muted)"><i></i>${its.length} equip.</span><span class="sc" style="--c:var(--ok)"><i></i>Identificados ${withId}</span><span class="sc" style="--c:#9333ea"><i></i>Pendentes de ID ${its.length-withId}</span><span class="sc" style="--c:var(--st3)"><i></i>Testados ${tst}</span><span class="sc" style="--c:var(--bad)"><i></i>Anomalias ${oi}</span><span class="sc" style="--c:#0891b2"><i></i>Fotos ${ph}</span>
+  <span class="grow"></span><span class="zm">Zoom <button class="btn sm" id="sbOut">−</button><b id="sbZ">${Math.round(view.z*100)}%</b><button class="btn sm" id="sbIn">+</button></span>`:"";
+ const so=$("sbOut");if(so){so.onclick=()=>$("zOut").click();$("sbIn").onclick=()=>$("zIn").click()}}
+setInterval(()=>{const z=$("sbZ");if(z&&S.view==="obra")z.textContent=Math.round(view.z*100)+"%"},400);
+
+/* ---------- ficha do equipamento: cabeçalho e separadores ---------- */
+S.shTab="det";
+function decorateSheet(box,it){const kids=[...box.children];const head=box.querySelector(".sh-head");if(!head)return;
+ const tabOf=el=>{const h=el.querySelector&&el.querySelector(":scope>h4");const t=h?h.textContent.toLowerCase():"";
+  if(el.classList.contains("hist"))return"hist";if(t.startsWith("checklist"))return"ens";if(t.startsWith("anomalias"))return"iss";if(el.classList.contains("sh-foot"))return"";return"det"};
+ const nIss=S.issues.filter(x=>x.itemId===it.id&&x.status!=="resolvida").length,nDocs=docsFor(it).length,nLog=(it.log||[]).length,ckl=CHECKS[it.type]||CHECKS.EQ,ckd=ckl.filter((_,k)=>ck(it)[k]).length;
+ const top=document.createElement("div");top.className="shtop";
+ top.innerHTML=`<h3>${it.devId?"ID "+esc(it.devId):it.mac?"MAC "+esc(it.mac):"Sem ID"} <span class="stchip" style="--c:${sOf(it.stage).c}">${esc(sOf(it.stage).n)}</span>${isDup(it)?`<span class="stchip" style="--c:var(--bad)">Repetido</span>`:""}</h3>`;
+ const tabs=document.createElement("div");tabs.className="shtabs";
+ const T=[["det","Detalhes"],["ens",`Ensaio<span class="n">${ckd}/${ckl.length}</span>`],["iss",`Anomalias${nIss?`<span class="n" style="background:#fee2e2;color:#b91c1c">${nIss}</span>`:""}`],["docs",`Documentos${nDocs?`<span class="n">${nDocs}</span>`:""}`],["hist",`Histórico${nLog?`<span class="n">${nLog}</span>`:""}`]];
+ tabs.innerHTML=T.map(([k,n])=>`<button type="button" data-st="${k}" class="${S.shTab===k?"on":""}">${n}</button>`).join("");
+ head.before(top);head.after(tabs);
+ const docsSec=document.createElement("div");docsSec.className="sec";docsSec.dataset.tab="docs";docsSec.innerHTML=docsTabHtml(it);
+ const foot=box.querySelector(".sh-foot");foot.before(docsSec);
+ kids.forEach(el=>{if(el===head)return;const t=tabOf(el);if(!t)return;el.dataset.tab=t});
+ const hist=box.querySelector(".hist");if(hist)hist.open=true;
+ const apply=()=>{box.querySelectorAll("[data-tab]").forEach(el=>el.hidden=el.dataset.tab!==S.shTab);tabs.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.st===S.shTab))};
+ tabs.querySelectorAll("button").forEach(b=>b.onclick=()=>{S.shTab=b.dataset.st;apply()});apply();wireDocsTab(it);
+ const nx=$("edNext");if(nx)nx.textContent="Seguinte →";
+ if(!box.querySelector("#edPrev")){const pv=document.createElement("button");pv.className="btn sm";pv.id="edPrev";pv.textContent="← Anterior";
+  pv.onclick=()=>{flushFields();const L2=planItems().filter(i=>inFilter(i)&&matchQ(i)).sort(workOrder);const k=L2.findIndex(i=>i.id===it.id);const pr=L2[k-1];if(pr){select(pr.id);centerOn(pr)}else toast("Este é o primeiro da lista.")};
+  nx&&nx.before(pv)}}
+
+/* ---------- Documentos (biblioteca da obra) ---------- */
+const DOC_CATS=["Projeto e desenhos","Fichas técnicas","Certificados e ensaios","Atas e correspondência","Fotografias","Outros"];
+function docsAll(){return Object.entries(L.meta||{}).filter(([id,v])=>id.startsWith("doc_")&&v&&v.ref).map(([id,v])=>({id,...v})).sort((a,b)=>String(b.at).localeCompare(String(a.at)))}
+function docsFor(it){return docsAll().filter(d=>(d.items||[]).includes(it.id)||(d.types||[]).includes(it.type))}
+function docExt(n){return(String(n).match(/\.([a-z0-9]{1,5})$/i)||[])[1]?.toUpperCase()||"FICH"}
+const DOC_COL={PDF:"#dc2626",DOC:"#2563eb",DOCX:"#2563eb",XLS:"#16a34a",XLSX:"#16a34a",DWG:"#9333ea",JPG:"#0891b2",JPEG:"#0891b2",PNG:"#0891b2"};
+function fmtSize(b){return b>1e6?(b/1e6).toFixed(1)+" MB":Math.max(1,Math.round(b/1e3))+" KB"}
+async function uploadDocs(files,cat,link){if(!S.canWrite){toast("Sem permissão para juntar documentos.");return[]}const ids=[];
+ for(const f of files){try{if(f.size>50e6)throw new Error("máximo 50 MB");const type=f.type||"application/octet-stream";const ref=await putFile(f,type);const id="doc_"+uid();
+   await api.set("meta",id,{name:f.name,cat:cat||"Outros",ref,type,size:f.size,by:S.meId,at:now(),items:link?[link]:[],types:[]});ids.push(id)}catch(e){toast(f.name+": "+(e.message||"erro"))}}
+ if(ids.length)toast(ids.length>1?`${ids.length} documentos guardados.`:"Documento guardado.");return ids}
+async function openDoc(id){const d=L.meta[id];if(!d)return;try{const b=await blobOf(d.ref);const blob=b.type?b:new Blob([b],{type:d.type});
+  if(/pdf|image\//.test(d.type)){const u=URL.createObjectURL(blob);const w=window.open(u,"_blank");if(!w)saveBlob(d.name,blob);setTimeout(()=>URL.revokeObjectURL(u),120000)}else saveBlob(d.name,blob)}
+ catch(e){toast("Documento indisponível"+(navigator.onLine?".":" sem rede."))}}
+function docRow(d,actions){const ex=docExt(d.name);return`<div class="docrow"><span class="dt" style="--c:${DOC_COL[ex]||"#64748b"}">${esc(ex.slice(0,4))}</span><span class="dn"><b>${esc(d.name)}</b><small>${esc(d.cat||"")} · ${fmtSize(d.size||0)} · ${esc(nameOf(d.by))} · ${fmtDate(d.at)}</small></span>${actions}</div>`}
+function docsTabHtml(it){const ds=docsFor(it);const others=docsAll().filter(d=>!ds.includes(d));
+ return`<h4><span>Documentos do equipamento</span></h4><div class="doclist">${ds.map(d=>docRow(d,`<button class="btn sm" data-dopen="${esc(d.id)}">Abrir</button>${S.canWrite&&(d.items||[]).includes(it.id)?`<button class="btn sm" data-dunl="${esc(d.id)}" title="Desligar">×</button>`:""}`)).join("")||`<span class="none">Sem documentos. Junta fichas técnicas, certificados ou manuais.</span>`}</div>
+  ${S.canWrite?`<div class="toolrow">${others.length?`<select id="dLink"><option value="">Ligar documento da obra…</option>${others.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("")}</select>`:""}<label class="btn sm" for="dUp">Carregar documento</label><input type="file" id="dUp" multiple hidden></div>
+  <label class="mkfill"><input type="checkbox" id="dType"> Ao ligar, aplicar a todos os equipamentos do tipo ${esc(tOf(it.type).n)}</label>`:""}`}
+function wireDocsTab(it){const box=$("sheet");box.querySelectorAll("[data-dopen]").forEach(b=>b.onclick=()=>openDoc(b.dataset.dopen));
+ box.querySelectorAll("[data-dunl]").forEach(b=>b.onclick=()=>{const d=L.meta[b.dataset.dunl];api.update("meta",b.dataset.dunl,{items:(d.items||[]).filter(x=>x!==it.id)});sheetFor=null;render()});
+ const dl=$("dLink");if(dl)dl.onchange=()=>{const d=L.meta[dl.value];if(!d)return;const all=$("dType")&&$("dType").checked;
+  api.update("meta",dl.value,all?{types:[...new Set([...(d.types||[]),it.type])]}:{items:[...new Set([...(d.items||[]),it.id])]});toast("Documento ligado.");sheetFor=null;render()};
+ const up=$("dUp");if(up)up.onchange=async e=>{const fs=[...e.target.files];e.target.value="";await uploadDocs(fs,"Fichas técnicas",it.id);sheetFor=null;render()}}
+
+/* ---------- páginas ---------- */
+const EQ={q:"",plan:"",type:"",stage:"",who:"",only:""},IDF={q:"",only:""},ISF={q:"",st:"open",prio:"",who:"",plan:""};
+let diaryDay=null,docF={q:"",cat:""};
+function pageHead(crumb,title,sub,actions){return`<div class="crumb"><button type="button" data-go="home">${esc(S.meta.name||"Projeto")}</button><span>›</span><b>${esc(crumb)}</b></div>
+ <div class="phead"><div><h2>${title}</h2>${sub?`<p>${sub}</p>`:""}</div><div class="toolrow">${actions||""}</div></div>`}
+const planName=id=>(S.plans.find(p=>p.id===id)||{}).name||"—";
+function renderPage(v){const W=$("pageWrap");
+ if(v==="equip")W.innerHTML=equipPage();else if(v==="ids")W.innerHTML=idsPage();else if(v==="issues")W.innerHTML=issuesPage();
+ else if(v==="diary")W.innerHTML=diaryPage();else if(v==="docs")W.innerHTML=docsPage();else if(v==="team")W.innerHTML=pageHead("Equipa","Equipa e acessos","Quem trabalha na obra, o papel de cada pessoa e o trabalho atribuído.")+teamSection()+techSection();
+ else if(v==="settings")W.innerHTML=settingsPage();
+ W.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+ W.querySelectorAll("[data-item]").forEach(r=>r.onclick=e=>{if(e.target.closest("select,input,button:not([data-item]),a"))return;openItem(r.dataset.item)});
+ hydrate(W);
+ ({equip:wireEquip,ids:wireIds,issues:wireIssues,diary:wireDiary,docs:wireDocs,team:()=>wireTeam(W),settings:()=>wireSettings(W)})[v](W)}
+
+function equipList(){const q=EQ.q.trim().toLowerCase();return S.items.filter(i=>(!EQ.plan||i.planId===EQ.plan)&&(!EQ.type||i.type===EQ.type)&&(!EQ.stage||(i.stage||"previsto")===EQ.stage)&&(!EQ.who||(EQ.who==="-"?!i.assignee:i.assignee===EQ.who))
+ &&(EQ.only!=="iss"||hasIssue(i))&&(EQ.only!=="noid"||!(i.devId||i.mac))&&(EQ.only!=="late"||isLate(i))&&(EQ.only!=="unpl"||i.x==null)
+ &&(!q||[i.code,i.devId,i.mac,i.model,i.maker,i.serial,i.taskNo,i.note].join(" ").toLowerCase().includes(q)))
+ .sort((a,b)=>S.plans.findIndex(p=>p.id===a.planId)-S.plans.findIndex(p=>p.id===b.planId)||String(a.code).localeCompare(String(b.code),"pt",{numeric:true}))}
+function equipPage(){const L2=equipList();const ppl=[...new Set(S.items.map(i=>i.assignee).filter(Boolean))];
+ return pageHead("Equipamentos","Equipamentos",`${S.items.length} equipamentos em ${S.plans.length} plantas`,`<button class="btn" id="eqCsv">Exportar CSV</button>`)+`
+ <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow">
+  <input type="search" id="eqQ" placeholder="Pesquisar referência, ID, MAC, modelo…" value="${esc(EQ.q)}">
+  <select id="eqP"><option value="">Todas as plantas</option>${S.plans.map(p=>`<option value="${esc(p.id)}"${EQ.plan===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}</select>
+  <select id="eqT"><option value="">Todos os sistemas</option>${TYPES.map(t=>`<option value="${t.k}"${EQ.type===t.k?" selected":""}>${t.n}</option>`).join("")}</select>
+  <select id="eqS"><option value="">Todas as etapas</option>${STAGES.map(s=>`<option value="${s.k}"${EQ.stage===s.k?" selected":""}>${s.n}</option>`).join("")}</select>
+  <select id="eqW"><option value="">Todos os responsáveis</option><option value="-"${EQ.who==="-"?" selected":""}>Sem responsável</option>${ppl.map(id=>`<option value="${esc(id)}"${EQ.who===id?" selected":""}>${esc(nameOf(id))}</option>`).join("")}</select>
+  <select id="eqO"><option value="">Todos</option><option value="noid"${EQ.only==="noid"?" selected":""}>Sem ID</option><option value="iss"${EQ.only==="iss"?" selected":""}>Com anomalia</option><option value="late"${EQ.only==="late"?" selected":""}>Em atraso</option><option value="unpl"${EQ.only==="unpl"?" selected":""}>Por colocar na planta</option></select>
+  <span class="muted" style="font-size:13px">${L2.length} resultados</span></div>
+ <div class="tbl"><table><thead><tr><th>Ref.</th><th>ID</th><th>MAC</th><th>Planta</th><th>Sistema</th><th>Etapa</th><th>Responsável</th><th>Prazo</th><th class="num">Fotos</th><th class="num">Anom.</th></tr></thead><tbody>
+ ${L2.slice(0,500).map(i=>`<tr class="click${isDup(i)?" dup":""}" data-item="${esc(i.id)}"><td class="mono">${esc(i.code)}</td><td class="mono">${esc(i.devId)}</td><td class="mono">${esc(i.mac)}</td><td>${esc(planName(i.planId))}</td><td>${esc(tOf(i.type).n)}</td>
+  <td><span class="stchip" style="--c:${sOf(i.stage).c}">${sOf(i.stage).n}</span></td><td>${i.assignee?esc(nameOf(i.assignee)):`<span class="muted">—</span>`}</td><td${isLate(i)?' style="color:var(--bad);font-weight:600"':""}>${i.due?fmtDay(i.due):""}</td><td class="num">${(i.photos||[]).length||""}</td><td class="num"${openIssues(i.id).length?' style="color:var(--bad);font-weight:700"':""}>${openIssues(i.id).length||""}</td></tr>`).join("")||`<tr><td colspan="10" class="empty2">Nada corresponde aos filtros.</td></tr>`}
+ ${L2.length>500?`<tr><td colspan="10" class="muted">A mostrar 500 de ${L2.length}. O CSV inclui todos.</td></tr>`:""}</tbody></table></div></div>`}
+function wireEquip(){const bind=(id,k)=>{const e=$(id);e.oninput=e.onchange=()=>{EQ[k]=e.value;const pos=e.selectionStart;renderPage("equip");const n=$(id);if(id==="eqQ"){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}}};
+ bind("eqQ","q");bind("eqP","plan");bind("eqT","type");bind("eqS","stage");bind("eqW","who");bind("eqO","only");
+ $("eqCsv").onclick=()=>saveFile(`Equipamentos_${slug()}.csv`,"﻿"+reportCsv(equipList()))}
+
+function idsPage(){const its=S.items;const withId=its.filter(i=>i.devId||i.mac);const dm=dupMap();const q=IDF.q.trim().toLowerCase();
+ const L2=its.filter(i=>(IDF.only==="dup"?dm[i.id]:IDF.only==="noid"?!(i.devId||i.mac):true)&&(!q||[i.devId,i.mac,i.code].join(" ").toLowerCase().includes(q)))
+  .sort((a,b)=>String(a.devId||a.mac||"~").localeCompare(String(b.devId||b.mac||"~"),"pt",{numeric:true}));
+ return pageHead("Lista de IDs","Lista de IDs","Todos os identificadores registados na obra, com repetidos destacados.",`<button class="btn" id="idCopy">Copiar IDs</button><button class="btn" id="idCsv">Exportar CSV</button>`)+`
+ <div class="kpis k4">
+  ${kpi("var(--ok)",'<path d="M20 6L9 17l-5-5"/>',"Com ID ou MAC",withId.length,`${pct(withId.length,its.length)}% dos equipamentos`,pct(withId.length,its.length),"idK1")}
+  ${kpi("var(--accent)",'<path d="M4 6h16M4 12h16M4 18h10"/>',"IDs únicos",new Set(withId.map(i=>String(i.devId||i.mac).toUpperCase())).size,"&nbsp;",null,"idK2")}
+  ${kpi("var(--bad)",'<path d="M8 8h12v12H8z"/><path d="M4 16V4h12"/>',"Repetidos",Object.keys(dm).length,"a verificar",null,"idK3")}
+  ${kpi("#9333ea",'<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',"Sem ID",its.length-withId.length,"por identificar",null,"idK4")}</div>
+ <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="idQ" placeholder="Pesquisar ID, MAC ou referência…" value="${esc(IDF.q)}">
+  <div class="seg"><button type="button" data-io="" aria-pressed="${!IDF.only}">Todos</button><button type="button" data-io="dup" aria-pressed="${IDF.only==="dup"}">Repetidos</button><button type="button" data-io="noid" aria-pressed="${IDF.only==="noid"}">Sem ID</button></div><span class="muted" style="font-size:13px">${L2.length} linhas</span></div>
+ <div class="tbl"><table><thead><tr><th>ID</th><th>MAC</th><th>Ref.</th><th>Planta</th><th>Sistema</th><th>Etapa</th><th>Leitura</th><th></th></tr></thead><tbody>
+ ${L2.slice(0,800).map(i=>`<tr class="click${dm[i.id]?" dup":""}" data-item="${esc(i.id)}"><td class="mono"><b>${esc(i.devId)||`<span class="muted">—</span>`}</b></td><td class="mono">${esc(i.mac)}</td><td class="mono">${esc(i.code)}</td><td>${esc(planName(i.planId))}</td><td>${esc(tOf(i.type).n)}</td><td><span class="stchip" style="--c:${sOf(i.stage).c}">${sOf(i.stage).n}</span></td><td class="muted" style="font-size:12px">${esc(i.readConf==="alta"?"Confirmado":i.readConf?"A confirmar":i.devId?"Manual":"")}</td><td>${dm[i.id]?`<span class="stchip" style="--c:var(--bad)">Repetido ×${dm[i.id]}</span>`:""}</td></tr>`).join("")||`<tr><td colspan="8" class="empty2">Sem resultados.</td></tr>`}</tbody></table></div></div>`}
+function wireIds(){const q=$("idQ");q.oninput=()=>{IDF.q=q.value;const pos=q.selectionStart;renderPage("ids");$("idQ").focus();try{$("idQ").setSelectionRange(pos,pos)}catch(x){}};
+ document.querySelectorAll("[data-io]").forEach(b=>b.onclick=()=>{IDF.only=b.dataset.io;renderPage("ids")});
+ $("idK3").onclick=()=>{IDF.only="dup";renderPage("ids")};$("idK4").onclick=()=>{IDF.only="noid";renderPage("ids")};$("idK1").onclick=$("idK2").onclick=()=>{IDF.only="";renderPage("ids")};
+ $("idCopy").onclick=()=>{const t=S.items.filter(i=>i.devId||i.mac).map(i=>[i.devId||"",i.mac||"",i.code,planName(i.planId)].join("\t")).join("\n");navigator.clipboard.writeText("ID\tMAC\tRef\tPlanta\n"+t).then(()=>toast("Lista copiada: cola no Excel.")).catch(()=>toast("Não foi possível copiar."))};
+ $("idCsv").onclick=()=>{const e=v=>{v=String(v??"");return/[;"\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};const dm=dupMap();
+  saveFile(`IDs_${slug()}.csv`,"﻿"+[["ID","MAC","Ref","Planta","Sistema","Etapa","Repetido"],...S.items.map(i=>[i.devId,i.mac,i.code,planName(i.planId),tOf(i.type).n,sOf(i.stage).n,dm[i.id]?"sim":""])].map(r=>r.map(e).join(";")).join("\r\n"))}}
+
+/* anomalias e pendências (punch list) */
+const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
+function issueList(){const q=ISF.q.trim().toLowerCase();return S.issues.filter(x=>(ISF.st==="open"?x.status!=="resolvida":ISF.st==="done"?x.status==="resolvida":true)&&(!ISF.prio||(x.prio||"media")===ISF.prio)&&(!ISF.who||(ISF.who==="-"?!x.assignee:x.assignee===ISF.who))&&(!ISF.plan||x.planId===ISF.plan)
+ &&(!q||[x.text,(S.items.find(i=>i.id===x.itemId)||{}).code].join(" ").toLowerCase().includes(q))).sort((a,b)=>(a.status==="resolvida")-(b.status==="resolvida")||["alta","media","baixa"].indexOf(a.prio||"media")-["alta","media","baixa"].indexOf(b.prio||"media")||String(a.due||"9").localeCompare(String(b.due||"9"))||String(a.createdAt).localeCompare(String(b.createdAt)))}
+function issuesPage(){const L2=issueList();const open=S.issues.filter(x=>x.status!=="resolvida");const td=today();const over=open.filter(x=>x.due&&x.due<td).length;const ppl=[...new Set(S.issues.map(x=>x.assignee).filter(Boolean))];
+ return pageHead("Anomalias e pendências","Anomalias e pendências","Lista de pendências da obra (punch list): prioridade, responsável e prazo.",S.canWrite?`<button class="btn primary" id="isNew">+ Nova pendência</button>`:"")+`
+ <div class="kpis k4">
+  ${kpi("var(--warn)",'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',"Abertas",open.length,"&nbsp;",null,"isK1")}
+  ${kpi("var(--bad)",'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',"Fora de prazo",over,"&nbsp;",null,"isK2")}
+  ${kpi("#b91c1c",'<path d="M12 2v20M2 12h20"/>',"Prioridade alta",open.filter(x=>x.prio==="alta").length,"&nbsp;",null,"isK3")}
+  ${kpi("var(--ok)",'<path d="M20 6L9 17l-5-5"/>',"Resolvidas",S.issues.length-open.length,`${pct(S.issues.length-open.length,S.issues.length)}% do total`,pct(S.issues.length-open.length,S.issues.length),"isK4")}</div>
+ <div id="isForm"></div>
+ <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="isQ" placeholder="Pesquisar descrição ou equipamento…" value="${esc(ISF.q)}">
+  <div class="seg"><button type="button" data-ist="open" aria-pressed="${ISF.st==="open"}">Abertas</button><button type="button" data-ist="done" aria-pressed="${ISF.st==="done"}">Resolvidas</button><button type="button" data-ist="all" aria-pressed="${ISF.st==="all"}">Todas</button></div>
+  <select id="isP"><option value="">Todas as prioridades</option>${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${ISF.prio===k?" selected":""}>${n}</option>`).join("")}</select>
+  <select id="isW"><option value="">Todos</option><option value="-"${ISF.who==="-"?" selected":""}>Sem responsável</option>${ppl.map(id=>`<option value="${esc(id)}"${ISF.who===id?" selected":""}>${esc(nameOf(id))}</option>`).join("")}</select>
+  <select id="isPl"><option value="">Todas as plantas</option>${S.plans.map(p=>`<option value="${esc(p.id)}"${ISF.plan===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}</select></div>
+ <div class="tbl"><table><thead><tr><th>Prioridade</th><th>Descrição</th><th>Equipamento</th><th>Planta</th><th>Responsável</th><th>Prazo</th><th>Estado</th><th>Registada</th></tr></thead><tbody>
+ ${L2.map(x=>{const it=S.items.find(i=>i.id===x.itemId);const late=x.status!=="resolvida"&&x.due&&x.due<td;const can=S.canWrite;
+  return`<tr${it?` class="click" data-item="${esc(it.id)}"`:""}><td>${can?`<select data-iprio="${esc(x.id)}">${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${(x.prio||"media")===k?" selected":""}>${n}</option>`).join("")}</select>`:`<span class="prio ${x.prio||"media"}">${PRIO[x.prio||"media"]}</span>`}</td>
+  <td style="max-width:340px">${x.photo?`<img data-ref="${esc(x.photo)}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:6px;float:left;margin-right:8px">`:""}${esc(x.text)}</td><td class="mono">${it?esc(it.devId||it.code):`<span class="muted">Geral</span>`}</td><td>${esc(planName(x.planId))}</td>
+  <td>${x.assignee?esc(nameOf(x.assignee)):`<span class="muted">—</span>`}</td><td>${can?`<input type="date" data-idue="${esc(x.id)}" value="${esc(x.due||"")}"${late?' style="color:var(--bad);border-color:var(--bad)"':""}>`:x.due?fmtDay(x.due):""}</td>
+  <td>${can?`<select data-ist2="${esc(x.id)}"><option value="aberta"${x.status==="aberta"||!x.status?" selected":""}>Aberta</option><option value="curso"${x.status==="curso"?" selected":""}>Em curso</option><option value="resolvida"${x.status==="resolvida"?" selected":""}>Resolvida</option></select>`:esc(x.status||"aberta")}</td>
+  <td style="font-size:12px">${esc(nameOf(x.createdBy))}<div class="muted">${fmtDate(x.createdAt)}</div></td></tr>`}).join("")||`<tr><td colspan="8" class="empty2">Sem pendências ${ISF.st==="open"?"abertas":""}.</td></tr>`}</tbody></table></div></div>`}
+function wireIssues(){const q=$("isQ");q.oninput=()=>{ISF.q=q.value;const pos=q.selectionStart;renderPage("issues");$("isQ").focus();try{$("isQ").setSelectionRange(pos,pos)}catch(x){}};
+ document.querySelectorAll("[data-ist]").forEach(b=>b.onclick=()=>{ISF.st=b.dataset.ist;renderPage("issues")});
+ $("isP").onchange=e=>{ISF.prio=e.target.value;renderPage("issues")};$("isW").onchange=e=>{ISF.who=e.target.value;renderPage("issues")};$("isPl").onchange=e=>{ISF.plan=e.target.value;renderPage("issues")};
+ $("isK1").onclick=()=>{ISF.st="open";ISF.prio="";renderPage("issues")};$("isK3").onclick=()=>{ISF.st="open";ISF.prio="alta";renderPage("issues")};$("isK4").onclick=()=>{ISF.st="done";renderPage("issues")};$("isK2").onclick=()=>{ISF.st="open";renderPage("issues")};
+ document.querySelectorAll("[data-iprio]").forEach(s=>s.onchange=()=>api.update("issues",s.dataset.iprio,{prio:s.value}));
+ document.querySelectorAll("[data-idue]").forEach(s=>s.onchange=()=>api.update("issues",s.dataset.idue,{due:s.value||""}));
+ document.querySelectorAll("[data-ist2]").forEach(s=>s.onchange=()=>{const id=s.dataset.ist2;if(s.value==="resolvida")resolveIssue(id);else api.update("issues",id,{status:s.value,resolvedAt:null,resolvedBy:null})});
+ const nb=$("isNew");if(nb)nb.onclick=()=>{const F=$("isForm");let who=null;
+  F.innerHTML=`<div class="card" style="padding:14px;display:grid;gap:10px"><b>Nova pendência</b><textarea id="nfT" rows="2" placeholder="O que é preciso fazer ou corrigir?" style="border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+   <div class="toolrow"><select id="nfPl">${S.plans.map(p=>`<option value="${esc(p.id)}"${p.id===S.planId?" selected":""}>${esc(p.name)}</option>`).join("")}</select><select id="nfPr">${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${k==="media"?" selected":""}>Prioridade ${n.toLowerCase()}</option>`).join("")}</select><input type="date" id="nfD"><span id="nfW" style="min-width:200px"></span><label class="btn sm" for="nfPh">Foto</label><input type="file" id="nfPh" accept="image/*" hidden></div>
+   <div class="toolrow"><button class="btn" id="nfX">Cancelar</button><button class="btn primary" id="nfOk">Registar</button></div></div>`;
+  mountPicker($("nfW"),null,id=>{who=id},"Responsável…");let photo=null;$("nfPh").onchange=async e=>{const f=e.target.files[0];if(f){photo=await putFile(await shrink(f),"image/jpeg");toast("Foto anexada")}};
+  $("nfX").onclick=()=>{F.innerHTML=""};$("nfOk").onclick=async()=>{const t=$("nfT").value.trim();if(!t){$("nfT").focus();return}
+   await api.set("issues",uid(),{itemId:null,planId:$("nfPl").value,text:t,photo,assignee:who,prio:$("nfPr").value,due:$("nfD").value||"",status:"aberta",createdBy:S.meId,createdAt:now()});F.innerHTML="";toast("Pendência registada")};$("nfT").focus()}}
+
+/* diário de obra */
+const WEATHER=["☀️ Sol","⛅ Nublado","🌧️ Chuva","💨 Vento","🥵 Calor","🥶 Frio"];
+function diaryDoc(d){return L.meta["diary_"+d]||{}}
+function diaryPage(){const d=diaryDay||today();const D=diaryDoc(d);const x=dayStats(d);const ro=!S.canWrite;
+ const days=[...new Set([...Object.keys(L.meta||{}).filter(k=>k.startsWith("diary_")).map(k=>k.slice(6)),...S.items.flatMap(i=>(i.log||[]).map(e=>dayOf(e.at)))])].filter(Boolean).sort().reverse().slice(0,40);
+ return pageHead("Diário de obra","Diário de obra","Registo diário: tempo, equipa em obra, trabalhos realizados e ocorrências. A atividade da app entra automaticamente.",`<input type="date" id="dyD" value="${d}" style="border:1px solid var(--line);border-radius:8px;padding:7px 9px"><button class="btn" id="dyCopy">Copiar resumo</button><button class="btn primary" id="dyPdf">Descarregar PDF</button>`)+`
+ <div class="diary"><div class="card" style="padding:16px;display:grid;gap:12px">
+  <div class="toolrow" style="justify-content:space-between"><b style="font-size:16px">${new Date(d+"T12:00").toLocaleDateString("pt-PT",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</b>${D.at?`<span class="muted" style="font-size:12px">Atualizado por ${esc(nameOf(D.by))} · ${fmtDate(D.at)}</span>`:""}</div>
+  <div class="dyrow"><label class="f">Tempo<select id="dyW"${ro?" disabled":""}><option value="">—</option>${WEATHER.map(w=>`<option${D.weather===w?" selected":""}>${w}</option>`).join("")}</select></label>
+   <label class="f">Temperatura (°C)<input id="dyT" type="number" value="${esc(D.temp??"")}"${ro?" readonly":""}></label>
+   <label class="f">Pessoas em obra<input id="dyN" type="number" min="0" value="${esc(D.workers??"")}"${ro?" readonly":""}></label>
+   <label class="f">Empresas / equipas<input id="dyE" value="${esc(D.crews||"")}" placeholder="ex.: Elétrica 4, AVAC 2"${ro?" readonly":""}></label></div>
+  <label class="f">Trabalhos realizados<textarea id="dyWk" rows="4"${ro?" readonly":""}>${esc(D.works||"")}</textarea></label>
+  ${ro?"":`<button class="btn sm" id="dyFill" style="justify-self:start">Preencher com a atividade registada na app</button>`}
+  <label class="f">Ocorrências, segurança e condicionantes<textarea id="dyOc" rows="3"${ro?" readonly":""}>${esc(D.events||"")}</textarea></label>
+  <label class="f">Visitas e fiscalização<input id="dyV" value="${esc(D.visits||"")}"${ro?" readonly":""}></label>
+  <div class="sec"><h4><span>Fotos do dia</span>${ro?"":`<label class="btn sm" for="dyPh">+ Fotos</label><input type="file" id="dyPh" accept="image/*" multiple hidden>`}</h4><div class="photos">${(D.photos||[]).map(r=>`<div class="phw"><button type="button" data-dph="${esc(r)}"><img data-ref="${esc(r)}" alt=""></button></div>`).join("")||`<span class="none">Sem fotos.</span>`}</div></div>
+  ${ro?"":`<div class="toolrow" style="justify-content:flex-end"><button class="btn primary" id="dySave">Guardar diário</button></div>`}</div>
+ <div style="display:grid;gap:14px;align-content:start"><div class="card" style="padding:14px;display:grid;gap:8px"><b>Atividade registada na app</b>
+  <div class="daygrid">${["instalado","enderecado","testado","validado","aceite"].map(k=>`<div class="tile"><span>${sOf(k).n}s</span><b>${x.st(k)}</b></div>`).join("")}<div class="tile"><span>IDs registados</span><b>${x.ids}</b></div><div class="tile${x.issNew.length?" bad":""}"><span>Anomalias novas</span><b>${x.issNew.length}</b></div><div class="tile"><span>Resolvidas</span><b>${x.issRes.length}</b></div></div>
+  ${Object.keys(x.people).length?`<div class="muted" style="font-size:13px">${Object.entries(x.people).map(([id,n])=>`${esc(nameOf(id))}: ${n} ações`).join(" · ")}</div>`:""}</div>
+  <div class="card" style="padding:14px;display:grid;gap:6px"><b>Dias</b><div class="dydays">${days.map(k=>`<button type="button" data-dd="${k}" class="${k===d?"on":""}">${fmtDay(k)}/${k.slice(2,4)}${L.meta["diary_"+k]?" ✓":""}</button>`).join("")||`<span class="none">Sem registos.</span>`}</div></div></div></div>`}
+function dayWorksText(d){const x=dayStats(d);const by={};for(const e of x.ev){const k=(S.plans.find(p=>p.id===e.it.planId)||{}).name||"?";by[k]=by[k]||{};const t=e.t.replace(/\s*\(.*\)$/,"");by[k][t]=(by[k][t]||0)+1}
+ return Object.entries(by).map(([pl,ts])=>`${pl}: `+Object.entries(ts).map(([t,n])=>`${t} (${n})`).join(", ")).join("\n")}
+function wireDiary(){const d=diaryDay||today();
+ $("dyD").onchange=e=>{diaryDay=e.target.value||today();renderPage("diary")};
+ document.querySelectorAll("[data-dd]").forEach(b=>b.onclick=()=>{diaryDay=b.dataset.dd;renderPage("diary")});
+ document.querySelectorAll("[data-dph]").forEach(b=>b.onclick=()=>openPhoto(null,b.dataset.dph));
+ const f=$("dyFill");if(f)f.onclick=()=>{const t=dayWorksText(d);const ta=$("dyWk");ta.value=(ta.value?ta.value+"\n":"")+(t||"Sem atividade registada na app neste dia.")};
+ const read=()=>({weather:$("dyW").value,temp:$("dyT").value,workers:$("dyN").value,crews:$("dyE").value,works:$("dyWk").value,events:$("dyOc").value,visits:$("dyV").value});
+ const sv=$("dySave");if(sv)sv.onclick=async()=>{await api.set("meta","diary_"+d,{...diaryDoc(d),...read(),day:d,by:S.meId,at:now()});toast("Diário guardado.");renderPage("diary")};
+ const ph=$("dyPh");if(ph)ph.onchange=async e=>{const fs=[...e.target.files];e.target.value="";const refs=[];for(const f2 of fs){try{refs.push(await putFile(await shrink(f2),"image/jpeg"))}catch(x){}}
+  await api.set("meta","diary_"+d,{...diaryDoc(d),...read(),day:d,photos:[...(diaryDoc(d).photos||[]),...refs],by:S.meId,at:now()});renderPage("diary")};
+ $("dyCopy").onclick=()=>{const D=diaryDoc(d);const t=[dayText(d),"",D.weather?"Tempo: "+D.weather+(D.temp?` (${D.temp} °C)`:""):"",D.workers?"Pessoas em obra: "+D.workers:"",D.crews?"Equipas: "+D.crews:"",D.works?"\nTrabalhos:\n"+D.works:"",D.events?"\nOcorrências:\n"+D.events:"",D.visits?"Visitas: "+D.visits:""].filter(Boolean).join("\n");
+  navigator.clipboard.writeText(t).then(()=>toast("Resumo copiado")).catch(()=>toast("Não foi possível copiar."))};
+ $("dyPdf").onclick=()=>diaryPdf(d)}
+async function diaryPdf(d){if(!window.jspdf){toast("Gerador de PDF indisponível.");return}const D=diaryDoc(d),x=dayStats(d);const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:"mm",format:"a4"});const M=15,W=doc.internal.pageSize.getWidth();let y=M+4;
+ const line=(k,v)=>{if(!v)return;doc.setFont("helvetica","bold");doc.text(k+":",M,y);doc.setFont("helvetica","normal");const ls=doc.splitTextToSize(String(v),W-2*M-40);doc.text(ls,M+40,y);y+=5.5*ls.length+1};
+ const para=(k,v)=>{if(!v)return;y+=2;doc.setFont("helvetica","bold");doc.text(k,M,y);y+=6;doc.setFont("helvetica","normal");const ls=doc.splitTextToSize(String(v),W-2*M);doc.text(ls,M,y);y+=5*ls.length+2};
+ doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text("Diário de obra",M,y);y+=9;doc.setFontSize(11);
+ line("Obra",S.meta.name||"—");line("Data",new Date(d+"T12:00").toLocaleDateString("pt-PT",{weekday:"long",day:"numeric",month:"long",year:"numeric"}));
+ line("Tempo",(D.weather||"").replace(/^\S+\s/,"")+(D.temp?` · ${D.temp} °C`:""));line("Pessoas em obra",D.workers);line("Equipas",D.crews);line("Visitas",D.visits);
+ para("Trabalhos realizados",D.works);para("Ocorrências e segurança",D.events);
+ para("Atividade registada na app",["instalado","enderecado","testado","validado","aceite"].map(k=>`${sOf(k).n}s: ${x.st(k)}`).join("  ·  ")+`\nIDs registados: ${x.ids}  ·  Anomalias novas: ${x.issNew.length}  ·  Resolvidas: ${x.issRes.length}`);
+ const ph=(D.photos||[]).slice(0,6);if(ph.length){y+=2;let col=0;for(const r of ph){try{const t=await thumbData(r);if(!t)continue;if(y>235){doc.addPage();y=M}doc.addImage(t,"JPEG",M+col*62,y,58,42);col++;if(col===3){col=0;y+=46}}catch(e){}}if(col)y+=46}
+ y=Math.max(y+8,250);if(y>270){doc.addPage();y=M+10}doc.setDrawColor(150);doc.line(M,y+12,M+70,y+12);doc.setFontSize(9);doc.text("Diretor de obra / responsável",M,y+17);
+ await saveBlob(`Diario_obra_${d}.pdf`,doc.output("blob"))}
+
+/* documentos */
+function docsPage(){const q=docF.q.trim().toLowerCase();const all=docsAll();const L2=all.filter(d=>(!docF.cat||d.cat===docF.cat)&&(!q||String(d.name).toLowerCase().includes(q)));
+ return pageHead("Documentos","Documentos","Projeto, fichas técnicas, certificados, atas e outros ficheiros da obra. Ficam disponíveis para toda a equipa e podem ser ligados aos equipamentos.",S.canWrite?`<select id="docCat">${DOC_CATS.map(c=>`<option>${c}</option>`).join("")}</select><label class="btn primary" for="docUp">+ Carregar documentos</label><input type="file" id="docUp" multiple hidden>`:"")+`
+ <div class="ptabs">${["",...DOC_CATS].map(c=>`<button type="button" data-dc="${esc(c)}" class="${docF.cat===c?"on":""}">${c||"Todos"} <span class="muted">${(c?all.filter(d=>d.cat===c):all).length}</span></button>`).join("")}</div>
+ <div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="docQ" placeholder="Pesquisar documento…" value="${esc(docF.q)}"></div>
+ <div class="doclist">${L2.map(d=>{const n=(d.items||[]).length,tp=(d.types||[]).map(t=>tOf(t).n);return docRow(d,`${n||tp.length?`<span class="muted" style="font-size:12px">${n?n+" equip.":""}${tp.length?" "+tp.join(", "):""}</span>`:""}<button class="btn sm" data-dopen="${esc(d.id)}">Abrir</button>${S.canWrite&&(S.isCoord||d.by===S.meId)?`<button class="btn sm danger" data-ddel="${esc(d.id)}">Apagar</button>`:""}`)}).join("")||`<div class="empty2">Ainda não há documentos${docF.cat?" nesta categoria":""}.</div>`}</div></div>`}
+function wireDocs(){const q=$("docQ");q.oninput=()=>{docF.q=q.value;const pos=q.selectionStart;renderPage("docs");$("docQ").focus();try{$("docQ").setSelectionRange(pos,pos)}catch(x){}};
+ document.querySelectorAll("[data-dc]").forEach(b=>b.onclick=()=>{docF.cat=b.dataset.dc;renderPage("docs")});
+ document.querySelectorAll("[data-dopen]").forEach(b=>b.onclick=()=>openDoc(b.dataset.dopen));
+ document.querySelectorAll("[data-ddel]").forEach(b=>b.onclick=()=>{if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Confirmar";return}api.del("meta",b.dataset.ddel);toast("Documento apagado")});
+ const up=$("docUp");if(up){if(docF.cat)$("docCat").value=docF.cat;up.onchange=async e=>{const fs=[...e.target.files];e.target.value="";await uploadDocs(fs,$("docCat").value,null);renderPage("docs")}}}
+
+/* configurações */
+function settingsPage(){return pageHead("Configurações","Configurações","Projeto, notificações, envio de emails, leitura com IA, dados e utilização sem rede.")+`
+ ${S.isCoord?`<section class="block"><h2>Projeto</h2><div class="card" style="padding:14px;display:grid;gap:10px;max-width:640px"><label class="f">Nome da obra<input id="stName" value="${esc(S.meta.name||"")}" placeholder="ex.: HCI - Fit-out Sede CGD"></label>
+  <label class="f">Cliente / dono de obra<input id="stClient" value="${esc(S.meta.client||"")}"></label><label class="f">Morada<input id="stAddr" value="${esc(S.meta.address||"")}"></label>
+  <div class="toolrow"><button class="btn primary" id="stSave">Guardar</button></div></div></section>`:""}
+ ${notifCard()}${mailSection()}${aiSection()}${dataSection()}${offlineSection()}`}
+function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=()=>{api.set("meta","project",{...S.meta,name:$("stName").value.trim(),client:$("stClient").value.trim(),address:$("stAddr").value.trim()});toast("Projeto guardado.")};
+ wireNotif(W);wireMail(W);wireAi(W);wireData(W)}
+/* menu "Ações" na barra da planta (agrupa as opções menos usadas) */
+(()=>{const bar=document.querySelector("#viewObra .bar");if(!bar)return;const w=document.createElement("div");w.className="actwrap";
+ w.innerHTML=`<button type="button" class="btn" id="btnAct" aria-haspopup="true">Ações ▾</button><div class="actmenu" id="actMenu" hidden></div>`;
+ const grow=bar.querySelector(".grow");(grow||bar.lastChild).after(w);const m=w.querySelector("#actMenu");
+ ["btnExp","btnOv","btnFw","btnFloor"].forEach(id=>{const b=$(id);if(b)m.appendChild(b)});
+ const imp=bar.querySelector('label[for="bulkIn"]');if(imp)m.prepend(imp);
+ $("btnAct").onclick=e=>{e.stopPropagation();m.hidden=!m.hidden};m.addEventListener("click",()=>{setTimeout(()=>{m.hidden=true},0)});
+ document.addEventListener("click",e=>{if(!e.target.closest(".actwrap"))m.hidden=true})})();
+
+/* preparar o leitor de etiquetas em segundo plano quando se abre a planta (a 1.ª leitura fica rápida) */
+let warmDone=false;
+function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 
 boot();

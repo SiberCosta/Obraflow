@@ -147,6 +147,19 @@ Avisos enviados: equipamento ou piso atribuído a ti; anomalia nova (coordenaç�
 
 A planta anterior fica guardada: **Pisos… → Repor planta anterior** volta atrás (as posições também).
 
+## Estrutura da plataforma (versão 2)
+
+- **Barra superior**: **pesquisa global** (IDs, MAC, equipamentos, plantas, documentos, anomalias; tecla **/**); **sino** com a atividade recente da equipa; estado da sincronização; a tua conta.
+- **Menu lateral**: Visão geral · Plantas e equipamentos · Equipamentos · Lista de IDs · Anomalias e pendências · Diário de obra · Relatórios · Documentos · Equipa · Configurações. No telemóvel abre no botão ☰ e há uma barra de navegação em baixo.
+- **Visão geral**: indicadores (equipamentos, com ID, pendentes de ID, anomalias, fotos), progresso por etapa, atividade recente, pastas e plantas.
+- **Plantas e equipamentos**: lista de plantas com miniatura e progresso · planta · ficha do equipamento com separadores **Detalhes / Ensaio / Anomalias / Documentos / Histórico** e botões **Anterior / Seguinte**; barra de estado com contagens e zoom; menu **Ações** (importar fotos, descarregar planta, sobrepor, Fieldwire, pisos).
+- **Equipamentos**: tabela com filtros (planta, sistema, etapa, responsável, sem ID, com anomalia, em atraso, por colocar) e exportação CSV.
+- **Lista de IDs**: todos os IDs e MAC, repetidos destacados, copiar para Excel e CSV.
+- **Anomalias e pendências** (punch list): prioridade, responsável, prazo e estado (aberta, em curso, resolvida); pendências gerais sem equipamento.
+- **Diário de obra**: tempo, pessoas e equipas em obra, trabalhos, ocorrências, visitas e fotos, com a atividade da app preenchida automaticamente; PDF assinável.
+- **Documentos**: biblioteca da obra por categorias (projeto, fichas técnicas, certificados, atas, fotografias); documentos ligados a equipamentos ou a todos os equipamentos de um tipo.
+- **Configurações**: dados do projeto, notificações por email, envio de emails, leitura com IA, importar/cópia de segurança e preparar para usar sem rede.
+
 ## Assinalar no desenho
 
 No separador **Obra**, o botão **Assinalar** abre as ferramentas de marcação:
@@ -179,6 +192,12 @@ A app abre em ecrã inteiro, como as outras apps.
 ## Ler etiquetas
 
 Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e os códigos DataMatrix/QR e preenche o **ID** (ou o **MAC**, se não houver ID). Se não tiver a certeza, mostra as leituras possíveis para escolheres com um toque. Dicas: foto de perto, direita, com boa luz e sem reflexos. Na primeira leitura com rede a app descarrega o leitor (alguns MB); a partir daí funciona sem rede.
+
+## Leitura das etiquetas no aparelho (como funciona)
+
+1. Leitura rápida da foto reduzida, em qualquer orientação (direita, de lado, de pernas para o ar), normal e pelo canal verde (placas verdes e fundos coloridos), com 2 leitores em paralelo quando o telemóvel aguenta.
+2. Onde aparece "ID" ou um código, a app recorta essa linha em alta resolução e lê-a várias vezes para confirmar.
+3. **Validação automática**: o código é comparado com o padrão dos IDs da obra (ex.: 6 caracteres hexadecimais) e o melhor fica gravado sozinho. As outras leituras ficam como botões para corrigir com um toque; só se nada for lido é que a app pede para escrever o ID (e põe o cursor no campo).
 
 ## Leitura com IA (opcional, gratuita)
 
