@@ -2491,7 +2491,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="21";
+const APP_VER="22";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -3034,13 +3034,58 @@ $("exGo").onclick=async()=>{const p=plan();if(!p)return;const btn=$("exGo");btn.
   if(fmt==="png"||fmt==="jpg"){const cv=drawMarkers(base0,its,mode,colorMode);btn.textContent="A preparar o ficheiro…";
    const prevUrl=await new Promise(r=>cv.toBlob(b=>r(URL.createObjectURL(b)),"image/jpeg",.7));$("exPrev").src=prevUrl;$("exPrev").hidden=false;
    blob=await new Promise(r=>cv.toBlob(r,fmt==="png"?"image/png":"image/jpeg",.92));name=base+"."+fmt}
-  else{if(!window.jspdf){toast("Gerador de PDF indisponível. Escolhe PNG ou JPG.");return}
-   const cv=drawMarkers(base0,its,mode,colorMode,"layout");   // só calcula onde ficam as etiquetas
+  else{const cv=drawMarkers(base0,its,mode,colorMode,"layout");   // só calcula onde ficam as etiquetas
    const sc=Math.min(1,1600/Math.max(cv.width,cv.height));const pv=document.createElement("canvas");pv.width=Math.round(cv.width*sc);pv.height=Math.round(cv.height*sc);
    const px=pv.getContext("2d");px.drawImage(cv,0,0,pv.width,pv.height);drawLayout(px,cv._labels,cv._mk,sc,mode);
    $("exPrev").src=pv.toDataURL("image/jpeg",.75);$("exPrev").hidden=false;
-   btn.textContent="A preparar o PDF…";blob=await planPdf(p,cv,its,mode,fmt==="pdf");name=base+".pdf"}
+   btn.textContent="A preparar o PDF…";name=base+".pdf";
+   try{blob=await vecPlanPdf(p,its,mode,colorMode,fmt==="pdf",!!(p.ov&&$("exOv").value==="1"))}
+   catch(e){console.warn("PDF vetorial",e);if(!window.jspdf){toast("Gerador de PDF indisponível. Escolhe PNG ou JPG.");return}blob=await planPdf(p,cv,its,mode,fmt==="pdf")}}
   await saveBlob(name,blob)}
  catch(e){toast("Não foi possível gerar: "+(e.message||"erro"))}finally{btn.disabled=false;btn.textContent="Gerar e descarregar";window.__lblScale=1}};
+
+/* ---------- PDF "limpo": a planta original em vetor (sem perder qualidade), sem margens nem faixas extra,
+   com pinos, ligações e etiquetas em vetor e o texto pesquisável ---------- */
+async function vecPlanPdf(p,its,mode,colorMode,withList,withOv){await loadScript("vendor/pdf-lib.min.js");const{PDFDocument,StandardFonts,rgb,degrees}=window.PDFLib;
+ const out=await PDFDocument.create();let VW,VH,page;
+ if(p.pdf){const bytes=new Uint8Array(await (await blobOf(p.pdf)).arrayBuffer());const src=await PDFDocument.load(bytes,{ignoreEncryption:true,updateMetadata:false});
+  const sp=src.getPage(Math.min((p.page||1),src.getPageCount())-1);const cb=sp.getCropBox(),mb=sp.getMediaBox();
+  const l=Math.max(cb.x,mb.x),b=Math.max(cb.y,mb.y),r=Math.min(cb.x+cb.width,mb.x+mb.width),t=Math.min(cb.y+cb.height,mb.y+mb.height);
+  const W0=r-l,H0=t-b,rot=((sp.getRotation().angle%360)+360)%360;const ep=await out.embedPage(sp,{left:l,bottom:b,right:r,top:t});
+  if(rot===90||rot===270){VW=H0;VH=W0}else{VW=W0;VH=H0}
+  page=out.addPage([VW,VH]);
+  if(rot===0)page.drawPage(ep,{x:0,y:0});else if(rot===90)page.drawPage(ep,{x:0,y:W0,rotate:degrees(-90)});else if(rot===180)page.drawPage(ep,{x:W0,y:H0,rotate:degrees(180)});else page.drawPage(ep,{x:H0,y:0,rotate:degrees(90)})}
+ else{const blob=await blobOf(p.img);const bm=await createImageBitmap(blob);const L=841*72/25.4;const s=L/Math.max(bm.width,bm.height);VW=bm.width*s;VH=bm.height*s;page=out.addPage([VW,VH]);
+  const img=/png/.test(blob.type)?await out.embedPng(await blob.arrayBuffer()):/jpe?g/.test(blob.type)?await out.embedJpg(await blob.arrayBuffer()):await out.embedJpg(await (await new Promise(r=>{const c=document.createElement("canvas");c.width=bm.width;c.height=bm.height;c.getContext("2d").drawImage(bm,0,0);c.toBlob(r,"image/jpeg",.95)})).arrayBuffer());
+  page.drawImage(img,{x:0,y:0,width:VW,height:VH})}
+ // desenho sobreposto e marcações (se pedidos): camada transparente por cima
+ const wantMk=typeof marksFor==="function"&&marksFor(p.id).length&&($("exMk")?$("exMk").value==="1":true);
+ if((withOv&&p.ov)||wantMk){const kk=Math.min(1,3000/Math.max(p.w,p.h));const oc=document.createElement("canvas");oc.width=Math.round(p.w*kk);oc.height=Math.round(p.h*kk);
+  if(withOv&&p.ov)await drawOvOn(oc,p);if(wantMk)drawMarksOn(oc,p);
+  const png=await out.embedPng(await (await new Promise(r=>oc.toBlob(r,"image/png"))).arrayBuffer());page.drawImage(png,{x:0,y:0,width:VW,height:VH})}
+ // disposição das etiquetas (mesmo algoritmo da app) numa grelha de ~4000 px
+ const LW=4000,s=VW/LW,LH=Math.round(VH/s);const lc=document.createElement("canvas");lc.width=LW;lc.height=LH;
+ const cv=drawMarkers(lc,its,mode,colorMode,"layout");const L=cv._labels||[],MK=cv._mk;
+ const X=v=>v*s,Y=v=>VH-v*s,C=h=>{const[a,b,c]=hexRgb(h);return rgb(a/255,b/255,c/255)},white=rgb(1,1,1);
+ const font=await out.embedFont(StandardFonts.CourierBold),helv=await out.embedFont(StandardFonts.Helvetica);
+ const fsPt=MK.fs*s,padPt=MK.pad*s,lw=Math.max(.3,MK.fs/9*s);
+ for(const q of L){if(!q.b)continue;page.drawLine({start:{x:X(q.hx),y:Y(q.hy)},end:{x:X(q.lx),y:Y(q.ly)},thickness:lw*2.2,color:white});page.drawLine({start:{x:X(q.hx),y:Y(q.hy)},end:{x:X(q.lx),y:Y(q.ly)},thickness:lw,color:C(q.col)})}
+ const safe=t=>String(t).replace(/[^\x20-\x7E -ÿ·–]/g,"?");
+ for(const q of L){const b=q.b;if(!b)continue;const t=safe(q.t);const tw=font.widthOfTextAtSize(t,fsPt);const bw=Math.max((b.x1-b.x0)*s,tw+padPt*2),bh=(b.y1-b.y0)*s;
+  page.drawRectangle({x:X(b.x0),y:Y(b.y0)-bh,width:bw,height:bh,color:q.dup?rgb(.76,.25,.18):white,borderColor:q.dup?rgb(.76,.25,.18):C(q.col),borderWidth:Math.max(.4,MK.fs/7*s)});
+  page.drawText(t,{x:X(b.x0)+padPt,y:Y(b.y0)-bh/2-fsPt*.33,size:fsPt,font,color:q.dup?white:rgb(.07,.07,.07)})}
+ for(const q of L){const ph=MK.ph*s,R=ph*.36,x=X(q.x),tip=Y(q.y),cy=tip+ph-R;
+  page.drawSvgPath(`M ${-R*.82} ${-(ph-R)+R*.45} L ${R*.82} ${-(ph-R)+R*.45} L 0 0 Z`,{x,y:tip,color:C(q.col)});
+  page.drawCircle({x,y:cy,size:R,color:C(q.col),borderColor:white,borderWidth:Math.max(.3,R*.18)});page.drawCircle({x,y:cy,size:R*.42,color:q.iss?rgb(.76,.25,.18):white})}
+ // ID, MAC e referência junto a cada pino (texto invisível para Ctrl+F)
+ for(const it of its){if(it.x==null)continue;try{page.drawText(safe([it.devId,it.mac,it.code].filter(Boolean).join(" ")),{x:X(it.x*LW),y:Y(it.y*LH),size:Math.max(1,fsPt*.5),font:helv,opacity:0})}catch(e){}}
+ out.setTitle(`${S.meta.name?S.meta.name+" · ":""}${p.name}`);out.setCreator("ObraFlow");out.setProducer("ObraFlow");out.setSubject("Planta com equipamentos e IDs");out.setKeywords(its.map(i=>i.devId||i.mac||i.code).filter(Boolean));
+ if(withList){const A4=[595.28,841.89];let pg=out.addPage(A4),y=800;const bold=await out.embedFont(StandardFonts.HelveticaBold);
+  const cols=[["Ref.",40],["ID",135],["MAC",215],["Tipo",335],["Etapa",450],["Leitura",520]];
+  const head=()=>{cols.forEach(([t,x])=>pg.drawText(t,{x,y,size:9,font:bold}));y-=6;pg.drawLine({start:{x:40,y},end:{x:555,y},thickness:.5,color:rgb(.7,.7,.7)});y-=12};
+  pg.drawText(safe(`Lista de equipamentos · ${p.name}`),{x:40,y,size:13,font:bold});y-=22;head();
+  for(const it of its){if(y<40){pg=out.addPage(A4);y=800;head()}const st=typeof readStateOf==="function"?readStateOf(it):"";
+   const row=[it.code,it.devId||"",it.mac||"",tOf(it.type).n,sOf(it.stage).n,st&&st!=="ok"?RS_N[st]:""];row.forEach((t,c)=>pg.drawText(safe(String(t).slice(0,c===3?22:20)),{x:cols[c][1],y,size:9,font:helv}));y-=14}}
+ return new Blob([await out.save({useObjectStreams:true})],{type:"application/pdf"})}
 
 boot();

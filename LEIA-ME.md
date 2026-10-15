@@ -243,7 +243,7 @@ Em **Lista de IDs** → **Carregar lista de IDs**: escolhe o PDF (ou Excel/CSV) 
 ## Pesquisar IDs nas plantas e PDF pesquisável (versão 20)
 
 - **Na app:** a pesquisa do topo procura também no **texto das plantas em PDF** (ex.: IDs ou referências escritos no desenho do projeto). O resultado aparece em "Texto nas plantas (PDF)"; ao tocar, a planta abre com o texto destacado a laranja. Funciona com PDF de texto (vetorial, exportado do CAD); uma planta digitalizada ou carregada como imagem não tem texto para procurar.
-- **Etiquetas nítidas no PDF (versão 21):** os pinos, as caixas e o texto das etiquetas vão em vetor — leem-se com qualquer zoom e na impressão. Em "Tamanho do texto das etiquetas" escolhe Normal, Grande ou Muito grande (ou Pequeno para plantas muito cheias). Pisos com mais de 60 equipamentos (ou texto grande) saem em folha A1.
+- **PDF limpo com a planta original (versão 22):** quando a planta foi carregada em PDF, o PDF descarregado usa o **desenho original em vetor** — mesmo tamanho de folha, sem faixas nem margens extra, sem perda de qualidade — e por cima os pinos, ligações e etiquetas também em vetor. O texto do desenho e os IDs procuram-se com Ctrl+F. Escolhe o "Tamanho do texto das etiquetas" no diálogo. Plantas carregadas como imagem saem com a imagem original (sem recompressão).
 - **No PDF descarregado** (Ações → Descarregar planta → PDF): os IDs, as referências e o texto do desenho original ficam como **texto pesquisável** — no leitor de PDF usa **Ctrl+F** (ou "Procurar" no telemóvel) e escreve o ID. A versão "planta + lista" junta também a tabela dos equipamentos em texto.
 
 ## Leitura com IA (opcional, gratuita)
