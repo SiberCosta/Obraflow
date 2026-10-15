@@ -1,4 +1,4 @@
-# CostaPlan · gestão de obra (app instalável)
+# ObraFlow · gestão de obra (app instalável)
 
 App da obra para computador, Android e iPhone: plantas dos pisos, equipamentos marcados na planta, leitura do ID/MAC pela foto da etiqueta, etapas e checklists, anomalias, coordenação, relatórios e auto de entrega.
 
@@ -91,7 +91,7 @@ A segurança mantém-se: ninguém vê nada até a coordenação aprovar a conta 
 
 ## Passo 7 · Primeira entrada e trazer os dados atuais
 
-1. Abre o endereço da app (vais ver o ecrã de entrada do **CostaPlan**) e escolhe **Criar conta nova**. **A primeira conta criada fica como Coordenação** — cria a tua primeiro.
+1. Abre o endereço da app (vais ver o ecrã de entrada do **ObraFlow**) e escolhe **Criar conta nova**. **A primeira conta criada fica como Coordenação** — cria a tua primeiro.
 2. Na Planta de Obra do Claude (a página que já usas): separador **Coordenação** → **Exportar para a app própria** → **Exportar tudo (.zip)**. Guarda o ficheiro.
 3. Na app nova: **Coordenação** → **Dados da obra** → **Importar .zip…** e escolhe esse ficheiro.
    Os pisos, plantas, equipamentos, fotos, anomalias e histórico passam todos. Os nomes de quem fez cada coisa ficam no histórico. O envio para o servidor continua em segundo plano: o indicador no topo mostra *N por enviar* até chegar a *Sincronizado*. Mantém a app aberta até lá.
@@ -160,6 +160,16 @@ A planta anterior fica guardada: **Pisos… → Repor planta anterior** volta at
 - **Documentos**: biblioteca da obra por categorias (projeto, fichas técnicas, certificados, atas, fotografias); documentos ligados a equipamentos ou a todos os equipamentos de um tipo.
 - **Configurações**: dados do projeto, notificações por email, envio de emails, leitura com IA, importar/cópia de segurança e preparar para usar sem rede.
 
+## Ecrã da planta (modo foco) — versão 15+
+
+Ao abrir uma planta vê-se só o essencial: a planta, os botões **Navegar / Marcar** e o zoom. O resto abre-se com botões e a app lembra-se da tua escolha neste aparelho:
+- **☰** (canto superior esquerdo) abre o menu (Visão geral, Equipamentos, Anomalias, Configurações…);
+- **Plantas** abre a lista de plantas (no telemóvel escolhe-se o piso na caixa do nome);
+- **Lista** abre a lista de equipamentos e o "Próximo equipamento" (o número amarelo é o que falta fazer);
+- **⋯ Ações**: Novo piso, Assinalar, Importar fotos, Descarregar planta, Sobrepor, Fieldwire, Pisos, Legenda das cores e Resumo do piso;
+- **?** junto ao zoom mostra a legenda das cores.
+Ao tocar num equipamento, a ficha abre-se ao lado (ou por baixo, no telemóvel).
+
 ## Assinalar no desenho
 
 No separador **Obra**, o botão **Assinalar** abre as ferramentas de marcação:
@@ -178,7 +188,7 @@ Qualquer equipamento com **ID ou MAC registado** conta automaticamente como **In
 
 - **Android (Chrome):** abre o endereço → menu **⋮** → **Instalar app** (ou *Adicionar ao ecrã principal*).
 - **iPhone / iPad (Safari):** abre o endereço → botão **Partilhar** → **Adicionar ao ecrã principal**.
-- **Computador (Chrome ou Edge):** abre o endereço → ícone de instalar na barra de endereço (ou menu → *Instalar CostaPlan*).
+- **Computador (Chrome ou Edge):** abre o endereço → ícone de instalar na barra de endereço (ou menu → *Instalar ObraFlow*).
 
 A app abre em ecrã inteiro, como as outras apps.
 
@@ -195,6 +205,7 @@ Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e o
 
 ## Leitura das etiquetas no aparelho (como funciona)
 
+0. **Foto principal em qualidade máxima**: a leitura usa a foto original tirada pela câmara (sem redução), começando pela mais recente; só lê fotos anteriores se a principal não chegar. O original fica guardado neste aparelho (as últimas 40 fotos) para voltar a ler; para a equipa vai uma cópia mais leve (2048 px), já com melhor qualidade do que antes.
 1. Leitura rápida da foto reduzida, em qualquer orientação (direita, de lado, de pernas para o ar), normal e pelo canal verde (placas verdes e fundos coloridos), com 2 leitores em paralelo quando o telemóvel aguenta.
 2. Onde aparece "ID" ou um código, a app recorta essa linha em alta resolução e lê-a várias vezes para confirmar.
 3. **Validação automática**: o código é comparado com o padrão dos IDs da obra (ex.: 6 caracteres hexadecimais) e o melhor fica gravado sozinho. As outras leituras ficam como botões para corrigir com um toque; só se nada for lido é que a app pede para escrever o ID (e põe o cursor no campo).

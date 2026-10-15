@@ -178,6 +178,14 @@ async function shrink(file,max=1400,q=.82){const url=URL.createObjectURL(file);t
  const k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));const cv=document.createElement("canvas");
  cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);const cx=cv.getContext("2d");cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(im,0,0,cv.width,cv.height);
  return await new Promise(r=>cv.toBlob(r,"image/jpeg",q))}finally{URL.revokeObjectURL(url)}}
+/* foto original (qualidade máxima) guardada só neste aparelho para a leitura de etiquetas; a cópia partilhada é mais leve */
+const ORIG_MAX=40;
+async function hiRes(file){const ok=/^image\/(jpeg|png|webp)$/.test(file.type||"")&&file.size<=15e6;
+ if(ok){try{const bm=await createImageBitmap(file);const L=Math.max(bm.width,bm.height);bm.close&&bm.close();if(L<=4200)return file}catch(e){}}
+ try{return await shrink(file,4200,.95)}catch(e){return file}}
+async function origPut(ref,blob){try{await IDBX.put("files","orig:"+ref,blob);let l=(await IDBX.get("kv","origList").catch(()=>null))||[];l=l.filter(x=>x!==ref);l.push(ref);
+ while(l.length>ORIG_MAX){const o=l.shift();await IDBX.del("files","orig:"+o).catch(()=>{})}await IDBX.put("kv","origList",l)}catch(e){}}
+async function bestBlobOf(ref){const o=await IDBX.get("files","orig:"+ref).catch(()=>null);return o||blobOf(ref)}
 /* guardar um piso inteiro no aparelho para usar sem rede */
 async function keepOffline(p,onStep){const refs=[p.img,p.pdf,p.ov&&p.ov.ref,p.fw&&p.fw.img].filter(Boolean);
  S.items.filter(i=>i.planId===p.id).forEach(i=>(i.photos||[]).forEach(r=>refs.push(r)));S.issues.filter(x=>x.planId===p.id&&x.photo).forEach(x=>refs.push(x.photo));
@@ -217,15 +225,40 @@ function homeCache(){try{return JSON.parse(localStorage.getItem("cp-home")||"nul
 function saveHomeCache(){if(!S.ready||!S.plans.length&&!S.meta.name)return;const its=S.items;
  const c={name:S.meta.name||"",plans:S.plans.length,items:its.length,tested:its.filter(i=>sIdx(i.stage)>=3).length,at:now()};
  try{const o=homeCache();if(!o||o.name!==c.name||o.items!==c.items||o.tested!==c.tested||o.plans!==c.plans)localStorage.setItem("cp-home",JSON.stringify(c))}catch(e){}}
-function landingHero(){const c=homeCache();const pct=c&&c.items?Math.round(c.tested/c.items*100):0;
- return`<div class="lhero">
-  <div class="lbrand"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z" fill="var(--accent)"/><circle cx="12" cy="11.4" r="4.1" fill="#141917"/></svg><span>CostaPlan</span></div>
-  <h2>Gestão de obra no terreno</h2>
-  <p>Plantas, equipamentos e IDs, ensaios e entrega, no telemóvel, no tablet e no computador. Funciona mesmo sem rede.</p>
-  ${c&&(c.name||c.plans)?`<div class="lproj"><span class="lk">Projeto neste aparelho</span><b>${esc(c.name||"Obra")}</b>
-   <div class="lstats"><span><b>${c.plans}</b> plantas</span><span><b>${c.items}</b> equipamentos</span><span><b>${pct}%</b> testado</span></div>
-   <div class="lbar"><i style="width:${pct}%"></i></div></div>`:""}
-  <ul class="lfeat"><li><b>Pins na planta</b> com o ID lido da foto da etiqueta</li><li><b>Etapas, checklists e anomalias</b> por equipamento</li><li><b>Coordenação</b>, relatórios e auto de entrega</li></ul></div>`}
+const OF_LOGO=`<svg class="oflogo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#e8a317"/><path d="M9 23c4.2 0 3-7.5 7-7.5S19 9 23 9" fill="none" stroke="#1d2421" stroke-width="2.4" stroke-linecap="round"/><circle cx="9" cy="23" r="2.7" fill="#1d2421"/><circle cx="16" cy="15.5" r="2.4" fill="#1d2421"/><circle cx="23" cy="9" r="3.6" fill="#1d2421"/><circle cx="23" cy="9" r="1.5" fill="#e8a317"/></svg>`;
+const OF_WORD=`<span class="ofword">Obra<em>Flow</em></span>`;
+/* demonstração animada do fluxo na página de entrada (só ilustração, sem dados reais) */
+function landingDemo(){
+ return`<section class="lp-demo" aria-label="Como funciona o ObraFlow">
+  <div class="dm-head"><span class="dm-k">Como funciona</span><span class="dm-live"><i></i>demonstração</span></div>
+  <div class="dm-stage" aria-hidden="true">
+   <svg class="dm-plan" viewBox="0 0 320 200">
+    <g class="dm-walls"><path d="M14 14h292v172H14z"/><path d="M14 84h96M110 14v70M170 14v62h136M170 76v40M14 130h70v56M84 130h20M150 186v-48h70M220 138v48M220 138h86"/></g>
+    <g class="dm-room"><text x="40" y="52">SALA 1</text><text x="210" y="45">OPEN SPACE</text><text x="28" y="165">WC</text><text x="240" y="168">COPA</text></g>
+   </svg>
+   <span class="dm-pin p1" style="left:20%;top:58%"><b></b></span>
+   <span class="dm-pin p2 tgt" style="left:62%;top:36%"><b></b></span>
+   <span class="dm-pin p3" style="left:44%;top:58%"><b></b></span>
+   <span class="dm-pin p4" style="left:80%;top:62%"><b></b></span>
+   <div class="dm-phone"><div class="dm-scr"><div class="dm-label"><small>EATON · DI-200</small><b>ID: 7D5F4E</b><small>MAC 00:1B:7A:3C:9E:21</small></div><i class="dm-scan"></i><span class="dm-shut"></span></div></div>
+   <div class="dm-chip"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></svg><span><b>7D5F4E</b> validado automaticamente</span></div>
+   <div class="dm-prog"><span>Piso 3 · testado</span><div><i></i></div></div>
+   <div class="dm-done"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg>Auto de entrega pronto</div>
+  </div>
+  <ol class="dm-steps"><li class="s1"><b>1</b>Planta</li><li class="s2"><b>2</b>Foto da etiqueta</li><li class="s3"><b>3</b>ID validado</li><li class="s4"><b>4</b>Ensaio e entrega</li></ol>
+ </section>`}
+
+function landingHero(){
+ const ic=d=>`<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+ return`<section class="lp-hero">
+  <div class="lp-brand">${OF_LOGO}${OF_WORD}</div>
+  <h2>A obra a fluir,<br>do desenho à entrega.</h2>
+  <p>Plantas, equipamentos e IDs, ensaios e auto de entrega — no telemóvel, no tablet e no computador. Funciona mesmo sem rede.</p>
+  <ul class="lp-feat">
+   <li>${ic('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>')}<span><b>Pins na planta</b>com o ID lido da etiqueta</span></li>
+   <li>${ic('<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 12h8"/>')}<span><b>Leitura automática</b>foto → ID validado</span></li>
+   <li>${ic('<path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/>')}<span><b>Ensaios e entrega</b>checklists, anomalias, relatórios</span></li>
+  </ul></section>`}
 
 /* =========================================================
    Entrar / registar / sair
@@ -233,19 +266,21 @@ function landingHero(){const c=homeCache();const pct=c&&c.items?Math.round(c.tes
 let authMode="login";
 function showAuth(msg){const A=$("auth");A.hidden=false;document.body.classList.add("authing");
  const isUp=authMode==="signup",isReset=authMode==="reset";
- A.innerHTML=`<div class="landing">${landingHero()}<div class="authcard">
-  <div class="authbrand"><svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 1.2C6.1 1.2 1.6 5.7 1.6 11.4c0 7.4 8.6 17.6 9.7 18.9.4.4 1 .4 1.4 0 1.1-1.3 9.7-11.5 9.7-18.9C22.4 5.7 17.9 1.2 12 1.2z" fill="var(--accent)"/><circle cx="12" cy="11.4" r="4.1" fill="var(--ink)"/></svg><div><h1>CostaPlan</h1><small class="muted">Gestão de obra · plantas, IDs e ensaios</small></div></div>
-  <h2>${isUp?"Criar conta":isReset?"Recuperar palavra-passe":"Entrar"}</h2>
+ A.innerHTML=`<div class="landing lp">${landingHero()}<div class="authcard lp-card">
+  <div class="lp-cardhead"><h2>${isUp?"Criar conta":isReset?"Recuperar acesso":"Bem-vindo de volta"}</h2><p>${isUp?"Regista-te para entrar na equipa da obra.":isReset?"Enviamos um link para definires nova palavra-passe.":"Entra com o teu email da obra."}</p></div>
   <form id="authForm" novalidate>
-   ${isUp?`<label class="f">Nome<input id="auName" autocomplete="name" required></label>`:""}
-   <label class="f">Email<input id="auEmail" type="email" autocomplete="email" required></label>
-   ${isReset?"":`<label class="f">Palavra-passe<input id="auPass" type="password" autocomplete="${isUp?"new-password":"current-password"}" minlength="6" required></label>`}
+   ${isUp?`<label class="f lp-f">Nome<span class="lp-in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><input id="auName" autocomplete="name" placeholder="Nome e apelido" required></span></label>`:""}
+   <label class="f lp-f">Email<span class="lp-in"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><input id="auEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="nome@empresa.pt" required></span></label>
+   ${isReset?"":`<label class="f lp-f">Palavra-passe<span class="lp-in"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><input id="auPass" type="password" autocomplete="${isUp?"new-password":"current-password"}" minlength="6" placeholder="${isUp?"mínimo 6 caracteres":"••••••••"}" required><button type="button" class="lp-eye" id="auEye" aria-label="Mostrar palavra-passe">Mostrar</button></span></label>`}
    <div class="msg err" id="auMsg" ${msg?"":"hidden"}>${esc(msg||"")}</div>
-   <button class="btn primary" type="submit" id="auGo">${isUp?"Criar conta":isReset?"Enviar email de recuperação":"Entrar"}</button>
+   <button class="btn primary lp-go" type="submit" id="auGo">${isUp?"Criar conta":isReset?"Enviar email de recuperação":"Entrar"}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
   </form>
-  <div class="authalt">${isUp?`<button class="linkb" data-m="login">Já tenho conta</button>`:`<button class="linkb" data-m="signup">Criar conta nova</button>`}${isReset?`<button class="linkb" data-m="login">Voltar</button>`:`<button class="linkb" data-m="reset">Esqueci-me da palavra-passe</button>`}</div>
-  <p class="muted" style="font-size:12px;margin:0">${isUp?"Depois de criares a conta, a coordenação tem de a aprovar. A primeira conta criada fica como coordenação.":"Precisas de ligação à internet para entrar pela primeira vez neste aparelho."}</p></div></div>`;
+  ${isReset||isUp?"":`<button type="button" class="linkb lp-forgot" data-m="reset">Esqueci-me da palavra-passe</button>`}
+  <div class="lp-or"><span>ou</span></div>
+  ${isUp||isReset?`<button type="button" class="btn lp-alt" data-m="login">Já tenho conta · Entrar</button>`:`<button type="button" class="btn lp-alt" data-m="signup">Criar conta nova</button>`}
+  <p class="lp-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>${isUp?"Depois de criares a conta, a coordenação tem de a aprovar. A primeira conta criada fica como coordenação.":"Precisas de ligação à internet para entrar pela primeira vez neste aparelho."}</p></div>${landingDemo()}</div>`;
  A.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{authMode=b.dataset.m;showAuth()});
+ const eye=$("auEye");if(eye)eye.onclick=()=>{const i=$("auPass");const sh=i.type==="password";i.type=sh?"text":"password";eye.textContent=sh?"Esconder":"Mostrar"};
  $("authForm").onsubmit=async e=>{e.preventDefault();const em=$("auEmail").value.trim(),pw=$("auPass")?$("auPass").value:"",nm=$("auName")?$("auName").value.trim():"";
   const m=$("auMsg");const fail=t=>{m.hidden=false;m.className="msg err";m.textContent=t};
   if(!em||(!isReset&&pw.length<6)||(isUp&&!nm)){fail(isUp&&!nm?"Escreve o teu nome.":"Escreve o email e uma palavra-passe com pelo menos 6 caracteres.");return}
@@ -689,7 +724,7 @@ $("pvDel").onclick=()=>{if(!phArmed){phArmed=true;$("pvDel").classList.add("arme
 ["phCam","phFile","dpCam","dpFile"].forEach(id=>$(id).onchange=e=>{const fs=[...e.target.files];e.target.value="";if($("dlgPhoto").open)$("dlgPhoto").close();const it=cur();if(it)addPhotos(it,fs)});
 async function addPhotos(it,fs){if(!it||!fs.length)return;const blobs=[],refs=[];
  setReadMsgFor(it.id,"A guardar foto…","busy");
- for(const f of fs){try{const b=await shrink(f);const r=await putFile(b,"image/jpeg");blobs.push(b);refs.push(r)}catch(err){toast("Foto não guardada: "+err.message)}}
+ for(const f of fs){try{const hi=await hiRes(f);const b=await shrink(hi,2048,.9);const r=await putFile(b,"image/jpeg");await origPut(r,hi);blobs.push(hi);refs.push(r)}catch(err){toast("Foto não guardada: "+err.message)}}
  if(!refs.length){setReadMsgFor(it.id,"");return}
  const fresh=S.items.find(i=>i.id===it.id)||it;
  await api.update("items",it.id,logPatch(fresh,{photos:[...(fresh.photos||[]),...refs],updatedAt:now(),updatedBy:S.meId},refs.length>1?`${refs.length} fotos adicionadas`:"Foto adicionada"));
@@ -829,7 +864,7 @@ async function readOne(blob,onStep){const codes=await readCodes(blob);let cands=
   // 2) onde aparece "ID" ou um código, recorta essa linha em alta resolução e lê de novo (várias vezes) para confirmar
   const anchors=[];for(const d of ds)for(const w of wordsOf(d)){const t=String(w.text||"");const c=t.replace(/[^0-9A-Za-z]/g,"");
    if(/^[I1l|][DO0]/.test(t)||(/^[0-9A-FOILS]{5,9}$/i.test(c)&&/\d/.test(c)))anchors.push(w)}
-  if(anchors.length){onStep&&onStep(rot,"zoom");const full=await rotCanvas(blob,rot,2400);const k=full.width/(await textCanvas(blob,rot,"lum",1000)).width;const seen=[];
+  if(anchors.length){onStep&&onStep(rot,"zoom");const full=await rotCanvas(blob,rot,3600);const k=full.width/(await textCanvas(blob,rot,"lum",1000)).width;const seen=[];
    for(const w of anchors.sort((a,b)=>(/^[I1l|][DO0]/.test(b.text)?1:0)-(/^[I1l|][DO0]/.test(a.text)?1:0)).slice(0,3)){const b=w.bbox||{};if(seen.some(q=>Math.abs(q.y0-b.y0)<(b.y1-b.y0)&&Math.abs(q.x0-b.x0)<(b.y1-b.y0)*6))continue;seen.push(b);await refineAt(P,full,k,w,votes);if(strongNow())break}}
   cands=applyPattern([...candsFrom(text,codes),...Object.entries(votes).map(([v,n])=>({k:"id",v,s:n>=2.5?10.5:n>=1.5?8:6}))]);
   if(cands.length&&cands[0].s>=10)return{cands,codes,text}}
@@ -879,7 +914,7 @@ Regras:
 function aiCfg(){const a=L.meta&&L.meta.ai;return a&&a.key?a:null}
 const AI_MODELS=["gemini-2.5-flash","gemini-flash-latest","gemini-2.0-flash"];
 async function aiRead(blobs,cfg){const ai=cfg||aiCfg();if(!ai||!navigator.onLine)return null;
- const parts=[{text:READ_PROMPT}];for(const b of blobs.slice(-2)){const sm=await shrink(b,1600,.88);parts.push({inline_data:{mime_type:"image/jpeg",data:(await blobToDataUrl(sm)).split(",")[1]}})}
+ const parts=[{text:READ_PROMPT}];for(const b of blobs.slice(-2)){const sm=await shrink(b,2400,.92);parts.push({inline_data:{mime_type:"image/jpeg",data:(await blobToDataUrl(sm)).split(",")[1]}})}
  let lastErr=null;
  for(const m of[...new Set([ai.model||AI_MODELS[0],...AI_MODELS])]){const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),35000);
   try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(ai.key)}`,
@@ -919,7 +954,7 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
  readingId=id;lastReadErr=null;const br=$("btnRead");if(br)br.disabled=true;setReadMsgFor(id,"A ler a etiqueta no aparelho…","busy");
  let aiErr=null;
  try{let blobs=blobsIn&&blobsIn.length?blobsIn.slice(-sampleMax):[];
-  if(!blobs.length)for(const r of refs){try{blobs.push(await blobOf(r))}catch(e){}}
+  if(!blobs.length)for(const r of refs){try{blobs.push(await bestBlobOf(r))}catch(e){}}
   if(!blobs.length)throw new Error("a foto não está disponível neste aparelho");
   let all=[],src="local",aiObs="";aiErr=null;
   if(aiCfg()&&navigator.onLine){setReadMsgFor(id,"A ler a etiqueta com IA…","busy");
@@ -928,8 +963,10 @@ async function readLabel(id,overwrite,blobsIn,opts){opts=opts||{};const it0=S.it
    catch(e){aiErr=e.message||"erro"}}
   if(!all.length){src="local";
    if(!poolP)setReadMsgFor(id,navigator.onLine?"A preparar o leitor (só na primeira vez, pode demorar um pouco)…":"A preparar o leitor…","busy");
-   for(let k=0;k<blobs.length;k++){const r=opts.crop?await readCrop(blobs[k],(a,n)=>setReadMsgFor(id,`A ler a zona recortada (${a} de ${n})…`,"busy"))
-     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${k+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="zoom"?" · a confirmar o código":""}…`,"busy"));
+   // começa pela foto principal (a mais recente, em qualidade máxima); só lê as outras se esta não chegar
+   const order=blobs.map((b,i)=>i).reverse();
+   for(let n=0;n<order.length;n++){const k=order[n];if(n>0&&all.some(c=>c.k==="id"&&c.s>=10))break;const r=opts.crop?await readCrop(blobs[k],(a,n)=>setReadMsgFor(id,`A ler a zona recortada (${a} de ${n})…`,"busy"))
+     :await readOne(blobs[k],(rot,ch)=>setReadMsgFor(id,`A ler a etiqueta${blobs.length>1?` (foto ${n+1} de ${blobs.length})`:""}${rot?` · a rodar ${rot}°`:""}${ch==="zoom"?" · a confirmar o código":""}…`,"busy"));
     for(const c of r.cands){const o=all.find(x=>x.k===c.k&&x.v===c.v);if(o)o.s=Math.max(o.s,c.s)+1;else all.push({...c})}}}
   all.sort((a,b)=>b.s-a.s);all=all.slice(0,6);
   const it=S.items.find(i=>i.id===id)||it0;
@@ -1623,7 +1660,7 @@ function mailSection(){if(S.demo||!S.isCoord)return"";if(mailSt===null&&navigato
   ${S.isAdmin?`<ol class="muted" style="margin:0;font-size:13px;padding-left:18px"><li>Cria conta grátis em <b>brevo.com</b>.</li><li>Em <b>Senders, domains &amp; dedicated IPs → Senders</b> junta o teu email (ex.: o teu Gmail) e confirma-o.</li><li>Em <b>SMTP &amp; API → API keys</b> carrega em <b>Generate a new API key</b> e cola-a aqui.</li></ol>
   <div class="mailform"><input type="password" id="mlKey" autocomplete="off" placeholder="${m.configured?"Chave guardada. Cola outra para trocar":"Chave API do Brevo (xkeysib-…)"}">
    <input type="email" id="mlFrom" placeholder="Email remetente confirmado no Brevo" value="${esc(m.sender||(S.me&&S.me.email)||"")}">
-   <input type="text" id="mlName" placeholder="Nome do remetente" value="${esc(m.name||"CostaPlan")}">
+   <input type="text" id="mlName" placeholder="Nome do remetente" value="${esc(m.name||"ObraFlow")}">
    <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="mlSave">Guardar</button><button class="btn" id="mlTest"${m.configured?"":" disabled"}>Enviar email de teste</button></span></div>
   <p id="mlMsg" class="muted" style="margin:0;font-size:13px">${esc(mailMsg)}</p>`:`<p class="muted" style="margin:0;font-size:13px">Só o administrador configura o envio.</p>`}</section>`}
 function wireMail(W){const say=t=>{mailMsg=t;const e=$("mlMsg");if(e)e.textContent=t};
@@ -2071,7 +2108,7 @@ function mkHint(){const t=S.draw.tool;return t==="select"?`<b>Assinalar · Selec
  :t==="text"?`<b>Assinalar · Texto:</b> toca na planta onde queres escrever.`:`<b>Assinalar:</b> desenha na planta com o dedo ou o rato. Para mover a planta escolhe <b>Selecionar</b> (seta) ou usa os botões + e −.`}
 
 /* =========================================================
-   CostaPlan 2 · moldura: menu lateral, pesquisa global, notificações,
+   ObraFlow 2 · moldura: menu lateral, pesquisa global, notificações,
    páginas de gestão (equipamentos, IDs, anomalias, diário, documentos,
    equipa, configurações) e a área de trabalho da planta em 3 colunas
    ========================================================= */
@@ -2381,5 +2418,52 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=()=>{api.set("met
 /* preparar o leitor de etiquetas em segundo plano quando se abre a planta (a 1.ª leitura fica rápida) */
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
+/* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
+const APP_VER="16";
+setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
+ if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
+  $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
+
+/* =========================================================
+   Modo foco na planta: só a planta e o essencial à vista.
+   Menu, lista de plantas, lista de equipamentos, legenda e resumo
+   abrem-se com botões (e ficam lembrados neste aparelho).
+   ========================================================= */
+(()=>{const bar=document.querySelector("#viewObra .bar");if(!bar)return;const B=document.body;
+ const KEY="cp-focus";let st={};try{st=JSON.parse(localStorage.getItem(KEY)||"{}")||{}}catch(e){}
+ const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
+ const apply=()=>{B.classList.toggle("pl-open",!!st.pl);B.classList.toggle("ls-open",!!st.ls);B.classList.toggle("lg-open",!!st.lg);B.classList.toggle("sb-open",!!st.sb);
+  const set=(id,on)=>{const b=$(id);if(b)b.setAttribute("aria-pressed",on?"true":"false")};set("fPlans",st.pl);set("fList",st.ls);set("fLeg",st.lg)};
+ const tog=k=>{st[k]=!st[k];save();apply();if(k==="ls"||k==="pl")setTimeout(()=>{try{fit()}catch(e){}},220)};
+ // botões novos
+ const mk=(id,html,title)=>{const b=document.createElement("button");b.type="button";b.className="btn fbtn";b.id=id;b.innerHTML=html;b.title=title;return b};
+ const ic=d=>`<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+ const bPl=mk("fPlans",ic('<rect x="3" y="4" width="7" height="16" rx="1.5"/><path d="M14 6h7M14 12h7M14 18h7"/>')+"<span>Plantas</span>","Mostrar ou esconder a lista de plantas");
+ const bLs=mk("fList",ic('<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>')+'<span>Lista</span><b class="fcnt" id="fListN"></b>',"Mostrar ou esconder a lista de equipamentos");
+ bar.prepend(bPl);
+ const seg=bar.querySelector(".seg");(seg||bar.lastChild).after(bLs);
+ bPl.onclick=()=>tog("pl");bLs.onclick=()=>tog("ls");
+ // "Ações" com ícone (no telemóvel fica só o ícone)
+ const ba=$("btnAct");if(ba){ba.classList.add("fbtn");ba.innerHTML=ic('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>')+"<span>Ações</span>"}
+ // "Marcar equipamento" mais curto
+ const mm=$("mMark");if(mm)mm.textContent="Marcar";
+ // menos usados para dentro de "Ações"
+ const m=$("actMenu");
+ if(m){const nf=$("btnNewFloor"),mkb=$("btnMk");if(mkb)m.prepend(mkb);if(nf){nf.classList.remove("primary");m.prepend(nf)}
+  const lg=document.createElement("button");lg.type="button";lg.className="btn";lg.id="fLeg";lg.textContent="Legenda das cores";lg.onclick=()=>tog("lg");
+  const sb=document.createElement("button");sb.type="button";sb.className="btn";sb.id="fSum";sb.textContent="Resumo do piso (barra inferior)";sb.onclick=()=>tog("sb");
+  m.append(lg,sb)}
+ // botão de legenda na planta, junto ao zoom
+ const z=document.querySelector("#viewer .zoom");if(z){const b=document.createElement("button");b.className="btn";b.id="zLeg";b.type="button";b.title="Legenda das cores";b.setAttribute("aria-label","Legenda");b.textContent="?";b.onclick=e=>{e.stopPropagation();tog("lg")};z.appendChild(b)}
+ // a dica "Navegar: arrasta…" só aparece nos primeiros usos; as dos outros modos ficam sempre
+ const h=$("hint");if(h){let seen=0;try{seen=+localStorage.getItem("cp-navhint")||0}catch(e){}
+  const chk=()=>{const nav=/^Navegar/.test((h.textContent||"").trim());h.classList.toggle("fhide",nav&&seen>=3)};
+  new MutationObserver(chk).observe(h,{childList:true,subtree:true,characterData:true});chk();
+  if(seen<3){seen++;try{localStorage.setItem("cp-navhint",seen)}catch(e){}}}
+ // contador "por fazer" no botão Lista
+ setInterval(()=>{const n=$("fListN");if(!n||S.view!=="obra")return;const c=document.querySelector('.filters [data-f="todo"] b');const t=c?c.textContent.trim():"";if(n.textContent!==t)n.textContent=t},700);
+ // ao abrir a ficha de um equipamento num ecrã pequeno, a lista de plantas fecha-se
+ document.addEventListener("click",e=>{if(st.pl&&innerWidth<1100&&e.target.closest("#plansPane [data-pl]")){st.pl=false;save();apply()}});
+ apply()})();
 
 boot();
