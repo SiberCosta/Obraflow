@@ -2,9 +2,9 @@
    - a app (html, css, js) vem da rede quando há ligação e fica guardada para abrir sem rede
    - bibliotecas e tipos de letra (CDN) ficam guardados depois da primeira vez
    - nada do Supabase (dados e ficheiros) passa por aqui: isso é tratado pela app */
-const VERSION = "v23";
+const VERSION = "v33";
 const SHELL = "obra-shell-" + VERSION, LIBS = "obra-libs-" + VERSION;
-const CORE = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
+const CORE = ["./", "index.html", "styles.css", "app.js", "tecnico.js", "config.js", "manifest.webmanifest",
   "vendor/pdf.js", "vendor/pdf.worker.js", "vendor/jszip.min.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 const LIB_HOSTS = ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "fonts.googleapis.com", "fonts.gstatic.com", "tessdata.projectnaptha.com", "unpkg.com"];
@@ -34,4 +34,15 @@ self.addEventListener("fetch", e => {
       return r;
     }))));
   }
+});
+
+// tocar numa notificação: abre (ou traz para a frente) a app e mostra o sítio certo
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const d = e.notification.data || {};
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
+    const c = cs.find(x => x.url.startsWith(self.registration.scope));
+    if (c) { c.postMessage({ type: "notif", n: d.n, p: d.p }); return c.focus(); }
+    return self.clients.openWindow("./#notificacoes");
+  }));
 });

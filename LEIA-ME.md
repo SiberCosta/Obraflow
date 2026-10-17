@@ -153,6 +153,30 @@ Ao entrar com o email aparece primeiro a lista **Os meus projetos** — só as o
 - Para trocar de obra: no menu lateral toca no nome do projeto (**Trocar**).
 - Sem a atualização 3 a app continua a funcionar com um só projeto.
 
+## Pessoas, papéis por obra e convites (versão 25)
+
+Corre (de novo, se já tinhas corrido) `supabase/atualizacao-3-projetos.sql` no Supabase — acrescenta os papéis por obra e os convites. Pode correr-se várias vezes.
+
+- **Os meus projetos** mostra só as obras e o teu papel em cada uma. As opções de gestão estão dentro da obra.
+- **Pessoas** (menu da obra): quem está nesta obra e o papel de cada um:
+  - **Administrador** — gere a obra, as definições e as pessoas;
+  - **Membro** — trabalha: marca, fotografa, lê etiquetas, faz ensaios;
+  - **Seguidor** — só vê e recebe avisos.
+  O Administrador muda o papel, retira pessoas ou adiciona contas que já existam. Em baixo continuam as **Contas da plataforma** (aprovar contas novas) e o trabalho atribuído.
+- **Convidar para esta obra** (na página Pessoas): escolhe o papel e
+  - **Criar QR code / link** — serve para várias pessoas durante 30 dias: mostra o QR code (para apontar a câmara do telemóvel), o link para copiar ou partilhar e o QR para descarregar;
+  - **Enviar por email** — o convite só funciona para esse email e uma vez; abre o teu programa de email com a mensagem pronta.
+  Quem abre o convite vê na página de entrada para que obra é, cria conta (ou entra) e fica logo com acesso — não precisa de aprovação. Em "Convites ativos" podes voltar a mostrar ou anular um convite.
+- **Definições da obra** (menu da obra): nome, n.º da obra/contrato, cliente, morada, fiscalização, empreiteiro, projetista, diretor de obra, datas de início e de conclusão, estado e notas. Só o Administrador da obra altera.
+
+## Emails quando identificas alguém (versão 26)
+
+Corre no Supabase `supabase/atualizacao-4-mencoes.sql` (depois das atualizações 2 e 3). Para os emails saírem, configura o envio (Brevo, gratuito) em **Definições da obra → Envio de emails**.
+
+- **Atribuir** um equipamento (campo Responsável) ou uma pendência a alguém envia-lhe um email — também quando se muda o responsável.
+- **Identificar com @**: numa nota de equipamento, numa pendência ou no diário escreve **@** e escolhe a pessoa da lista (só aparecem as pessoas desta obra). Ao guardar, essa pessoa recebe um email com o texto e o link para a obra. A mesma pessoa não é avisada duas vezes pela mesma nota.
+- As notificações ficam **ligadas por defeito**; cada pessoa escolhe o que recebe em Definições da obra → Notificações por email. Atribuições e menções saem em cerca de 1 minuto, mesmo para quem escolheu o resumo diário.
+
 ## Trocar a planta de um piso sem perder os IDs
 
 **Obra → Pisos… → Trocar planta (manter os IDs no sítio)** e escolhe o PDF ou imagem novo:
@@ -224,6 +248,15 @@ Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e o
 2. Onde aparece "ID" ou um código, a app recorta essa linha em alta resolução e lê-a várias vezes para confirmar.
 3. **Validação automática**: o código é comparado com o padrão dos IDs da obra (ex.: 6 caracteres hexadecimais) e o melhor fica gravado sozinho. As outras leituras ficam como botões para corrigir com um toque; só se nada for lido é que a app pede para escrever o ID (e põe o cursor no campo).
 
+## Selecionar todos e leitura contínua do ecrã (versão 32)
+
+- **Selecionar vários:** aparece uma barra no topo da planta com **Selecionar todos**, *Só os filtrados*, *Sem ID*, *Limpar* e *Terminar* (também Ctrl+A).
+- **Captura de ecrã → «Manter este ecrã e ler automaticamente»:** escolhe a janela (ex.: Fieldwire), arrasta a zona onde aparece o ID e ativa a opção. A partir daí, cada vez que abres uma etiqueta nova nessa janela, a app lê sozinha e regista o ID no equipamento selecionado (ou no próximo sem ID), e passa ao seguinte. IDs que já estão registados são ignorados. No canto aparece o estado com *Ler agora*, *Zona* (mudar a zona) e *Parar*. Funciona no Chrome/Edge do computador; mantém a janela do ObraFlow visível (ao lado), porque o navegador abranda as janelas escondidas.
+
+## Etiquetas tortas ou ao contrário (versão 31)
+
+A leitura passa a experimentar também a foto inclinada (±7°, e ±14° na leitura detalhada) além das 4 orientações, e corrige confusões típicas do OCR em códigos soltos (G→6, S→5, Z→2, Q→0 — ex.: «4EBGS6» → 4EB656).
+
 ## Leitura em segundo plano e "Leitura inconclusiva" (versão 18)
 
 - Depois de tirar a foto podes **fechar a ficha**: a leitura continua em segundo plano (aparece "A ler etiquetas" no topo). Fotos que ficaram por ler são encontradas e lidas sozinhas.
@@ -254,6 +287,61 @@ O leitor do telemóvel funciona sem rede, mas falha com fotos desfocadas ou tira
 2. Na app: **Coordenação → Leitura de etiquetas com IA** → cola a chave → **Guardar** → **Testar**.
 
 A partir daí, as fotos são lidas pela IA da Google (plano gratuito, com limite de pedidos por minuto e por dia). Sem rede, ou se a IA falhar, a app usa o leitor do telemóvel. Se a leitura falhar, usa **Recortar a zona do ID e ler de novo** e seleciona só a linha do código.
+
+## Tarefas e dúvidas na planta — "gotas" (versão 27)
+
+- Na barra da planta há o modo **Tarefa / dúvida**. Toca nele e depois no ponto da planta: escolhe **Tarefa** (trabalho a fazer) ou **Dúvida** (pergunta a esclarecer), escreve o título e a descrição (com @ para avisar alguém), escolhe responsável, prazo, prioridade e junta fotos.
+- Na planta aparece uma gota: azul ✓ = tarefa, roxa ? = dúvida, cinzenta = concluída/respondida, contorno vermelho = prazo ultrapassado.
+- Toca na gota para ver e gerir: mudar o estado (Aberta / Em curso / Concluída ou Respondida), responder ou comentar, mudar responsável e prazo, **Mover** ou **Apagar**.
+- Em **Tarefas e anomalias** há separadores *Tarefas*, *Dúvidas* e *Anomalias*; tocar numa linha abre a gota na planta.
+- Em **Ações** podes esconder/mostrar as gotas.
+
+## Notificações da plataforma (versão 27)
+
+- O **sino** no topo tem dois separadores: **Para mim** (identificaram-te com @, atribuíram-te algo, responderam/comentaram as tuas tarefas e dúvidas, concluíram uma tarefa tua, prazo hoje ou ultrapassado, e — para administradores — novas dúvidas) e **Atividade da obra**.
+- O número vermelho conta só o que é para ti e ainda não leste; tocar numa notificação leva ao sítio certo. Há **Marcar todas como lidas**.
+- **Avisos no ecrã do aparelho:** em *Definições da obra → Notificações na plataforma* (ou no sino) carrega em **Ativar**. Funcionam com a app aberta ou em segundo plano (no iPhone só com a app instalada no ecrã principal). Com a app fechada continuas a receber por **email**.
+- SQL: corre `supabase/atualizacao-5-tarefas-duvidas.sql` (depois da 2, 3 e 4) para os emails dizerem Tarefa/Dúvida e para avisar respostas e conclusões.
+
+## Ficha de tarefa completa ao estilo Fieldwire (versão 28)
+
+Ao tocar numa gota abre a ficha completa:
+- **Estado:** Aberta → Em curso → Concluída → **Verificada** (verificar: quem criou ou a coordenação).
+- **Especialidade** (SADI, Eletricidade, AVAC, Hidráulica, Telecom/ITED, Segurança, Construção civil, Arquitetura, Outros): a gota fica com a cor da especialidade.
+- **Prioridade, responsável, início e prazo, horas de mão de obra, custo, etiquetas** e **equipamento ligado**.
+- **Seguidores:** recebem os avisos (no sino e por email). Quem é identificado com @ numa mensagem passa a seguir.
+- **Checklist** com progresso (na gota aparece 1/3). Pode guardar-se como **modelo** e aplicar-se noutras tarefas da obra (também ao criar).
+- **Fotos e ficheiros** (PDF, DWG, Excel…), **tarefas relacionadas**, **histórico** de todas as alterações junto da conversa. As mensagens podem levar foto.
+- **Duplicar**, **Mover**, **Colocar na planta** (para tarefas importadas sem posição).
+- **No menu Ações:** escolher que gotas mostrar (todas / só abertas / só as minhas / escondidas).
+
+**Integrações (gratuitas):**
+- **Partilhar → Copiar ligação:** abre diretamente a tarefa (depois de entrar, para quem tem acesso à obra).
+- **WhatsApp** e **email** com o resumo e a ligação.
+- **Google Calendar** e **.ics** (Outlook, iPhone, Android) com início/prazo e lembrete.
+- **Relatório PDF** da tarefa, com recorte da planta, checklist, fotos e mensagens (Imprimir → Guardar como PDF). Na página Tarefas há também o relatório de todas.
+- **Excel / CSV** de todas as tarefas e dúvidas.
+- **Importar do Fieldwire:** no Fieldwire exporta as tarefas para Excel/CSV e carrega o ficheiro em *Tarefas e anomalias → Importar do Fieldwire*. São reconhecidos título, estado, categoria, responsável (pelo nome), prioridade, datas, planta (pelo nome), etiquetas, horas, custo, descrição e checklist. As tarefas ficam sem posição; usa *Colocar na planta*.
+
+SQL: volta a correr `supabase/atualizacao-5-tarefas-duvidas.sql` (nova versão: emails também aos seguidores e quando a tarefa é verificada).
+
+## Técnico — Manual, calculadoras e assistente RTIEBT (versão 29)
+
+No menu lateral há **Técnico (RTIEBT)**. Funciona **sem rede e sem depender de outros sites**: as tabelas, os esquemas e o assistente estão todos no ficheiro `tecnico.js`, que fica guardado no aparelho (é preparado em segundo plano na primeira vez que a app abre com rede).
+
+- **Início:** atalhos, destaques (regras mais usadas) e os últimos cálculos guardados.
+- **Calcular:**
+  - *Queda de tensão* (mono/tri, corrente ou potência, cos φ, cobre/alumínio; limite 3% iluminação / 5% outros usos; dá o fator K, a distância máxima e a secção mínima).
+  - *Ocupação de tubos VD* (H07V-U/R ou cabo com Ø; embebida ≤ ⅓, à vista ≤ 40%, coluna/entrada ≤ 20% e mínimo 32 mm).
+  - *Proteções / amperagem* (I<sub>Z</sub> por método A1/A2/B1/B2/C, PVC/XLPE, temperatura e agrupamento; disjuntor ou fusível gG; secção mínima).
+  - *Potências E-REDES* (escalão → corrente; cargas → escalão; potência mínima da habitação).
+  - Cada resultado pode ser **guardado numa tarefa/dúvida ou num equipamento** (fica no histórico deles).
+- **Consultar:** guia de bolso (regras rápidas, fator K, tubos, diferenciais, VE, cores, checklist H07V, alturas, IP), esquemas (comutador de escada, inversor, quadro de habitação, sensor/fotocélula), automação (tabela KNX/DALI/Modbus/BACnet/DMX/M-Bus, seleção de redes, tipologias bus) e **Tabelas e fontes**.
+- **Assistente:** perguntas em português, respondidas no próprio aparelho a partir do guia e das tabelas (ex.: «que secção para 32 A a 20 m?», «tubo para 5 cabos de 2,5 mm²», «que DR para placa de indução?»). Faz os cálculos, mostra os esquemas e indica a fonte.
+- **Acesso logo no início (versão 30):** na página *Os meus projetos* (antes de escolher a obra) e na *Visão geral* há o cartão **Técnico (RTIEBT)** com atalhos para Calcular, Consultar e Assistente.
+- Numa tarefa ou dúvida, o botão **Técnico / calcular** abre o módulo ligado a essa tarefa (os resultados guardam-se lá).
+
+**Valores e revisão:** os valores seguem as RTIEBT (Portaria 949-A/2006 e 252/2015), a IEC 60364-5-52, a HD 308/HD 21.3 e a E-REDES — a fonte aparece em cada resposta. **Têm de ser confirmados pelo técnico responsável.** Em *Consultar → Tabelas e fontes* a coordenação pode **exportar** as tabelas (JSON), corrigi-las e **importar** a versão revista para a obra, sem mexer no código.
 
 ## Limites do plano gratuito (verificado em outubro de 2026)
 

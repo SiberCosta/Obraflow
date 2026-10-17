@@ -1,5 +1,5 @@
 -- =====================================================================
--- CostaPlan · atualização 2: hierarquia de acesso + notificações por email
+-- ObraFlow · atualização 2: hierarquia de acesso + notificações por email
 -- Correr UMA vez: Supabase → SQL Editor → New query → colar tudo → Run.
 -- (Pode correr-se outra vez sem estragar nada.)
 -- =====================================================================
@@ -253,15 +253,15 @@ begin
       url := 'https://api.brevo.com/v3/smtp/email',
       headers := jsonb_build_object('api-key', k, 'Content-Type', 'application/json', 'accept', 'application/json'),
       body := jsonb_build_object(
-        'sender', jsonb_build_object('email', se, 'name', coalesce(sn, 'CostaPlan')),
+        'sender', jsonb_build_object('email', se, 'name', coalesce(sn, 'ObraFlow')),
         'to', jsonb_build_array(jsonb_build_object('email', r.email, 'name', r.name)),
-        'subject', 'CostaPlan · ' || subj,
+        'subject', 'ObraFlow · ' || subj,
         'htmlContent', '<div style="font-family:Arial,sans-serif;font-size:14px;color:#1d2421;max-width:600px">'
-          || '<h2 style="margin:0 0 12px">CostaPlan</h2><p>Olá ' || public.html_esc(r.name) || ', '
+          || '<h2 style="margin:0 0 12px">ObraFlow</h2><p>Olá ' || public.html_esc(r.name) || ', '
           || case when p_daily then 'este é o resumo do dia:' else 'há novidades na obra:' end || '</p><ul style="padding-left:18px">' || items || '</ul>'
           || case when total > 40 then '<p>… e mais ' || (total - 40) || '.</p>' else '' end
-          || case when site is not null then '<p><a href="' || public.html_esc(site) || '" style="background:#e8a317;color:#1d2421;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Abrir a CostaPlan</a></p>' else '' end
-          || '<p style="color:#8a948f;font-size:12px">Recebes este email porque ativaste as notificações na CostaPlan (Início → Notificações por email).</p></div>'),
+          || case when site is not null then '<p><a href="' || public.html_esc(site) || '" style="background:#e8a317;color:#1d2421;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:bold">Abrir a ObraFlow</a></p>' else '' end
+          || '<p style="color:#8a948f;font-size:12px">Recebes este email porque ativaste as notificações na ObraFlow (Início → Notificações por email).</p></div>'),
       timeout_milliseconds := 10000);
     update public.notif_queue set sent_at = now() where user_id = r.user_id and sent_at is null;
     cnt := cnt + 1;
@@ -278,7 +278,7 @@ begin
   if not public.is_admin() then raise exception 'Só o administrador pode configurar o email.'; end if;
   if coalesce(p_key,'') <> '' then insert into public.app_config values ('brevo_key', p_key) on conflict (name) do update set value = excluded.value; end if;
   insert into public.app_config values ('sender_email', p_sender) on conflict (name) do update set value = excluded.value;
-  insert into public.app_config values ('sender_name', coalesce(nullif(p_name,''), 'CostaPlan')) on conflict (name) do update set value = excluded.value;
+  insert into public.app_config values ('sender_name', coalesce(nullif(p_name,''), 'ObraFlow')) on conflict (name) do update set value = excluded.value;
   insert into public.app_config values ('site_url', p_site) on conflict (name) do update set value = excluded.value;
 end $$;
 create or replace function public.mail_status() returns jsonb
@@ -304,10 +304,10 @@ begin
   perform net.http_post(
     url := 'https://api.brevo.com/v3/smtp/email',
     headers := jsonb_build_object('api-key', k, 'Content-Type', 'application/json', 'accept', 'application/json'),
-    body := jsonb_build_object('sender', jsonb_build_object('email', se, 'name', coalesce(sn,'CostaPlan')),
+    body := jsonb_build_object('sender', jsonb_build_object('email', se, 'name', coalesce(sn,'ObraFlow')),
       'to', jsonb_build_array(jsonb_build_object('email', em, 'name', nm)),
-      'subject', 'CostaPlan · email de teste',
-      'htmlContent', '<p>Olá ' || public.html_esc(nm) || ', as notificações por email da CostaPlan estão a funcionar.</p>'),
+      'subject', 'ObraFlow · email de teste',
+      'htmlContent', '<p>Olá ' || public.html_esc(nm) || ', as notificações por email da ObraFlow estão a funcionar.</p>'),
     timeout_milliseconds := 10000);
 end $$;
 -- resultado do último pedido de envio (para a app mostrar se o Brevo aceitou)
@@ -321,10 +321,10 @@ $$;
 
 -- agendamentos: de 5 em 5 minutos (imediato) e todos os dias às 17:00 UTC (~18h em Lisboa)
 do $$ begin
-  perform cron.unschedule(jobid) from cron.job where jobname in ('costaplan-notif', 'costaplan-diario');
+  perform cron.unschedule(jobid) from cron.job where jobname in ('obraflow-notif', 'obraflow-diario');
 exception when others then null; end $$;
-select cron.schedule('costaplan-notif', '*/5 * * * *', $$select public.notif_send(false)$$);
-select cron.schedule('costaplan-diario', '0 17 * * *', $$select public.notif_send(true)$$);
+select cron.schedule('obraflow-notif', '*/5 * * * *', $$select public.notif_send(false)$$);
+select cron.schedule('obraflow-diario', '0 17 * * *', $$select public.notif_send(true)$$);
 
 -- tempo real para a equipa ver as mudanças de papéis
 do $$ begin

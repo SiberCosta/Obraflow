@@ -2,7 +2,7 @@
 -- ObraFlow · Atualização 3: vários projetos, cada um com a sua equipa
 -- Corre DEPOIS da atualização 2 (acessos e notificações).
 -- Supabase → SQL Editor → New query → colar tudo → Run.
--- Pode correr-se mais de uma vez sem estragar nada.
+-- Pode correr-se mais de uma vez sem estragar nada (se já correste uma versão anterior, corre de novo: acrescenta papéis por obra e convites).
 --
 -- O que muda:
 --  * nova tabela "projects" (obras) e "project_members" (quem tem acesso a cada obra);
@@ -203,6 +203,115 @@ begin
   end;
   return new;
 end $$;
+
+-- ---------- papéis por obra: Administrador · Membro · Seguidor ----------
+alter table public.project_members add column if not exists role text not null default 'membro';
+do $$ begin
+  alter table public.project_members add constraint project_members_role_chk check (role in ('admin','membro','seguidor'));
+exception when duplicate_object then null; end $$;
+-- quem já tinha acesso: coordenação → Administrador da obra; leitura → Seguidor; restantes → Membro (só na 1.ª vez)
+update public.project_members pm set role = case when m.role in ('admin','coord') then 'admin' when m.role = 'leitura' then 'seguidor' else 'membro' end
+  from public.members m
+ where m.user_id = pm.user_id and pm.role = 'membro' and not exists (select 1 from public.project_members x where x.role <> 'membro');
+
+create or replace function public.proj_role(p text) returns text
+language sql stable security definer set search_path = public as $$
+  select case when public.is_admin() then 'admin'
+              else (select pm.role from public.project_members pm join public.members m on m.user_id = pm.user_id
+                     where pm.project_id = p and pm.user_id = auth.uid() and m.role <> 'pendente') end
+$$;
+create or replace function public.proj_can_write(p text) returns boolean
+language sql stable security definer set search_path = public as $$ select coalesce(public.proj_role(p) in ('admin','membro'), false) $$;
+create or replace function public.proj_is_admin(p text) returns boolean
+language sql stable security definer set search_path = public as $$ select coalesce(public.proj_role(p) = 'admin', false) $$;
+
+create or replace function public.project_add_creator() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null then
+    insert into public.project_members (project_id, user_id, role) values (new.id, auth.uid(), 'admin')
+    on conflict (project_id, user_id) do update set role = 'admin';
+  end if;
+  return new;
+end $$;
+
+drop policy if exists docs_insert on public.docs;
+create policy docs_insert on public.docs for insert with check (public.is_active() and public.proj_can_write(project));
+drop policy if exists docs_update on public.docs;
+create policy docs_update on public.docs for update
+  using (public.is_active() and public.proj_can_write(project)) with check (public.is_active() and public.proj_can_write(project));
+drop policy if exists projects_update on public.projects;
+create policy projects_update on public.projects for update using (public.proj_is_admin(id)) with check (public.proj_is_admin(id));
+drop policy if exists pm_insert on public.project_members;
+create policy pm_insert on public.project_members for insert with check (public.proj_is_admin(project_id));
+drop policy if exists pm_update on public.project_members;
+create policy pm_update on public.project_members for update using (public.proj_is_admin(project_id)) with check (public.proj_is_admin(project_id));
+drop policy if exists pm_delete on public.project_members;
+create policy pm_delete on public.project_members for delete using (public.proj_is_admin(project_id));
+
+-- ---------- convites para entrar numa obra (link, QR code ou email) ----------
+create table if not exists public.project_invites (
+  token        text primary key,
+  project_id   text not null references public.projects(id) on delete cascade,
+  role         text not null default 'membro' check (role in ('admin','membro','seguidor')),
+  email        text not null default '',
+  max_uses     int,
+  uses         int not null default 0,
+  revoked      boolean not null default false,
+  expires_at   timestamptz default now() + interval '30 days',
+  created_by   uuid default auth.uid(),
+  created_at   timestamptz not null default now(),
+  last_used_by uuid,
+  last_used_at timestamptz
+);
+alter table public.project_invites enable row level security;
+drop policy if exists inv_select on public.project_invites;
+create policy inv_select on public.project_invites for select using (public.proj_is_admin(project_id));
+drop policy if exists inv_insert on public.project_invites;
+create policy inv_insert on public.project_invites for insert with check (public.proj_is_admin(project_id) and length(token) >= 16);
+drop policy if exists inv_update on public.project_invites;
+create policy inv_update on public.project_invites for update using (public.proj_is_admin(project_id)) with check (public.proj_is_admin(project_id));
+drop policy if exists inv_delete on public.project_invites;
+create policy inv_delete on public.project_invites for delete using (public.proj_is_admin(project_id));
+grant select, insert, update, delete on public.project_invites to authenticated;
+
+-- informação pública mínima do convite (para a página de entrada mostrar "convidado para a obra X")
+create or replace function public.invite_info(p_token text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare i public.project_invites;
+begin
+  select * into i from public.project_invites where token = p_token;
+  if not found or i.revoked or (i.expires_at is not null and i.expires_at < now()) or (i.max_uses is not null and i.uses >= i.max_uses) then
+    return jsonb_build_object('ok', false);
+  end if;
+  return jsonb_build_object('ok', true, 'name', (select name from public.projects where id = i.project_id), 'role', i.role, 'email', i.email);
+end $$;
+grant execute on function public.invite_info(text) to anon, authenticated;
+
+-- aceitar o convite: entra na obra com o papel do convite; uma conta nova fica logo aprovada
+create or replace function public.accept_invite(p_token text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare i public.project_invites; me uuid := auth.uid(); my_email text;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'erro', 'Entra primeiro com a tua conta.'); end if;
+  select * into i from public.project_invites where token = p_token for update;
+  if not found then return jsonb_build_object('ok', false, 'erro', 'Convite inválido.'); end if;
+  if i.revoked or (i.expires_at is not null and i.expires_at < now()) then return jsonb_build_object('ok', false, 'erro', 'Este convite já não é válido.'); end if;
+  if i.max_uses is not null and i.uses >= i.max_uses then return jsonb_build_object('ok', false, 'erro', 'Este convite já foi usado.'); end if;
+  select email into my_email from auth.users where id = me;
+  if i.email <> '' and lower(i.email) <> lower(coalesce(my_email, '')) then
+    return jsonb_build_object('ok', false, 'erro', 'Este convite foi enviado para ' || i.email || '. Entra com esse email.');
+  end if;
+  insert into public.project_members (project_id, user_id, role) values (i.project_id, me, i.role)
+  on conflict (project_id, user_id) do update set role = case when public.project_members.role = 'admin' then 'admin'
+                                                               when excluded.role = 'admin' then 'admin'
+                                                               when public.project_members.role = 'membro' or excluded.role = 'membro' then 'membro'
+                                                               else 'seguidor' end;
+  update public.members set role = case when i.role = 'seguidor' then 'leitura' else 'tecnico' end where user_id = me and role = 'pendente';
+  update public.project_invites set uses = uses + 1, last_used_by = me, last_used_at = now() where token = p_token;
+  return jsonb_build_object('ok', true, 'project', i.project_id, 'name', (select name from public.projects where id = i.project_id), 'role', i.role);
+end $$;
+grant execute on function public.accept_invite(text) to authenticated;
 
 -- tempo real para a lista de projetos
 do $$ begin alter publication supabase_realtime add table public.projects; exception when duplicate_object then null; end $$;

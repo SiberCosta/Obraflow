@@ -431,8 +431,8 @@ viewer.addEventListener("pointerdown",e=>{
  if(e.target.closest(".zoom,.hint,.legend,.emptyplan,.mkbar,.mkpanel"))return;
  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});viewer.setPointerCapture(e.pointerId);
  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:view.z};drag=null;return}
- const pin=e.target.closest(".pin"),gh=e.target.closest(".ghost");
- drag={sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y,moved:false,pin:pin?pin.dataset.id:null,ghost:gh?+gh.dataset.g:null};
+ const pin=e.target.closest(".pin"),gh=e.target.closest(".ghost"),tp=e.target.closest(".tpin");
+ drag={sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y,moved:false,pin:pin?pin.dataset.id:null,ghost:gh?+gh.dataset.g:null,tpin:tp?tp.dataset.t:null};
 });
 viewer.addEventListener("pointermove",e=>{
  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -447,6 +447,8 @@ function endPtr(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
  if(!drag)return;viewer.classList.remove("panning");const d=drag;drag=null;if(e.type==="pointercancel")return;
  if(d.pin&&d.moved&&d.pt){api.update("items",d.pin,logPatch(S.items.find(i=>i.id===d.pin),{x:d.pt.x,y:d.pt.y,updatedAt:now(),updatedBy:S.meId},"Posição alterada"));toast("Posição atualizada");return}
  if(d.moved)return;
+ if(d.tpin&&!S.movingTask){openTask(d.tpin);return}
+ if(S.movingTask||(S.mode==="task"&&!S.swap&&!S.align&&!S.moving)){taskClick(e);return}
  if(S.moving){const pt=toPlan(e);const id=S.moving;if(pt){S.moving=null;api.update("items",id,logPatch(S.items.find(i=>i.id===id),{x:pt.x,y:pt.y,updatedAt:now(),updatedBy:S.meId},"Posição alterada"));toast("Posição atualizada");render()}return}
  if(S.swap&&S.swap.stage>=1&&S.swap.stage<3){swapClick(e);return}
  if(S.swap)return;
@@ -524,19 +526,19 @@ function renderObra(){
  // hint
  const c=cur();
  const gN=ghostList().length;
- $("hint").innerHTML=S.draw?mkHint():S.swap&&S.swap.stage?swapHint():S.moving?`<b>Mover ${esc((S.items.find(i=>i.id===S.moving)||{}).code||"")}:</b> toca no novo sítio na planta. <button class="btn sm" id="mvCancel">Cancelar</button>`
+ $("hint").innerHTML=S.draw?mkHint():S.movingTask||S.mode==="task"?taskHint():S.swap&&S.swap.stage?swapHint():S.moving?`<b>Mover ${esc((S.items.find(i=>i.id===S.moving)||{}).code||"")}:</b> toca no novo sítio na planta. <button class="btn sm" id="mvCancel">Cancelar</button>`
   :S.align?`<b>Alinhar:</b> clica na planta base no <b>ponto ${S.align.dst.length+1}</b> (o mesmo que marcaste ${S.align.kind==="ov"?"no desenho a sobrepor":"na captura do Fieldwire"}). <button class="btn sm" id="alCancel">Cancelar</button>`
   :c&&c.x==null?`<b>Colocar ${esc(c.code)}:</b> `+(c.taskNo?`clica em cima do pin <b>${esc(c.taskNo)}</b> do Fieldwire.`:`clica na planta onde está este equipamento.`)
   :S.mode==="mark"?`<b>Marcar:</b> clica onde está o equipamento e tira a foto da etiqueta.`
   :gN?`<b>Fieldwire:</b> ${gN} pins por registar. Clica num círculo laranja e cola a foto da etiqueta com <b>Ctrl+V</b>.`
   :`<b>Navegar:</b> arrasta para mover, roda ou dois dedos para zoom. Toca num marcador para abrir.`;
  const mvc=$("mvCancel");if(mvc)mvc.onclick=()=>{S.moving=null;render()};
- viewer.classList.toggle("marking",S.mode==="mark"||!!S.moving||!!S.align||!!(S.swap&&S.swap.stage&&S.swap.stage<3));wireSwapHint();
+ viewer.classList.toggle("marking",S.mode==="mark"||S.mode==="task"||!!S.movingTask||!!S.moving||!!S.align||!!(S.swap&&S.swap.stage&&S.swap.stage<3));wireSwapHint();
  const alc=$("alCancel");if(alc)alc.onclick=()=>{S.align=null;render()};
  $("btnFw").hidden=!S.canWrite||!p;
  $("btnExp").hidden=!p;$("btnOv").hidden=!p||(!S.canWrite&&!p.ov);
  
- $("mNav").setAttribute("aria-pressed",S.mode==="nav");$("mMark").setAttribute("aria-pressed",S.mode==="mark");
+ $("mNav").setAttribute("aria-pressed",S.mode==="nav");$("mMark").setAttribute("aria-pressed",S.mode==="mark");{const mt=$("mTask");if(mt){mt.setAttribute("aria-pressed",S.mode==="task");mt.disabled=!p}}
  renderPins();renderList();renderSheet();renderBulk();
  $("multiBtn").hidden=!S.canWrite;$("multiBtn").setAttribute("aria-pressed",!!S.multi);
  wantNames([...new Set(S.issues.flatMap(x=>[x.assignee,x.createdBy]).concat(S.items.flatMap(i=>[i.updatedBy,i.assignee,...(i.log||[]).flatMap(e=>[e.by,e.u])])).filter(Boolean))]);
@@ -552,7 +554,7 @@ function renderPins(){if(drag&&drag.moved&&drag.pin)return;
   el.title=(it.devId?`ID ${it.devId} · `:"")+(it.mac?`MAC ${it.mac} · `:"")+(!it.devId&&!it.mac?"Sem ID lido · ":"")+`${it.code} · ${tOf(it.type).n} · ${sOf(it.stage).n}`;frag.appendChild(el)}
  for(const g of ghostList()){const el=document.createElement("div");el.className="ghost";el.dataset.g=g.i;el.style.left=g.x*p.w+"px";el.style.top=g.y*p.h+"px";el.style.scale=String(1/view.z);el.title="Pin do Fieldwire por registar: clica e cola a foto";frag.appendChild(el)}
  if(S.align)S.align.dst.forEach(q=>{const el=document.createElement("div");el.className="alignpt ghost-like";el.style.left=q.x+"px";el.style.top=q.y+"px";el.style.scale=String(1/view.z);frag.appendChild(el)});
- swapMarkers(frag,p);stage.appendChild(frag);renderOverlay(p);renderOv(p);renderMarks(p);declutter()}
+ swapMarkers(frag,p);stage.appendChild(frag);renderOverlay(p);renderOv(p);renderMarks(p);renderTasks(p);declutter()}
 function renderList(){
  const its=planItems();
  document.querySelectorAll(".filters .chip[data-f]").forEach(ch=>{const f=ch.dataset.f;ch.setAttribute("aria-pressed",S.filter===f);ch.querySelector("b").textContent=its.filter(i=>inFilter(i,f)).length});
@@ -786,6 +788,8 @@ async function prepCanvas(blob,rot){const bm=await createImageBitmap(blob);const
    placas verdes / fundos coloridos) e binarização adaptativa (cada zona compara com a sua vizinhança,
    por isso texto escuro sobre verde, branco ou reflexos fica preto sobre branco) */
 const bmCache=new WeakMap();
+/* tamanho da tela para qualquer ângulo (inclui inclinações, ex.: 187°) */
+function rotDims(w,h,rot){const a=rot*Math.PI/180,c=Math.abs(Math.cos(a)),s=Math.abs(Math.sin(a));return[Math.round(w*c+h*s),Math.round(w*s+h*c)]}
 async function bitmapOf(blob){let b=bmCache.get(blob);if(!b){b=await createImageBitmap(blob);bmCache.set(blob,b)}return b}
 function adaptiveBW(cx,W,H,ch,winFrac,C){const im=cx.getImageData(0,0,W,H),d=im.data,n=W*H;const g=new Float32Array(n);
  for(let i=0,j=0;j<n;i+=4,j++)g[j]=ch==="g"?d[i+1]:d[i]*.299+d[i+1]*.587+d[i+2]*.114;
@@ -795,11 +799,11 @@ function adaptiveBW(cx,W,H,ch,winFrac,C){const im=cx.getImageData(0,0,W,H),d=im.
   const sum=I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0];const m=sum/((x1-x0)*(y1-y0));const v=g[y*W+x]<m-C?0:255;const k=(y*W+x)*4;d[k]=d[k+1]=d[k+2]=v;d[k+3]=255}}
  cx.putImageData(im,0,0)}
 async function rotCanvas(blob,rot,maxL){const bm=await bitmapOf(blob);const L=Math.max(bm.width,bm.height);const k=Math.min(1,maxL/L);
- const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");const sw=rot%180!==0;cv.width=sw?h:w;cv.height=sw?w:h;
+ const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");[cv.width,cv.height]=rotDims(w,h,rot);
  const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality="high";
  cx.translate(cv.width/2,cv.height/2);cx.rotate(rot*Math.PI/180);cx.drawImage(bm,-w/2,-h/2,w,h);return cv}
 async function textCanvas(blob,rot,ch,maxL){maxL=maxL||1700;const bm=await bitmapOf(blob);const L=Math.max(bm.width,bm.height);const k=maxL/L;
- const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");const sw=rot%180!==0;cv.width=sw?h:w;cv.height=sw?w:h;
+ const w=Math.round(bm.width*k),h=Math.round(bm.height*k);const cv=document.createElement("canvas");[cv.width,cv.height]=rotDims(w,h,rot);
  const cx=cv.getContext("2d",{willReadFrequently:true});cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality="high";
  cx.translate(cv.width/2,cv.height/2);cx.rotate(rot*Math.PI/180);cx.drawImage(bm,-w/2,-h/2,w,h);cx.setTransform(1,0,0,1,0,0);
  adaptiveBW(cx,cv.width,cv.height,ch,.03,12);return cv}
@@ -835,11 +839,13 @@ function candsFrom(text,codes){const C=[];
  // códigos curtos isolados (ex.: 4EB655, 95F4528), muitas vezes ao lado do DataMatrix
  const macs=C.filter(c=>c.k==="mac").map(c=>c.v.replace(/:/g,""));
  const words=String(text||"").toUpperCase().split(/[^0-9A-Z]+/).filter(Boolean);
- words.forEach((w,i)=>{if(w.length<6||w.length>8||!/^[0-9A-FOIL]+$/.test(w))return;const v=hexFix(w);
+ words.forEach((w,i)=>{if(w.length<6||w.length>8)return;let sub=0;
+  if(!/^[0-9A-FOIL]+$/.test(w)){if(!/^[0-9A-FOILGSZQ]+$/.test(w)||!/[0-9]/.test(w)||(w.match(/[GSZQ]/g)||[]).length>2)return;w=w.replace(/G/g,"6").replace(/S/g,"5").replace(/Z/g,"2").replace(/Q/g,"0");sub=1}
+  const v=hexFix(w);
   if(!/\d/.test(v)||macs.some(m=>m.includes(v)))return;const prev=words[i-1]||"";
   if(/^(EN|G|CPR|VDS|SN|S|N|LOT|REF|PN|P|ART|TYPE|TIPO|MOD|MODEL|DATE|DATA|V|VDC|VAC|IP|IK)$/.test(prev))return;
   const letters=/[A-F]/.test(v);if(/^(19|20)\d{4,6}$/.test(v))return;
-  add("id",v,letters?(v.length===6?5:4):2)});
+  add("id",v,(letters?(v.length===6?5:4):2)-sub*.5)});
  return C.sort((a,b)=>b.s-a.s).slice(0,6)}
 /* padrão dos IDs desta obra (ex.: 6 caracteres hexadecimais) — serve para validar a leitura sozinha */
 function idPattern(){const L={};let hex=0,n=0;for(const i of S.items){const v=String(i.devId||"").trim().toUpperCase();if(!v)continue;n++;L[v.length]=(L[v.length]||0)+1;if(/^[0-9A-F]+$/.test(v))hex++}
@@ -869,7 +875,9 @@ async function readOne(blob,onStep,deep){const codes=await readCodes(blob);let c
  const P=await pool();let text="";const votes={};
  const strongNow=()=>{const best=Object.entries(votes).sort((a,b)=>b[1]-a[1])[0];return best&&best[1]>=2.5};
  // 1) leitura rápida da foto inteira (imagem reduzida) em cada orientação, normal e pelo canal verde, em paralelo
- for(const rot of[0,90,270,180]){onStep&&onStep(rot,"");
+ /* etiquetas fotografadas tortas (ex.: ao contrário e inclinadas 5–10°): depois das 4 orientações, tenta também ±7° (e ±14° na leitura profunda) */
+ const ROTS=[0,90,270,180,187,173,7,353,...(deep?[194,166,14,346,97,83,277,263]:[])];
+ for(const rot of ROTS){onStep&&onStep(rot%360,"");
   const run=async(ch,w)=>(await w.recognize(await textCanvas(blob,rot,ch,1000),{},{text:true,blocks:true})).data;
   let ds=[];if(P.a.length>1)ds=await Promise.all(["lum","g"].map((ch,i)=>run(ch,P.a[i])));else{ds.push(await run("lum",P.a[0]));if(!/(?:^|[^A-Za-z])[I1l][DO0]\s*[:;.]/.test(ds[0].text||""))ds.push(await run("g",P.a[0]))}
   for(const d of ds)text+="\n"+(d.text||"");
@@ -1677,10 +1685,10 @@ function wireTeam(W){W.querySelectorAll("[data-role]").forEach(s=>s.onchange=()=
    - o administrador configura o envio (Brevo, gratuito) em Coordenação
    ========================================================= */
 let myPrefs=null,prefsState="";   // "", "loading", "missing" (sem atualização 2), "ok"
-const EV_N={ev_atribuido:"Quando me atribuem equipamentos ou pisos",ev_anomalia:"Anomalias novas e resolvidas",ev_etapas:"Mudanças de etapa que me dizem respeito (para validar, para aceitar, aceites)",ev_plantas:"Plantas novas ou trocadas"};
+const EV_N={ev_mencao:"Quando me identificam com @ numa nota, pendência ou no diário",ev_atribuido:"Quando me atribuem equipamentos, pendências ou pisos",ev_anomalia:"Anomalias novas e resolvidas",ev_etapas:"Mudanças de etapa que me dizem respeito (para validar, para aceitar, aceites)",ev_plantas:"Plantas novas ou trocadas"};
 async function loadPrefs(){if(!sb||S.demo||!navigator.onLine||prefsState==="loading")return;prefsState="loading";
  const{data,error}=await sb.from("notif_prefs").select("*").eq("user_id",S.meId).maybeSingle();
- if(error){prefsState=/does not exist|relation|schema cache/i.test(error.message)?"missing":"";myPrefs=null}else{prefsState="ok";myPrefs=data||{enabled:false,mode:"imediato",ev_atribuido:true,ev_anomalia:true,ev_etapas:true,ev_plantas:false}}render()}
+ if(error){prefsState=/does not exist|relation|schema cache/i.test(error.message)?"missing":"";myPrefs=null}else{prefsState="ok";myPrefs=data||{enabled:true,mode:"imediato",ev_atribuido:true,ev_anomalia:true,ev_etapas:true,ev_plantas:false,ev_mencao:true}}render()}
 function notifCard(){if(S.demo||!isActive())return"";if(!prefsState&&navigator.onLine)setTimeout(loadPrefs,0);
  const P=myPrefs;
  return`<section class="block" id="notifSec"><h2><span>Notificações por email</span>${P&&P.enabled?`<span class="pill" style="--c:var(--ok)">Ligadas</span>`:""}</h2>
@@ -1689,11 +1697,12 @@ function notifCard(){if(S.demo||!isActive())return"";if(!prefsState&&navigator.o
   :`<div class="notif">
     <label class="sw"><input type="checkbox" id="nfOn"${P.enabled?" checked":""}><span>Receber emails em <b>${esc(S.me&&S.me.email||"")}</b></span></label>
     <div class="nfopts"${P.enabled?"":" hidden"}>
-     <div class="seg" role="group" aria-label="Frequência"><button type="button" data-nfmode="imediato" aria-pressed="${P.mode!=="diario"}">Na hora (a cada 5 min)</button><button type="button" data-nfmode="diario" aria-pressed="${P.mode==="diario"}">Resumo diário (~18h)</button></div>
+     <div class="seg" role="group" aria-label="Frequência"><button type="button" data-nfmode="imediato" aria-pressed="${P.mode!=="diario"}">Na hora (cerca de 1 min)</button><button type="button" data-nfmode="diario" aria-pressed="${P.mode==="diario"}">Resumo diário (~18h)</button></div>
      ${Object.entries(EV_N).map(([k,t])=>`<label class="ck"><input type="checkbox" data-nfev="${k}"${P[k]?" checked":""}><span>${esc(t)}</span></label>`).join("")}
     </div></div>`}</section>`}
 async function savePrefs(patch){if(!sb||!navigator.onLine){toast("Precisas de rede para mudar as notificações.");return}
- myPrefs={...myPrefs,...patch};const{error}=await sb.from("notif_prefs").upsert({user_id:S.meId,...myPrefs,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+ myPrefs={...myPrefs,...patch};let{error}=await sb.from("notif_prefs").upsert({user_id:S.meId,...myPrefs,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+ if(error&&/ev_mencao/.test(error.message||"")){const{ev_mencao,...rest}=myPrefs;({error}=await sb.from("notif_prefs").upsert({user_id:S.meId,...rest,updated_at:new Date().toISOString()},{onConflict:"user_id"}))}
  if(error){toast("Não foi possível guardar: "+error.message);prefsState="";loadPrefs();return}render()}
 function wireNotif(W){const on=$("nfOn");if(!on)return;on.onchange=()=>{savePrefs({enabled:on.checked});toast(on.checked?"Notificações por email ligadas.":"Notificações por email desligadas.")};
  W.querySelectorAll("[data-nfmode]").forEach(b=>b.onclick=()=>savePrefs({mode:b.dataset.nfmode}));
@@ -2337,10 +2346,10 @@ function eqGrid(L2){const R0=typeof refSet==="function"?refSet():null;
     <small class="muted">${esc(planName(i.planId))}${i.assignee?" · "+esc(nameOf(i.assignee)):""}${i.due?` · <span${isLate(i)?' class="bad"':""}>${fmtDay(i.due)}</span>`:""}</small></div></div>`}).join("")||`<div class="empty2">Nada corresponde aos filtros.</div>`}</div>${L2.length>240?`<p class="muted">A mostrar 240 de ${L2.length}. Usa os filtros ou a vista em lista.</p>`:""}`}
 function isGrid(L2){const td=today();
  return`<div class="isgrid">${L2.map(x=>{const it=S.items.find(i=>i.id===x.itemId);const late=x.status!=="resolvida"&&x.due&&x.due<td;const pr=x.prio||"media";
-  return`<div class="isc${x.status==="resolvida"?" done":""}"${it?` data-item="${esc(it.id)}" role="button" tabindex="0"`:""}>
+  return`<div class="isc${x.status==="resolvida"?" done":""}"${it?` data-item="${esc(it.id)}" role="button" tabindex="0"`:(x.kind==="tarefa"||x.kind==="duvida")?` data-task="${esc(x.id)}" role="button" tabindex="0"`:""}>
    ${x.photo?`<div class="isph"><img data-thumb="${esc(x.photo)}" alt=""></div>`:""}
    <div class="isb"><div class="ist"><span class="prio ${pr}">${PRIO[pr]}</span><span class="stchip" style="--c:${x.status==="resolvida"?"var(--ok)":x.status==="curso"?"var(--info)":"var(--warn)"}">${x.status==="resolvida"?"Resolvida":x.status==="curso"?"Em curso":"Aberta"}</span></div>
-    <p>${esc(x.text)}</p>
+    ${x.kind==="tarefa"||x.kind==="duvida"?`<b class="ist2"><span class="tkind k-${x.kind}"${x.cat&&typeof TCAT!=="undefined"&&TCAT[x.cat]?` style="background:${TCAT[x.cat].c}" title="${esc(TCAT[x.cat].n)}"`:""}>${x.kind==="duvida"?"Dúvida":"Tarefa"} ${x.seq?"#"+x.seq:""}</span> ${esc(x.title||"")}</b>`:""}<p>${esc(x.text)}</p>
     <small class="muted">${it?`<span class="mono">${esc(it.devId||it.code)}</span> · `:"Geral · "}${esc(planName(x.planId))}</small>
     <div class="isf"><span>${x.assignee?esc(nameOf(x.assignee)):`<span class="muted">Sem responsável</span>`}</span>${x.due?`<span${late?' class="bad"':""}>Prazo ${fmtDay(x.due)}</span>`:""}</div></div></div>`}).join("")||`<div class="empty2">Sem pendências ${ISF.st==="open"?"abertas":""}.</div>`}</div>`}
 function docTile(d){const ex=docExt(d.name),n=(d.items||[]).length;
@@ -2372,10 +2381,11 @@ function wireIds(){const q=$("idQ");q.oninput=()=>{IDF.q=q.value;const pos=q.sel
 
 /* anomalias e pendências (punch list) */
 const PRIO={alta:"Alta",media:"Média",baixa:"Baixa"};
-function issueList(){const q=ISF.q.trim().toLowerCase();return S.issues.filter(x=>(ISF.st==="open"?x.status!=="resolvida":ISF.st==="done"?x.status==="resolvida":true)&&(!ISF.prio||(x.prio||"media")===ISF.prio)&&(!ISF.who||(ISF.who==="-"?!x.assignee:x.assignee===ISF.who))&&(!ISF.plan||x.planId===ISF.plan)
- &&(!q||[x.text,(S.items.find(i=>i.id===x.itemId)||{}).code].join(" ").toLowerCase().includes(q))).sort((a,b)=>(a.status==="resolvida")-(b.status==="resolvida")||["alta","media","baixa"].indexOf(a.prio||"media")-["alta","media","baixa"].indexOf(b.prio||"media")||String(a.due||"9").localeCompare(String(b.due||"9"))||String(a.createdAt).localeCompare(String(b.createdAt)))}
+function issueList(){const q=ISF.q.trim().toLowerCase();return S.issues.filter(x=>(ISF.st==="open"?x.status!=="resolvida":ISF.st==="done"?x.status==="resolvida":true)&&(!ISF.prio||(x.prio||"media")===ISF.prio)&&(!ISF.who||(ISF.who==="-"?!x.assignee:x.assignee===ISF.who))&&(!ISF.plan||x.planId===ISF.plan)&&(!ISF.kind||(x.kind||"anomalia")===ISF.kind)
+ &&(!q||[x.title,x.text,(S.items.find(i=>i.id===x.itemId)||{}).code].join(" ").toLowerCase().includes(q))).sort((a,b)=>(a.status==="resolvida")-(b.status==="resolvida")||["alta","media","baixa"].indexOf(a.prio||"media")-["alta","media","baixa"].indexOf(b.prio||"media")||String(a.due||"9").localeCompare(String(b.due||"9"))||String(a.createdAt).localeCompare(String(b.createdAt)))}
 function issuesPage(){const L2=issueList();const open=S.issues.filter(x=>x.status!=="resolvida");const td=today();const over=open.filter(x=>x.due&&x.due<td).length;const ppl=[...new Set(S.issues.map(x=>x.assignee).filter(Boolean))];
- return pageHead("Anomalias e pendências","Anomalias e pendências","Lista de pendências da obra (punch list): prioridade, responsável e prazo.",S.canWrite?`<button class="btn primary" id="isNew">+ Nova pendência</button>`:"")+`
+ return pageHead("Tarefas e anomalias","Tarefas, dúvidas e anomalias","Tudo o que há para fazer ou esclarecer na obra: tarefas e dúvidas marcadas na planta, anomalias dos equipamentos e pendências.",S.canWrite?`<button class="btn primary" id="isNew">+ Nova pendência</button>`:"")+`
+ <div class="ptabs">${[["","Tudo"],["tarefa","Tarefas"],["duvida","Dúvidas"],["anomalia","Anomalias e pendências"]].map(([k,n])=>`<button type="button" data-ikind="${k}" class="${(ISF.kind||"")===k?"on":""}">${n} <span class="muted">${S.issues.filter(x=>x.status!=="resolvida"&&(!k||(x.kind||"anomalia")===k)).length}</span></button>`).join("")}</div>
  <div class="kpis k4">
   ${kpi("var(--warn)",'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',"Abertas",open.length,"&nbsp;",null,"isK1")}
   ${kpi("var(--bad)",'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',"Fora de prazo",over,"&nbsp;",null,"isK2")}
@@ -2389,12 +2399,12 @@ function issuesPage(){const L2=issueList();const open=S.issues.filter(x=>x.statu
   <select id="isPl"><option value="">Todas as plantas</option>${S.plans.map(p=>`<option value="${esc(p.id)}"${ISF.plan===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}</select>${vToggle(pageView("is"))}</div>
  ${pageView("is")==="grid"?isGrid(L2):`<div class="tbl"><table><thead><tr><th>Prioridade</th><th>Descrição</th><th>Equipamento</th><th>Planta</th><th>Responsável</th><th>Prazo</th><th>Estado</th><th>Registada</th></tr></thead><tbody>
  ${L2.map(x=>{const it=S.items.find(i=>i.id===x.itemId);const late=x.status!=="resolvida"&&x.due&&x.due<td;const can=S.canWrite;
-  return`<tr${it?` class="click" data-item="${esc(it.id)}"`:""}><td>${can?`<select data-iprio="${esc(x.id)}">${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${(x.prio||"media")===k?" selected":""}>${n}</option>`).join("")}</select>`:`<span class="prio ${x.prio||"media"}">${PRIO[x.prio||"media"]}</span>`}</td>
-  <td style="max-width:340px">${x.photo?`<img data-ref="${esc(x.photo)}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:6px;float:left;margin-right:8px">`:""}${esc(x.text)}</td><td class="mono">${it?esc(it.devId||it.code):`<span class="muted">Geral</span>`}</td><td>${esc(planName(x.planId))}</td>
+  return`<tr${it?` class="click" data-item="${esc(it.id)}"`:(x.kind==="tarefa"||x.kind==="duvida")?` class="click" data-task="${esc(x.id)}"`:""}><td>${can?`<select data-iprio="${esc(x.id)}">${Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${(x.prio||"media")===k?" selected":""}>${n}</option>`).join("")}</select>`:`<span class="prio ${x.prio||"media"}">${PRIO[x.prio||"media"]}</span>`}</td>
+  <td style="max-width:340px">${x.kind==="tarefa"||x.kind==="duvida"?`<span class="tkind k-${x.kind}"${x.cat&&typeof TCAT!=="undefined"&&TCAT[x.cat]?` style="background:${TCAT[x.cat].c}" title="${esc(TCAT[x.cat].n)}"`:""}>${x.kind==="duvida"?"Dúvida":"Tarefa"} ${x.seq?"#"+x.seq:""}</span> <b>${esc(x.title||"")}</b><br>`:""}${x.photo?`<img data-ref="${esc(x.photo)}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:6px;float:left;margin-right:8px">`:""}${esc(x.text)}</td><td class="mono">${it?esc(it.devId||it.code):`<span class="muted">Geral</span>`}</td><td>${esc(planName(x.planId))}</td>
   <td>${x.assignee?esc(nameOf(x.assignee)):`<span class="muted">—</span>`}</td><td>${can?`<input type="date" data-idue="${esc(x.id)}" value="${esc(x.due||"")}"${late?' style="color:var(--bad);border-color:var(--bad)"':""}>`:x.due?fmtDay(x.due):""}</td>
   <td>${can?`<select data-ist2="${esc(x.id)}"><option value="aberta"${x.status==="aberta"||!x.status?" selected":""}>Aberta</option><option value="curso"${x.status==="curso"?" selected":""}>Em curso</option><option value="resolvida"${x.status==="resolvida"?" selected":""}>Resolvida</option></select>`:esc(x.status||"aberta")}</td>
   <td style="font-size:12px">${esc(nameOf(x.createdBy))}<div class="muted">${fmtDate(x.createdAt)}</div></td></tr>`}).join("")||`<tr><td colspan="8" class="empty2">Sem pendências ${ISF.st==="open"?"abertas":""}.</td></tr>`}</tbody></table></div>`}</div>`}
-function wireIssues(){wireVT("is","issues");const q=$("isQ");q.oninput=()=>{ISF.q=q.value;const pos=q.selectionStart;renderPage("issues");$("isQ").focus();try{$("isQ").setSelectionRange(pos,pos)}catch(x){}};
+function wireIssues(){wireVT("is","issues");document.querySelectorAll("[data-ikind]").forEach(b=>b.onclick=()=>{ISF.kind=b.dataset.ikind;renderPage("issues")});const q=$("isQ");q.oninput=()=>{ISF.q=q.value;const pos=q.selectionStart;renderPage("issues");$("isQ").focus();try{$("isQ").setSelectionRange(pos,pos)}catch(x){}};
  document.querySelectorAll("[data-ist]").forEach(b=>b.onclick=()=>{ISF.st=b.dataset.ist;renderPage("issues")});
  $("isP").onchange=e=>{ISF.prio=e.target.value;renderPage("issues")};$("isW").onchange=e=>{ISF.who=e.target.value;renderPage("issues")};$("isPl").onchange=e=>{ISF.plan=e.target.value;renderPage("issues")};
  $("isK1").onclick=()=>{ISF.st="open";ISF.prio="";renderPage("issues")};$("isK3").onclick=()=>{ISF.st="open";ISF.prio="alta";renderPage("issues")};$("isK4").onclick=()=>{ISF.st="done";renderPage("issues")};$("isK2").onclick=()=>{ISF.st="open";renderPage("issues")};
@@ -2491,7 +2501,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="23";
+const APP_VER="33";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -2563,7 +2573,7 @@ async function loadProjects(){let list=null;
  else if(sb&&S.session&&navigator.onLine){
   try{const r=await sb.from("projects").select("id,name,client,address,status,created_at").order("created_at",{ascending:true});
    if(r.error)throw r.error;S.mp=true;list=r.data||[];
-   const m=await sb.from("project_members").select("project_id,user_id");S.pm=m.error?[]:(m.data||[]);IDBX.put("kv","pm",S.pm).catch(()=>{})}
+   let m=await sb.from("project_members").select("project_id,user_id,role");if(m.error)m=await sb.from("project_members").select("project_id,user_id");S.pm=m.error?[]:(m.data||[]);IDBX.put("kv","pm",S.pm).catch(()=>{})}
   catch(e){S.mp=false;list=null}
   IDBX.put("kv","mp",S.mp).catch(()=>{})}
  else{S.mp=!!(await IDBX.get("kv","mp").catch(()=>false));S.pm=(await IDBX.get("kv","pm").catch(()=>null))||[];list=await IDBX.get("kv","projects").catch(()=>null)}
@@ -2589,11 +2599,12 @@ async function openProject(id,view){if(!S.projects.some(p=>p.id===id))return;
  if(S.projectId!==id){S.projectId=id;try{localStorage.setItem("of-last-project",id)}catch(e){}
   S.planId=null;S.sel=null;S.draw=null;loadedPlan=null;plFolder=null;plQ2="";autoDone=false;
   await loadLocal();COLS.forEach(c=>emit(c));syncMetaName()}
+ setRole(S.role);
  go(view||"plans");syncNow().then(()=>{autoStageAll&&autoStageAll();setTimeout(bgScan,1500)})}
 
 /* sem projeto escolhido só se pode estar na lista de projetos */
 const goBase=go;
-go=function(v){if(!S.projectId&&v!=="projects"&&v!=="more")v="projects";goBase(v)};
+go=function(v){if(!S.projectId&&v!=="projects"&&v!=="more"&&v!=="tecnico")v="projects";goBase(v)};
 
 /* ---------- moldura: estado da vista de projetos ---------- */
 const renderShellBase=renderShell;
@@ -2641,6 +2652,17 @@ function renderProjects(){const W=$("pageWrap");const v=getPref("of-pj-view","gr
  W.querySelectorAll("[data-pjedit]").forEach(b=>b.onclick=e=>{e.stopPropagation();projDialog(b.dataset.pjedit)});
  W.querySelectorAll("[data-pjacc]").forEach(b=>b.onclick=e=>{e.stopPropagation();accessDialog(b.dataset.pjacc)});
  const nb=$("pjNew");if(nb)nb.onclick=()=>projDialog(null)}
+/* papel de cada pessoa em cada obra: Administrador (gere a obra e as pessoas), Membro (trabalha), Seguidor (só vê e recebe avisos) */
+const PR_N={admin:"Administrador",membro:"Membro",seguidor:"Seguidor"};
+function projRoleOf(uid,pid){if(S.demo)return"admin";const m=members.find(x=>x.user_id===uid);if(m&&m.role==="admin")return"admin";
+ const r=S.pm.find(x=>x.project_id===pid&&x.user_id===uid);if(!r)return S.mp?"":"membro";
+ return r.role||(m&&(m.role==="coord")?"admin":m&&m.role==="leitura"?"seguidor":"membro")}
+function myProjRole(pid){if(S.demo||!S.mp)return S.isAdmin||S.isCoord||S.demo?"admin":S.canWrite?"membro":"seguidor";return projRoleOf(S.meId,pid||S.projectId)||"seguidor"}
+/* o papel na obra limita o que se pode fazer: Seguidor só vê */
+const setRoleBase=setRole;
+setRole=function(r){setRoleBase(r);const pr=S.projectId?myProjRole():"";S.projRole=pr;S.isProjAdmin=pr==="admin";
+ if(S.projectId&&S.mp&&!S.demo&&isActive()){S.canWrite=pr==="admin"||pr==="membro";if(pr==="admin")S.isCoord=true}
+ else if(S.projectId&&pr==="seguidor")S.canWrite=false};
 function pjCard(p){const st=PST[p.id]||{},pc=st.items?Math.round(st.tested/st.items*100):0,np=peopleIn(p.id),cur=p.id===S.projectId;
  const manage=S.isCoord&&(S.mp||S.demo);
  return`<div class="pjc${cur?" on":""}" data-pj="${esc(p.id)}" role="button" tabindex="0" aria-label="Abrir ${esc(p.name)}">
@@ -2649,7 +2671,7 @@ function pjCard(p){const st=PST[p.id]||{},pc=st.items?Math.round(st.tested/st.it
    <div class="pjstats"><span><b>${st.plans??"–"}</b>plantas</span><span><b>${st.items??"–"}</b>equipamentos</span><span><b>${st.items?pc+"%":"–"}</b>testado</span></div>
    <div class="pjbar"><i style="width:${pc}%"></i></div>
    <div class="pjfoot">${np!=null?`<span class="pjm">${ico("users")}${np} pessoa${np===1?"":"s"}</span>`:"<span></span>"}
-    ${manage?`<span class="pjbtns"><button type="button" class="btn sm" data-pjacc="${esc(p.id)}"${S.demo?" hidden":""}>Acessos</button><button type="button" class="btn sm" data-pjedit="${esc(p.id)}">Editar</button></span>`:""}</div></div></div>`}
+    <span class="pjrole r-${myProjRole(p.id)}">${PR_N[myProjRole(p.id)]}</span></div></div></div>`}
 function pjRow(p){const st=PST[p.id]||{},pc=st.items?Math.round(st.tested/st.items*100):0,manage=S.isCoord&&(S.mp||S.demo);
  return`<div class="pjr${p.id===S.projectId?" on":""}" data-pj="${esc(p.id)}" role="button" tabindex="0">
   <span class="pjdot" style="--h:${hueOf(p.id+p.name)}">${esc(initials(p.name))}</span>
@@ -2657,7 +2679,7 @@ function pjRow(p){const st=PST[p.id]||{},pc=st.items?Math.round(st.tested/st.ite
   <span data-l="Plantas">${st.plans??"–"}</span><span data-l="Equipam.">${st.items??"–"}</span>
   <span class="pjpc" data-l="Testado"><span class="pjbar"><i style="width:${pc}%"></i></span>${st.items?pc+"%":"–"}</span>
   <span><span class="pjst s-${esc(p.status||"em_curso")}">${PJ_ST[p.status]||"Em curso"}</span></span>
-  <span class="pjbtns">${manage?`<button type="button" class="btn sm" data-pjacc="${esc(p.id)}"${S.demo?" hidden":""}>Acessos</button><button type="button" class="btn sm" data-pjedit="${esc(p.id)}">Editar</button>`:""}</span></div>`}
+  <span><span class="pjrole r-${myProjRole(p.id)}">${PR_N[myProjRole(p.id)]}</span></span></div>`}
 
 /* ---------- diálogos: projeto e acessos ---------- */
 (()=>{const d=document.createElement("dialog");d.id="dlgProj";d.innerHTML=`<form class="dlg" method="dialog" id="pjForm">
@@ -2775,6 +2797,63 @@ function renderPlansPage(){const W=$("pageWrap");const v=getPref("of-pl-view","g
 function syncBusy(){const b=$("busy"),p=$("plBusy");if(!b||!p)return;p.hidden=b.hidden;p.textContent=b.textContent}
 new MutationObserver(syncBusy).observe($("busy"),{attributes:true,childList:true,characterData:true,subtree:true});
 /* a pasta criada a partir da página de plantas fica logo aberta? não: a lista mostra-a */
+
+/* =========================================================
+   Pessoas da obra (Administrador · Membro · Seguidor) e Definições da obra
+   ========================================================= */
+let ppQ="",ppAddRole="membro";
+function peopleSection(){const pid=S.projectId;if(!pid)return"";
+ if(!S.mp||S.demo)return`<section class="block"><h2>Pessoas nesta obra</h2><div class="msg warn">${S.demo?"Na demonstração não há equipa.":"Para dar acessos por obra (Administrador, Membro, Seguidor), corre no Supabase o ficheiro <b>supabase/atualizacao-3-projetos.sql</b>."}</div></section>`;
+ const canManage=S.isAdmin||S.isProjAdmin;const inP=new Set(S.pm.filter(x=>x.project_id===pid).map(x=>x.user_id));
+ const admins=members.filter(m=>m.role==="admin");admins.forEach(m=>inP.add(m.user_id));
+ const rows=members.filter(m=>inP.has(m.user_id)).sort((a,b)=>["admin","membro","seguidor"].indexOf(projRoleOf(a.user_id,pid))-["admin","membro","seguidor"].indexOf(projRoleOf(b.user_id,pid))||String(a.name).localeCompare(String(b.name),"pt"));
+ const out=members.filter(m=>!inP.has(m.user_id)&&m.role!=="pendente");
+ const cnt=k=>rows.filter(m=>projRoleOf(m.user_id,pid)===k).length;
+ return`<section class="block"><h2><span>Pessoas nesta obra</span><span class="muted" style="font-size:13px;font-weight:500">${rows.length} pessoa${rows.length===1?"":"s"}</span></h2>
+ <div class="prole-help"><span><b>Administrador</b> gere a obra, as definições e as pessoas</span><span><b>Membro</b> trabalha: marca, fotografa, lê etiquetas, ensaios</span><span><b>Seguidor</b> só vê e recebe avisos</span></div>
+ <div class="kpis k4" style="margin:4px 0 10px">${["admin","membro","seguidor"].map(k=>`<div class="kpi" style="--c:${k==="admin"?"var(--accent)":k==="membro"?"var(--ok)":"var(--info)"}"><span class="kb"><span>${{admin:"Administradores",membro:"Membros",seguidor:"Seguidores"}[k]}</span><b>${cnt(k)}</b></span></div>`).join("")}</div>
+ <div class="card"><div class="pplist">${rows.map(m=>{const r=projRoleOf(m.user_id,pid),glob=m.role==="admin";
+  return`<div class="pprow"><span class="ini">${esc(initials(m.name||m.email))}</span><span class="ppn"><b>${esc(m.name||m.email)}${m.user_id===S.meId?" (eu)":""}</b><small>${esc(m.email||"")}${glob?" · administrador da plataforma (vê todas as obras)":""}</small></span>
+   ${canManage&&!glob&&m.user_id!==S.meId?`<select data-pprole="${esc(m.user_id)}" aria-label="Papel nesta obra">${["admin","membro","seguidor"].map(k=>`<option value="${k}"${r===k?" selected":""}>${PR_N[k]}</option>`).join("")}</select><button type="button" class="btn sm danger" data-pprem="${esc(m.user_id)}">Retirar</button>`:`<span class="pjrole r-${r}">${PR_N[r]}</span>`}</div>`}).join("")||`<div class="empty2">Ninguém ainda.</div>`}</div>
+ ${canManage?`<div class="ppadd"><b>Adicionar pessoa</b>${out.length?`<select id="ppWho"><option value="">Escolher…</option>${out.map(m=>`<option value="${esc(m.user_id)}">${esc(m.name||m.email)} · ${esc(m.email||"")}</option>`).join("")}</select>
+  <select id="ppRole">${["membro","seguidor","admin"].map(k=>`<option value="${k}"${ppAddRole===k?" selected":""}>${PR_N[k]}</option>`).join("")}</select><button type="button" class="btn primary" id="ppAdd">Adicionar</button>`:`<span class="muted">Todas as contas aprovadas já estão nesta obra. Para juntar alguém novo, usa <b>Convidar para esta obra</b> (QR code ou email).</span>`}<div class="msg err" id="ppMsg" hidden></div></div>`:""}</div></section>`}
+function wirePeople(W){const pid=S.projectId;const m=$("ppMsg");const fail=e=>{if(m){m.hidden=false;m.textContent="Não foi possível: "+(/row-level|permission/i.test(e.message||"")?"não tens permissão.":e.message)}};
+ W.querySelectorAll("[data-pprole]").forEach(sel=>sel.onchange=async()=>{try{const{error}=await sb.from("project_members").update({role:sel.value}).eq("project_id",pid).eq("user_id",sel.dataset.pprole);if(error)throw error;await loadProjects();toast("Papel atualizado: "+PR_N[sel.value]);renderPage("team")}catch(e){fail(e)}});
+ W.querySelectorAll("[data-pprem]").forEach(b=>b.onclick=async()=>{if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Confirmar";return}
+  try{const{error}=await sb.from("project_members").delete().eq("project_id",pid).eq("user_id",b.dataset.pprem);if(error)throw error;await loadProjects();toast("Pessoa retirada desta obra.");renderPage("team")}catch(e){fail(e)}});
+ const ad=$("ppAdd");if(ad)ad.onclick=async()=>{const u=$("ppWho").value,r=$("ppRole").value;ppAddRole=r;if(!u){$("ppWho").focus();return}
+  try{const{error}=await sb.from("project_members").insert({project_id:pid,user_id:u,role:r});if(error)throw error;await loadProjects();toast("Pessoa adicionada como "+PR_N[r]+".");renderPage("team")}catch(e){fail(e)}}}
+
+/* Definições da obra */
+const OBRA_F=[["name","Nome da obra","ex.: HCI - FIT-OUT SEDE CGD - LISBOA"],["code","N.º da obra / contrato",""],["client","Cliente / dono de obra",""],["address","Morada",""],
+ ["fisc","Fiscalização",""],["contractor","Empreiteiro / instalador",""],["designer","Projetista",""],["manager","Diretor de obra",""],["start","Data de início",""],["end","Data prevista de conclusão",""]];
+function obraSection(){const M=S.meta||{},pj=curProject()||{};const can=S.isAdmin||S.isProjAdmin||(!S.mp&&S.isCoord);const st=pj.status||M.status||"em_curso";
+ const val=k=>esc(k==="name"?(pj.name||M.name||""):k==="client"?(pj.client||M.client||""):k==="address"?(pj.address||M.address||""):(M[k]||""));
+ return`<section class="block"><h2>Definições da obra</h2><div class="card obraf">
+  ${OBRA_F.map(([k,l,ph])=>`<label class="f${k==="name"?" wide":""}">${l}<input id="ob_${k}"${k==="start"||k==="end"?' type="date"':""} value="${val(k)}" placeholder="${esc(ph)}"${can?"":" disabled"}></label>`).join("")}
+  <label class="f">Estado<select id="ob_status"${can?"":" disabled"}>${Object.entries(PJ_ST).map(([k,n])=>`<option value="${k}"${st===k?" selected":""}>${n}</option>`).join("")}</select></label>
+  <label class="f wide">Descrição / notas da obra<textarea id="ob_notes" rows="3"${can?"":" disabled"}>${esc(M.notes||"")}</textarea></label>
+  ${can?`<div class="toolrow wide"><button class="btn primary" id="obSave">Guardar definições</button>${S.isAdmin&&S.mp&&S.projects.length>1?`<span style="flex:1"></span><button class="btn danger" id="obDel">Apagar esta obra</button>`:""}</div>`:`<p class="muted wide" style="margin:0">Só o Administrador da obra pode alterar estas definições.</p>`}</div></section>`}
+function wireObra(W){const sv=$("obSave");if(sv)sv.onclick=async()=>{const v=k=>($("ob_"+k)||{}).value?.trim()||"";
+  const row={name:v("name")||S.meta.name||"Obra",client:v("client"),address:v("address"),status:$("ob_status").value};
+  const extra={};OBRA_F.forEach(([k])=>extra[k]=v(k));extra.name=row.name;extra.notes=$("ob_notes").value.trim();extra.status=row.status;
+  sv.disabled=true;try{await saveProjectRow(row);await api.set("meta","project",{...S.meta,...extra});toast("Definições da obra guardadas.");render()}finally{sv.disabled=false}};
+ const dl=$("obDel");if(dl)dl.onclick=()=>{projDialog(S.projectId);setTimeout(()=>{const b=$("pjDel");if(b)b.scrollIntoView({block:"center"})},100)}}
+/* páginas: "Pessoas" (antiga Equipa) e "Definições" (antiga Configurações) */
+const renderPageBase2=renderPage;
+renderPage=function(v){renderPageBase2(v);const W=$("pageWrap");
+ if(v==="team"){const h=W.querySelector(".phead");const ps=document.createElement("div");ps.innerHTML=peopleSection();
+  if(h){h.querySelector("h2")&&(h.querySelector("h2").textContent="Pessoas");const p=h.querySelector("p");if(p)p.textContent="Quem trabalha nesta obra e o que cada pessoa pode fazer. Em baixo: contas da plataforma e trabalho atribuído.";h.after(ps)}else W.prepend(ps);
+  const cr=W.querySelector(".crumb b");if(cr)cr.textContent="Pessoas";
+  // a parte das contas da plataforma fica com um título claro
+  [...W.querySelectorAll("section.block h2")].forEach(x=>{if(/^Equipa/.test(x.textContent.trim()))x.firstChild&&(x.firstChild.textContent="Contas da plataforma")});
+  wirePeople(W)}
+ if(v==="settings"){const h=W.querySelector(".phead");if(h){h.querySelector("h2")&&(h.querySelector("h2").textContent="Definições");const p=h.querySelector("p");if(p)p.textContent="Informação da obra, notificações, envio de emails, leitura com IA, dados e utilização sem rede."}
+  const cr=W.querySelector(".crumb b");if(cr)cr.textContent="Definições";
+  const old=$("stName");const sec=old&&old.closest("section.block");const box=document.createElement("div");box.innerHTML=obraSection();
+  if(sec)sec.replaceWith(box);else if(h)h.after(box);else W.prepend(box);wireObra(W)}};
+/* nomes no menu lateral */
+(()=>{const t=document.querySelector('.side [data-nav="team"] span:not(.cnt)');if(t)t.textContent="Pessoas";const c=document.querySelector('.side [data-nav="settings"] span:not(.cnt)');if(c)c.textContent="Definições da obra"})();
 
 /* =========================================================
    ObraFlow · Lista de IDs de referência (PDF, Excel, CSV ou texto)
@@ -2932,6 +3011,8 @@ inFilter=function(it,f){f=f||S.filter;if(f==="inc")return["inconclusivo","a_ler"
       desenho original) como texto real: no leitor de PDF, Ctrl+F encontra os IDs;
    2) a pesquisa da app procura também no texto das plantas em PDF (ex.: IDs escritos no desenho).
    ========================================================= */
+/* texto invisível junto ao pino: só o que a etiqueta ainda não mostra (para o Ctrl+F não encontrar o mesmo ID duas vezes) */
+function extraTxt(it,mode){const t=String(labelOf(it,mode)||"");return[it.devId,it.mac,it.code].filter(v=>v&&!t.includes(String(v))).join(" ")}
 /* texto de uma página de PDF com posições na imagem (0–1) */
 const PTX={};
 async function planText(p){if(!p||!p.pdf)return null;const key="ptx:"+p.pdf+"|"+(p.page||1);if(PTX[key])return PTX[key];
@@ -3016,7 +3097,7 @@ planPdf=async function(p,cv,its,mode,withList){const{jsPDF}=window.jspdf;const l
  for(const q of L){const ph=MK.ph*k,R=ph*.36,cx0=X(q.x),tip=Y(q.y),cy=tip-ph+R;doc.setFillColor(...hexRgb(q.col));doc.setDrawColor(255,255,255);doc.setLineWidth(Math.max(.12,R*.18));
   doc.triangle(cx0-R*.82,cy+R*.45,cx0+R*.82,cy+R*.45,cx0,tip,"F");doc.circle(cx0,cy,R,"FD");if(q.iss)doc.setFillColor(194,64,47);else doc.setFillColor(255,255,255);doc.circle(cx0,cy,R*.42,"F")}
  // 3) ID, MAC e referência junto a cada pino (invisível) — Ctrl+F encontra qualquer um deles
- doc.setFont("helvetica","normal");for(const it of its){if(it.x==null)continue;inv([it.devId,it.mac,it.code].filter(Boolean).join(" "),X(it.x*cv.width),Y(it.y*cv.height),Math.max(1,fsMm*.6),0)}
+ doc.setFont("helvetica","normal");for(const it of its){if(it.x==null||!extraTxt(it,mode))continue;inv(extraTxt(it,mode),X(it.x*cv.width),Y(it.y*cv.height),Math.max(1,fsMm*.6),0)}
  if(!withList)return doc.output("blob");
  doc.addPage("a4","portrait");const W2=doc.internal.pageSize.getWidth(),H2=doc.internal.pageSize.getHeight();let y=M+6;
  const cols=[["Ref.",M],["ID",M+34],["MAC",M+62],["Tipo",M+104],["Etapa",M+144],["Leitura",M+170]];
@@ -3078,7 +3159,7 @@ async function rasterPlanPdf(p,its,mode,colorMode,withList,withOv,onStep){const{
  doc.setTextColor(0);
  for(const q of L){const ph=MK.ph*s,R=ph*.36,x=q.x*s,tip=q.y*s,cy=tip-ph+R;doc.setFillColor(...hexRgb(q.col));doc.setDrawColor(255,255,255);doc.setLineWidth(Math.max(.3,R*.18));
   doc.triangle(x-R*.82,cy+R*.45,x+R*.82,cy+R*.45,x,tip,"F");doc.circle(x,cy,R,"FD");if(q.iss)doc.setFillColor(194,64,47);else doc.setFillColor(255,255,255);doc.circle(x,cy,R*.42,"F")}
- doc.setFont("helvetica","normal");for(const it of its){if(it.x==null)continue;try{doc.setFontSize(Math.max(1,fsPt*.5));doc.text([it.devId,it.mac,it.code].filter(Boolean).join(" "),it.x*VW,it.y*VH,{renderingMode:"invisible"})}catch(e){}}
+ doc.setFont("helvetica","normal");for(const it of its){if(it.x==null||!extraTxt(it,mode))continue;try{doc.setFontSize(Math.max(1,fsPt*.5));doc.text(extraTxt(it,mode),it.x*VW,it.y*VH,{renderingMode:"invisible"})}catch(e){}}
  doc.setProperties({title:`${S.meta.name?S.meta.name+" · ":""}${p.name}`,creator:"ObraFlow",subject:"Planta com equipamentos e IDs",keywords:its.map(i=>i.devId||i.mac||i.code).filter(Boolean).join(" ")});
  if(withList){doc.addPage("a4","portrait");let y=50;doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text(`Lista de equipamentos · ${p.name}`,40,y);y+=24;
   const cols=[["Ref.",40],["ID",135],["MAC",215],["Tipo",335],["Etapa",450],["Leitura",520]];const head=()=>{doc.setFont("helvetica","bold");doc.setFontSize(9);cols.forEach(([t,x])=>doc.text(t,x,y));y+=6;doc.setDrawColor(180);doc.line(40,y,555,y);y+=12;doc.setFont("helvetica","normal")};head();
@@ -3121,7 +3202,7 @@ async function vecPlanPdf(p,its,mode,colorMode,withList,withOv){await loadPdfLib
   page.drawSvgPath(`M ${-R*.82} ${-(ph-R)+R*.45} L ${R*.82} ${-(ph-R)+R*.45} L 0 0 Z`,{x,y:tip,color:C(q.col)});
   page.drawCircle({x,y:cy,size:R,color:C(q.col),borderColor:white,borderWidth:Math.max(.3,R*.18)});page.drawCircle({x,y:cy,size:R*.42,color:q.iss?rgb(.76,.25,.18):white})}
  // ID, MAC e referência junto a cada pino (texto invisível para Ctrl+F)
- for(const it of its){if(it.x==null)continue;try{page.drawText(safe([it.devId,it.mac,it.code].filter(Boolean).join(" ")),{x:X(it.x*LW),y:Y(it.y*LH),size:Math.max(1,fsPt*.5),font:helv,opacity:0})}catch(e){}}
+ for(const it of its){if(it.x==null||!extraTxt(it,mode))continue;try{page.drawText(safe(extraTxt(it,mode)),{x:X(it.x*LW),y:Y(it.y*LH),size:Math.max(1,fsPt*.5),font:helv,opacity:0})}catch(e){}}
  out.setTitle(`${S.meta.name?S.meta.name+" · ":""}${p.name}`);out.setCreator("ObraFlow");out.setProducer("ObraFlow");out.setSubject("Planta com equipamentos e IDs");out.setKeywords(its.map(i=>i.devId||i.mac||i.code).filter(Boolean));
  if(withList){const A4=[595.28,841.89];let pg=out.addPage(A4),y=800;const bold=await out.embedFont(StandardFonts.HelveticaBold);
   const cols=[["Ref.",40],["ID",135],["MAC",215],["Tipo",335],["Etapa",450],["Leitura",520]];
@@ -3130,5 +3211,659 @@ async function vecPlanPdf(p,its,mode,colorMode,withList,withOv){await loadPdfLib
   for(const it of its){if(y<40){pg=out.addPage(A4);y=800;head()}const st=typeof readStateOf==="function"?readStateOf(it):"";
    const row=[it.code,it.devId||"",it.mac||"",tOf(it.type).n,sOf(it.stage).n,st&&st!=="ok"?RS_N[st]:""];row.forEach((t,c)=>pg.drawText(safe(String(t).slice(0,c===3?22:20)),{x:cols[c][1],y,size:9,font:helv}));y-=14}}
  return new Blob([await out.save({useObjectStreams:true})],{type:"application/pdf"})}
+
+/* =========================================================
+   ObraFlow · Convites para entrar numa obra (link, QR code ou email)
+   ========================================================= */
+const INV_KEY="of-invite";
+function inviteUrl(tok){return location.origin+location.pathname+"#convite="+tok}
+function newToken(){const a=new Uint8Array(18);crypto.getRandomValues(a);return[...a].map(b=>"abcdefghijkmnpqrstuvwxyz23456789"[b%32]).join("")}
+/* guardar o convite que veio no link (antes de entrar) */
+(()=>{const m=location.hash.match(/convite=([a-z0-9]{16,})/i);if(m){try{localStorage.setItem(INV_KEY,m[1])}catch(e){}history.replaceState(null,"",location.pathname+location.search)}})();
+function pendingInvite(){try{return localStorage.getItem(INV_KEY)||""}catch(e){return""}}
+function clearInvite(){try{localStorage.removeItem(INV_KEY)}catch(e){}}
+/* página de entrada: mostra para que obra é o convite */
+const showAuthBase=showAuth;
+showAuth=function(msg){showAuthBase(msg);const tok=pendingInvite();if(!tok||!sb)return;
+ sb.rpc("invite_info",{p_token:tok}).then(({data,error})=>{const card=document.querySelector(".lp-card");if(!card||error||!data)return;
+  const b=document.createElement("div");b.className="invban "+(data.ok?"ok":"bad");
+  b.innerHTML=data.ok?`<b>Convite para a obra</b><span>${esc(data.name||"")}</span><small>como ${esc(PR_N[data.role]||data.role)}${data.email?` · para ${esc(data.email)}`:""}. Entra ou cria conta para aceitar.</small>`:`<b>Este convite já não é válido.</b><small>Pede um novo convite ao administrador da obra.</small>`;
+  card.prepend(b);if(data.ok&&data.email){const e=$("auEmail");if(e&&!e.value)e.value=data.email}
+  if(!data.ok)clearInvite()}).catch(()=>{})};
+/* depois de entrar: aceita o convite (a conta nova fica aprovada) e abre a obra */
+let invOpen=null;
+const startSessionBase=startSession;
+startSession=async function(session,offline){const tok=pendingInvite();
+ if(tok&&!offline&&sb&&navigator.onLine){try{const{data,error}=await sb.rpc("accept_invite",{p_token:tok});
+   if(!error&&data&&data.ok){invOpen=data.project;clearInvite();setTimeout(()=>toast(`Entraste na obra ${data.name||""} como ${PR_N[data.role]||data.role}.`),900)}
+   else if(data&&data.erro){clearInvite();setTimeout(()=>toast("Convite: "+data.erro),900)}}catch(e){}}
+ await startSessionBase(session,offline);
+ if(invOpen&&S.projects.some(p=>p.id===invOpen)){const id=invOpen;invOpen=null;openProject(id)}};
+/* quem já tem sessão e abre um link de convite */
+window.addEventListener("hashchange",async()=>{const m=location.hash.match(/convite=([a-z0-9]{16,})/i);if(!m)return;try{localStorage.setItem(INV_KEY,m[1])}catch(e){}
+ history.replaceState(null,"",location.pathname+location.search);if(S.session&&sb){const{data}=await sb.rpc("accept_invite",{p_token:m[1]}).catch(()=>({data:null}));clearInvite();
+  if(data&&data.ok){await loadMembers();await loadProjects();toast(`Entraste na obra ${data.name||""}.`);openProject(data.project)}else if(data&&data.erro)toast("Convite: "+data.erro)}});
+
+/* ---------- desenhar o QR code ---------- */
+let qrP=null;function qrLib(){if(!qrP)qrP=loadScript("vendor/qrcode.js").catch(e=>{qrP=null;throw e});return qrP}
+async function qrCanvas(text,px){await qrLib();const{QRCode,ECL}=window.QRCodeLib;const q=new QRCode(-1,ECL.M);q.addData(text);q.make();const n=q.getModuleCount(),m=4,s=Math.max(4,Math.floor((px||320)/(n+m*2)));
+ const c=document.createElement("canvas");c.width=c.height=(n+m*2)*s;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.fillStyle="#1d2421";
+ for(let r=0;r<n;r++)for(let k=0;k<n;k++)if(q.isDark(r,k))x.fillRect((k+m)*s,(r+m)*s,s,s);return c}
+
+/* ---------- convidar (página Pessoas) ---------- */
+let invList=[],invLast=null;
+async function loadInvites(){if(!sb||!S.mp||S.demo||!S.projectId)return;const{data,error}=await sb.from("project_invites").select("token,role,email,max_uses,uses,revoked,expires_at,created_at").eq("project_id",S.projectId).order("created_at",{ascending:false});
+ invList=error?[]:(data||[]).filter(i=>!i.revoked&&(!i.expires_at||new Date(i.expires_at)>new Date())&&(i.max_uses==null||i.uses<i.max_uses))}
+function inviteSection(){if(!S.mp||S.demo||!(S.isAdmin||S.isProjAdmin))return"";
+ return`<section class="block" id="invSec"><h2>Convidar para esta obra</h2><div class="card invc">
+  <div class="invform"><label class="f">Papel<select id="ivRole"><option value="membro">Membro — trabalha na obra</option><option value="seguidor">Seguidor — só vê e recebe avisos</option><option value="admin">Administrador — gere a obra e as pessoas</option></select></label>
+   <label class="f">Email (opcional)<input id="ivEmail" type="email" placeholder="nome@empresa.pt"></label>
+   <div class="toolrow"><button type="button" class="btn primary" id="ivQr">Criar QR code / link</button><button type="button" class="btn" id="ivMail">Enviar por email</button></div>
+   <p class="muted" style="margin:0;font-size:12.5px">O <b>QR code / link</b> serve para várias pessoas durante 30 dias. Com <b>email</b>, o convite só funciona para esse endereço e uma vez. Quem aceitar entra logo nesta obra com o papel escolhido — não precisa de aprovação.</p>
+   <div class="msg err" id="ivMsg" hidden></div></div>
+  <div class="invout" id="ivOut" hidden></div>
+  ${invList.length?`<div class="invlist"><b>Convites ativos</b>${invList.map(i=>`<div class="invrow"><span class="pjrole r-${i.role}">${PR_N[i.role]}</span><span>${i.email?esc(i.email):"QR code / link"}${i.max_uses==null?` · ${i.uses} uso${i.uses===1?"":"s"}`:""}</span><small class="muted">${i.expires_at?"até "+fmtDay(String(i.expires_at).slice(0,10)):""}</small><button type="button" class="btn sm" data-ivshow="${esc(i.token)}">Mostrar</button><button type="button" class="btn sm danger" data-ivrev="${esc(i.token)}">Anular</button></div>`).join("")}</div>`:""}
+ </div></section>`}
+async function createInvite(withEmail){const m=$("ivMsg");m.hidden=true;const role=$("ivRole").value,email=$("ivEmail").value.trim().toLowerCase();
+ if(withEmail&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){m.hidden=false;m.textContent="Escreve o email da pessoa.";$("ivEmail").focus();return null}
+ const row={token:newToken(),project_id:S.projectId,role,email:withEmail?email:"",max_uses:withEmail?1:null};
+ const{error}=await sb.from("project_invites").insert(row);if(error){m.hidden=false;m.textContent="Não foi possível criar o convite: "+(/row-level|permission/i.test(error.message)?"só o Administrador da obra pode convidar.":/project_invites/.test(error.message)?"corre de novo no Supabase o ficheiro atualizacao-3-projetos.sql.":error.message);return null}
+ invLast=row;return row}
+async function showInvite(row){const o=$("ivOut");if(!o)return;const url=inviteUrl(row.token);const pj=curProject()||{};
+ o.hidden=false;o.innerHTML=`<div class="qrbox" id="ivQrBox"></div><div class="invinfo"><b>Convite para ${esc(pj.name||"a obra")}</b><span class="pjrole r-${row.role}">${PR_N[row.role]}</span>
+  <p class="muted" style="margin:0">Aponta a câmara do telemóvel para o QR code, ou envia o link.${row.email?` Só funciona para <b>${esc(row.email)}</b>.`:""}</p>
+  <input readonly id="ivLink" value="${esc(url)}"><div class="toolrow"><button type="button" class="btn" id="ivCopy">Copiar link</button>${navigator.share?`<button type="button" class="btn" id="ivShare">Partilhar…</button>`:""}<a class="btn" id="ivMailto">Abrir no email</a><button type="button" class="btn" id="ivPng">Descarregar QR</button></div></div>`;
+ try{const c=await qrCanvas(url,300);c.className="qrimg";$("ivQrBox").appendChild(c);$("ivPng").onclick=()=>c.toBlob(b=>saveBlob(`Convite_${slug()}.png`,b))}catch(e){$("ivQrBox").innerHTML=`<span class="muted">QR code indisponível: ${esc(e.message)}</span>`}
+ const subj=`Convite para a obra ${pj.name||""} no ObraFlow`,body=`Olá,\n\nConvido-te para a obra "${pj.name||""}" no ObraFlow como ${PR_N[row.role]}.\n\nAbre este link (no telemóvel ou no computador), cria conta ou entra com o teu email, e ficas logo com acesso:\n${url}\n\nO convite é válido durante 30 dias.\n\n${(S.me&&S.me.name)||""}`;
+ $("ivMailto").href=`mailto:${encodeURIComponent(row.email||"")}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+ $("ivCopy").onclick=()=>navigator.clipboard.writeText(url).then(()=>toast("Link copiado.")).catch(()=>{$("ivLink").select();toast("Seleciona e copia o link.")});
+ const sh=$("ivShare");if(sh)sh.onclick=()=>navigator.share({title:subj,text:`Convite para a obra ${pj.name||""} no ObraFlow`,url}).catch(()=>{});
+ o.scrollIntoView({block:"nearest",behavior:"smooth"})}
+function wireInvites(W){const q=$("ivQr");if(!q)return;
+ q.onclick=async()=>{q.disabled=true;try{const r=await createInvite(false);if(r){await loadInvites();renderPage("team");setTimeout(()=>showInvite(r),50)}}finally{q.disabled=false}};
+ $("ivMail").onclick=async()=>{const r=await createInvite(true);if(r){await loadInvites();renderPage("team");setTimeout(async()=>{await showInvite(r);const a=$("ivMailto");if(a)a.click()},50)}};
+ W.querySelectorAll("[data-ivshow]").forEach(b=>b.onclick=()=>{const i=invList.find(x=>x.token===b.dataset.ivshow);if(i)showInvite(i)});
+ W.querySelectorAll("[data-ivrev]").forEach(b=>b.onclick=async()=>{if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Confirmar";return}
+  await sb.from("project_invites").update({revoked:true}).eq("token",b.dataset.ivrev);await loadInvites();toast("Convite anulado.");renderPage("team")})}
+/* junta a secção de convites à página Pessoas */
+const renderPageBase3=renderPage;let invLoadedFor=null;
+renderPage=function(v){renderPageBase3(v);if(v!=="team")return;const W=$("pageWrap");
+ if(invLoadedFor!==S.projectId){invLoadedFor=S.projectId;loadInvites().then(()=>{if(S.view==="team")renderPage("team")})}
+ const ps=W.querySelector(".pplist");const sec=ps&&ps.closest("section.block");const box=document.createElement("div");box.innerHTML=inviteSection();
+ if(sec)sec.after(box);wireInvites(W);if(invLast&&W.querySelector("#ivOut")&&invList.some(i=>i.token===invLast.token)){}};
+
+/* =========================================================
+   ObraFlow · Identificar pessoas com @ (notas, pendências, diário)
+   O texto guarda "@Nome"; o documento guarda a lista "mentions" (ids) e o servidor
+   envia o email só às pessoas acabadas de identificar.
+   ========================================================= */
+function projPeople(){const pid=S.projectId;if(!pid)return[];const inP=new Set(S.pm.filter(x=>x.project_id===pid).map(x=>x.user_id));
+ return members.filter(m=>m.role!=="pendente"&&(!S.mp||m.role==="admin"||inP.has(m.user_id))).map(m=>({id:m.user_id,name:m.name||m.email,email:m.email}))}
+const normN=t=>String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+function findMentions(text){const T=normN(text);if(!T.includes("@"))return[];const ppl=projPeople();const out=new Set();
+ const firsts={};ppl.forEach(p=>{const f=normN(p.name).split(/\s+/)[0];firsts[f]=(firsts[f]||0)+1});
+ for(const p of ppl){const full=normN(p.name),first=full.split(/\s+/)[0];
+  const re=s=>new RegExp("@"+s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?![\\p{L}\\p{N}])","u");
+  if(re(full).test(T)||(firsts[first]===1&&re(first).test(T))||(p.email&&T.includes("@"+normN(p.email).split("@")[0]+" ")))out.add(p.id)}
+ return[...out]}
+const MENTION_F=["note","text","notes"];
+function withMentions(c,id,data,base){if(!["items","issues","meta"].includes(c))return data;const txt=MENTION_F.map(f=>data[f]).filter(v=>typeof v==="string").join("\n");if(!txt)return data;
+ const found=findMentions(txt);if(!found.length)return data;const prev=((base&&base.mentions)||[]).filter(Boolean);
+ return{...data,mentions:[...new Set([...prev,...found])],mentionText:txt.slice(0,400)}}
+const apiSetBase=api.set,apiUpdateBase=api.update;
+api.set=function(c,id,data){return apiSetBase.call(api,c,id,withMentions(c,id,data,L[c]&&L[c][id]))};
+api.update=function(c,id,patch){return apiUpdateBase.call(api,c,id,withMentions(c,id,patch,L[c]&&L[c][id]))};
+/* lista de sugestões ao escrever "@" */
+let mBox=null,mFor=null,mSel=0,mList=[];
+function mentionField(el){return el&&(el.tagName==="TEXTAREA"||(el.tagName==="INPUT"&&/(^niText$|text|note|desc|obs)/i.test(el.id||"")&&el.type!=="search"))&&!el.readOnly&&!el.disabled}
+function mClose(){if(mBox)mBox.hidden=true;mFor=null}
+function mOpen(el,q){const ppl=projPeople().filter(p=>p.id!==S.meId&&(!q||normN(p.name).includes(normN(q))||normN(p.email).startsWith(normN(q)))).slice(0,6);
+ if(!ppl.length){mClose();return}mList=ppl;mSel=0;mFor=el;
+ if(!mBox){mBox=document.createElement("div");mBox.className="mbox";document.body.appendChild(mBox);mBox.addEventListener("mousedown",e=>{const b=e.target.closest("[data-mi]");if(b){e.preventDefault();mPick(+b.dataset.mi)}})}
+ mBox.innerHTML=`<small>Identificar (recebe email)</small>`+ppl.map((p,i)=>`<button type="button" data-mi="${i}" class="${i===mSel?"on":""}"><span class="ini">${esc(initials(p.name))}</span><span><b>${esc(p.name)}</b><small>${esc(p.email||"")}</small></span></button>`).join("");
+ const r=el.getBoundingClientRect();mBox.style.left=Math.min(r.left,innerWidth-280)+"px";mBox.style.top=(r.bottom+4+scrollY)+"px";mBox.style.minWidth=Math.min(320,r.width)+"px";mBox.hidden=false}
+function mPick(i){const el=mFor,p=mList[i];if(!el||!p)return;const pos=el.selectionStart,before=el.value.slice(0,pos),after=el.value.slice(pos);
+ const at=before.lastIndexOf("@");const nb=before.slice(0,at)+"@"+p.name+" ";el.value=nb+after;el.setSelectionRange(nb.length,nb.length);mClose();
+ el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));el.focus();
+ toast(`${p.name} vai receber um email quando guardares.`)}
+document.addEventListener("input",e=>{const el=e.target;if(!mentionField(el)||!S.projectId||S.demo)return;const pos=el.selectionStart||0,b=el.value.slice(0,pos);
+ const m=b.match(/(?:^|\s)@([\p{L}\p{N}._-]{0,24})$/u);if(m)mOpen(el,m[1]);else if(mFor===el)mClose()},true);
+document.addEventListener("keydown",e=>{if(!mBox||mBox.hidden||e.target!==mFor)return;
+ if(e.key==="ArrowDown"||e.key==="ArrowUp"){mSel=(mSel+(e.key==="ArrowDown"?1:-1)+mList.length)%mList.length;mBox.querySelectorAll("[data-mi]").forEach((b,i)=>b.classList.toggle("on",i===mSel));e.preventDefault()}
+ else if(e.key==="Enter"||e.key==="Tab"){mPick(mSel);e.preventDefault();e.stopPropagation()}else if(e.key==="Escape")mClose()},true);
+document.addEventListener("focusout",e=>{if(e.target===mFor)setTimeout(()=>{if(document.activeElement!==mFor)mClose()},150)});
+/* dica nos campos de texto */
+document.addEventListener("focusin",e=>{const el=e.target;if(!mentionField(el)||el.dataset.mhint||S.demo||!S.mp)return;el.dataset.mhint="1";if(el.placeholder&&!/@/.test(el.placeholder))el.placeholder+=" · @ para avisar alguém";else if(!el.placeholder)el.placeholder="Escreve @ para avisar alguém por email"});
+
+/* =========================================================
+   ObraFlow · Tarefas e dúvidas na planta (gotas) — ficha completa ao estilo Fieldwire
+   Cada gota: tipo (tarefa/dúvida), estado (Aberta → Em curso → Concluída → Verificada),
+   especialidade, prioridade, responsável, seguidores, início/prazo, horas e custo,
+   etiquetas, checklist (com modelos), fotos e ficheiros, equipamento ligado,
+   tarefas relacionadas e histórico com conversa (@ avisa por email).
+   Integrações: ligação direta, WhatsApp, email, Google Calendar / Outlook (.ics),
+   relatório PDF com recorte da planta, Excel/CSV e importação de tarefas do Fieldwire.
+   Guardam-se na coleção "issues" (kind "tarefa"/"duvida"; x,y na planta).
+   ========================================================= */
+const TK={tarefa:{n:"Tarefa",c:"#2563eb",g:"✓"},duvida:{n:"Dúvida",c:"#7c3aed",g:"?"}};
+const TST={aberta:"Aberta",curso:"Em curso",resolvida:"Concluída",verificada:"Verificada"};
+const TCAT={sadi:{n:"SADI / Deteção de incêndio",c:"#e11d48"},ele:{n:"Eletricidade",c:"#d97706"},avac:{n:"AVAC",c:"#0284c7"},hid:{n:"Hidráulica / Águas",c:"#1d4ed8"},
+ tel:{n:"Telecomunicações / ITED",c:"#7c3aed"},seg:{n:"Segurança (CCTV / Intrusão / Acessos)",c:"#0f766e"},cc:{n:"Construção civil",c:"#78716c"},arq:{n:"Arquitetura / Acabamentos",c:"#a16207"},out:{n:"Outros",c:"#475569"}};
+const tSt=t=>t.status==="resolvida"&&t.verifiedAt?"verificada":(t.status||"aberta");
+const tStN=(t,st)=>(st||tSt(t))==="resolvida"&&t.kind==="duvida"?"Respondida":TST[st||tSt(t)];
+const tCol=t=>(TCAT[t.cat]||{}).c||(TK[t.kind]||TK.tarefa).c;
+const isTk=x=>x&&(x.kind==="tarefa"||x.kind==="duvida");
+S.movingTask=null;
+const TFILT=["todas","abertas","minhas","nenhuma"],TFILT_N={todas:"Todas",abertas:"Só abertas",minhas:"Só as minhas",nenhuma:"Escondidas"};
+let tFilt=(()=>{try{const v=localStorage.getItem("of-tasks-f");return TFILT.includes(v)?v:"todas"}catch(e){return"todas"}})();
+function planTasks(pid){return S.issues.filter(x=>isTk(x)&&x.planId===(pid||S.planId)&&x.x!=null)}
+function nextSeq(){return S.issues.reduce((m,x)=>Math.max(m,+x.seq||0),0)+1}
+const tRef=t=>`${(TK[t.kind]||TK.tarefa).n} #${t.seq||""}`;
+const tLink=t=>location.origin+location.pathname+`#tarefa=${encodeURIComponent(t.id)}${S.projectId?"&obra="+encodeURIComponent(S.projectId):""}`;
+
+/* ---------- botão de modo e filtro das gotas ---------- */
+(()=>{const mk=$("mMark");if(!mk)return;const b=document.createElement("button");b.id="mTask";b.type="button";b.setAttribute("aria-pressed","false");b.title="Toca na planta para criar uma tarefa ou uma dúvida nesse ponto";
+ b.innerHTML=`<svg class="gico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s-7-6.4-7-12a7 7 0 0 1 14 0c0 5.6-7 12-7 12z"/></svg>Tarefa / dúvida`;mk.after(b);
+ b.onclick=()=>{S.mode=S.mode==="task"?"nav":"task";S.movingTask=null;render()}})();
+function taskHint(){return S.movingTask?`<b>Colocar/mover:</b> toca no sítio da tarefa/dúvida na planta. <button class="btn sm" id="tmCancel">Cancelar</button>`:`<b>Tarefa / dúvida:</b> toca no ponto da planta onde queres criar uma tarefa ou colocar uma dúvida.`}
+document.addEventListener("click",e=>{if(e.target.id==="tmCancel"){S.movingTask=null;render()}});
+(()=>{const m=$("actMenu");if(!m)return;const b=document.createElement("button");b.type="button";b.className="btn";b.id="tkShow";const lab=()=>b.textContent="Gotas na planta: "+TFILT_N[tFilt]+" ▸";lab();
+ b.onclick=()=>{tFilt=TFILT[(TFILT.indexOf(tFilt)+1)%TFILT.length];try{localStorage.setItem("of-tasks-f",tFilt)}catch(e){}lab();toast("Gotas na planta: "+TFILT_N[tFilt]);render()};m.appendChild(b)})();
+
+/* ---------- desenhar as gotas ---------- */
+function renderTasks(p){stage.querySelectorAll(".tpin").forEach(e=>e.remove());if(!p||tFilt==="nenhuma"||S.swap)return;const td=today();
+ for(const t of planTasks(p.id)){const done=t.status==="resolvida";if(tFilt==="abertas"&&done)continue;if(tFilt==="minhas"&&t.assignee!==S.meId&&t.createdBy!==S.meId&&!(t.followers||[]).includes(S.meId))continue;
+  const k=TK[t.kind];const el=document.createElement("div");const late=!done&&t.due&&t.due<td;const ck=t.checklist||[],cd=ck.filter(c=>c.done).length;
+  el.className="tpin"+(done?" done":"")+(t.verifiedAt?" ver":"")+(late?" late":"")+(S.taskSel===t.id?" sel":"")+(t.prio==="alta"?" hi":"");el.dataset.t=t.id;el.style.left=t.x*p.w+"px";el.style.top=t.y*p.h+"px";el.style.scale=String(1/view.z);el.style.setProperty("--c",tCol(t));
+  el.title=`${tRef(t)} · ${t.title||t.text||""}${t.assignee?" · "+nameOf(t.assignee):""}${ck.length?` · checklist ${cd}/${ck.length}`:""}`;
+  el.innerHTML=`<svg viewBox="0 0 30 40" aria-hidden="true"><path d="M15 39C15 39 2.5 25.5 2.5 14.5a12.5 12.5 0 0 1 25 0C27.5 25.5 15 39 15 39z"/><text x="15" y="19.5">${done?"✓":k.g}</text></svg><span>${k.n.slice(0,1)}${t.seq||""}${ck.length&&!done?` <em>${cd}/${ck.length}</em>`:""}</span>`;stage.appendChild(el)}}
+const scalePinsBase=scalePins;scalePins=function(){scalePinsBase();stage.querySelectorAll(".tpin").forEach(el=>el.style.scale=String(1/view.z))};
+function taskClick(e){const pt=toPlan(e);if(!pt)return;
+ if(S.movingTask){const id=S.movingTask;S.movingTask=null;const t=S.issues.find(x=>x.id===id);tUpd(t,{x:pt.x,y:pt.y,planId:S.planId},t&&t.x==null?"colocou na planta "+planName(S.planId):"mudou a posição na planta");toast("Posição guardada.");render();return}
+ if(!S.canWrite){toast("Não tens permissão para criar tarefas nesta obra.");return}
+ newTask(pt)}
+/* gravar com histórico */
+function tUpd(t,patch,logT){if(!t)return;const p={...patch,updatedAt:now(),updatedBy:S.meId};if(logT)p.log=[...(t.log||[]),{at:now(),by:S.meId,t:logT}].slice(-80);return api.update("issues",t.id,p)}
+
+/* ---------- diálogo ---------- */
+(()=>{const d=document.createElement("dialog");d.id="dlgTask";d.innerHTML=`<div class="dlg tdlg" id="tkBody"></div>`;document.body.appendChild(d);
+ const inp=document.createElement("input");inp.type="file";inp.id="tkFile";inp.hidden=true;document.body.appendChild(inp);
+ d.addEventListener("close",()=>{S.taskSel=null;render()})})();
+function pickFile(accept){return new Promise(res=>{const i=$("tkFile");i.accept=accept||"";i.multiple=true;i.value="";i.onchange=()=>res([...i.files]);i.click()})}
+function peopleOpts(sel,none){return`<option value="">${none||"Sem responsável"}</option>`+projPeople().map(p=>`<option value="${esc(p.id)}"${sel===p.id?" selected":""}>${esc(p.name)}</option>`).join("")}
+const catOpts=sel=>`<option value="">Sem especialidade</option>`+Object.entries(TCAT).map(([k,v])=>`<option value="${k}"${sel===k?" selected":""}>${esc(v.n)}</option>`).join("");
+const prioOpts=sel=>Object.entries(PRIO).map(([k,n])=>`<option value="${k}"${(sel||"media")===k?" selected":""}>${n}</option>`).join("");
+let tkDraft=null;
+function newTask(pt,base){tkDraft={kind:"tarefa",title:"",text:"",assignee:"",due:"",start:"",prio:"media",cat:"",photos:[],checklist:[],x:pt?pt.x:null,y:pt?pt.y:null,planId:S.planId,...(base||{})};
+ if(!base){try{const last=JSON.parse(localStorage.getItem("of-tk-last")||"{}");if(last.kind)tkDraft.kind=last.kind;if(last.cat)tkDraft.cat=last.cat}catch(e){}}
+ drawNew();$("dlgTask").showModal();setTimeout(()=>$("tkTitle").focus(),60)}
+function tplList(){return(S.meta&&S.meta.taskTpl)||[]}
+function drawNew(){const D=tkDraft;const tpls=tplList();$("tkBody").innerHTML=`<div class="tdh"><h3>Novo ponto na planta</h3><button type="button" class="btn sm" id="tkX">Fechar</button></div>
+ <div class="tkinds">${Object.entries(TK).map(([k,v])=>`<button type="button" data-tk="${k}" class="${D.kind===k?"on":""}" style="--c:${v.c}"><i><b>${v.g}</b></i><span><b>${v.n}</b><small>${k==="duvida"?"Pergunta a esclarecer (cota, material, localização…)":"Trabalho a fazer neste ponto"}</small></span></button>`).join("")}</div>
+ <label class="f">Título<input id="tkTitle" value="${esc(D.title)}" placeholder="${D.kind==="duvida"?"ex.: Confirmar altura do detetor no corredor":"ex.: Passar cabo até ao quadro"}"></label>
+ <label class="f">Descrição<textarea id="tkText" rows="3" placeholder="Detalhes. Escreve @ para avisar alguém por email.">${esc(D.text)}</textarea></label>
+ <div class="tgrid"><label class="f">Responsável<select id="tkWho">${peopleOpts(D.assignee)}</select></label><label class="f">Especialidade<select id="tkCat">${catOpts(D.cat)}</select></label>
+  <label class="f">Prioridade<select id="tkPrio">${prioOpts(D.prio)}</select></label><label class="f">Início<input type="date" id="tkStart" value="${esc(D.start)}"></label><label class="f">Prazo<input type="date" id="tkDue" value="${esc(D.due)}"></label>
+  ${tpls.length?`<label class="f">Checklist<select id="tkTpl"><option value="">Sem modelo</option>${tpls.map((t,i)=>`<option value="${i}"${D.tpl===String(i)?" selected":""}>${esc(t.name)} (${t.items.length})</option>`).join("")}</select></label>`:""}</div>
+ <div class="tph">${D.photos.map(r=>`<img data-ref="${esc(r)}" alt="">`).join("")}<button type="button" class="btn sm" id="tkAddPh">+ Foto</button></div>
+ <div class="toolrow" style="justify-content:flex-end"><button type="button" class="btn" id="tkCancel">Cancelar</button><button type="button" class="btn primary" id="tkCreate">Criar ${TK[D.kind].n.toLowerCase()}</button></div>`;
+ hydrate($("tkBody"));const keep=()=>{D.title=$("tkTitle").value;D.text=$("tkText").value;D.assignee=$("tkWho").value;D.due=$("tkDue").value;D.start=$("tkStart").value;D.prio=$("tkPrio").value;D.cat=$("tkCat").value;const tp=$("tkTpl");if(tp)D.tpl=tp.value};
+ $("tkBody").querySelectorAll("[data-tk]").forEach(b=>b.onclick=()=>{keep();D.kind=b.dataset.tk;drawNew()});
+ $("tkX").onclick=$("tkCancel").onclick=()=>$("dlgTask").close();
+ $("tkAddPh").onclick=async()=>{keep();const fs=await pickFile("image/*");for(const f of fs){try{D.photos.push(await putFile(await shrink(f,2048,.9),"image/jpeg"))}catch(err){toast("Foto não guardada: "+err.message)}}drawNew()};
+ $("tkCreate").onclick=async()=>{keep();if(!D.title.trim()){$("tkTitle").focus();toast("Escreve um título.");return}const id=uid();
+  const tp=D.tpl!==undefined&&D.tpl!==""?tplList()[+D.tpl]:null;const checklist=[...(D.checklist||[]),...(tp?tp.items.map(t=>({id:uid(),t,done:false})):[])];
+  try{localStorage.setItem("of-tk-last",JSON.stringify({kind:D.kind,cat:D.cat}))}catch(e){}
+  await api.set("issues",id,{kind:D.kind,seq:nextSeq(),title:D.title.trim(),text:D.text.trim(),assignee:D.assignee||null,due:D.due||"",start:D.start||"",prio:D.prio,cat:D.cat||"",
+   photo:D.photos[0]||null,photos:D.photos,files:D.files||[],planId:D.planId,x:D.x,y:D.y,itemId:null,linkItem:D.linkItem||null,status:"aberta",comments:[],checklist,followers:[],tags:D.tags||[],related:D.related||[],
+   hours:D.hours||"",cost:D.cost||"",log:[{at:now(),by:S.meId,t:D.dupOf?"criou (cópia de "+D.dupOf+")":"criou"}],createdBy:S.meId,createdAt:now()});
+  S.mode="nav";toast(`${TK[D.kind].n} criada${D.assignee&&D.assignee!==S.meId?" — "+nameOf(D.assignee)+" vai ser avisado":""}.`);openTask(id)}}
+function openTask(id){const t=S.issues.find(x=>x.id===id);if(!t)return;S.taskSel=id;drawTask();const d=$("dlgTask");if(!d.open)d.showModal();render()}
+function canEditTask(t){return S.canWrite&&(S.isCoord||S.isProjAdmin||t.createdBy===S.meId||t.assignee===S.meId||(t.followers||[]).includes(S.meId))}
+const canVerify=t=>S.canWrite&&(S.isCoord||S.isProjAdmin||t.createdBy===S.meId);
+function tFiles(t){return[...new Set([...(t.photos||[]),t.photo].filter(Boolean))]}
+function drawTask(){const t=S.issues.find(x=>x.id===S.taskSel);if(!t){$("dlgTask").close();return}const k=TK[t.kind]||TK.tarefa,can=canEditTask(t),td=today(),st=tSt(t);
+ const late=t.status!=="resolvida"&&t.due&&t.due<td;const cm=t.comments||[],ck=t.checklist||[],cd=ck.filter(c=>c.done).length,fol=t.followers||[],fls=t.files||[],rel=(t.related||[]).map(id=>S.issues.find(x=>x.id===id)).filter(Boolean);
+ const items=S.items.filter(i=>i.planId===t.planId).sort((a,b)=>String(a.code).localeCompare(String(b.code)));const li=t.linkItem&&S.items.find(i=>i.id===t.linkItem);
+ const tl=[...cm.map(c=>({...c,ty:"c"})),...(t.log||[]).map(l=>({...l,ty:"l"}))].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+ const dis=can?"":" disabled";
+ $("tkBody").innerHTML=`<div class="tdh"><span class="tkind k-${t.kind}" style="background:${tCol(t)}">${tRef(t)}</span><span class="tst s-${st}">${tStN(t)}</span>${late?`<span class="tst s-late">Atrasada</span>`:""}<span style="flex:1"></span>
+  <div class="actwrap tkshare"><button type="button" class="btn sm" id="tkSh">Partilhar ▾</button><div class="actmenu" id="tkShM" hidden>
+   <button class="btn" data-sh="link">Copiar ligação</button><button class="btn" data-sh="wa">Enviar por WhatsApp</button><button class="btn" data-sh="mail">Enviar por email</button>
+   <button class="btn" data-sh="gcal"${t.due||t.start?"":" disabled"}>Adicionar ao Google Calendar</button><button class="btn" data-sh="ics"${t.due||t.start?"":" disabled"}>Calendário Outlook / iPhone (.ics)</button>
+   <button class="btn" data-sh="pdf">Relatório PDF da ${t.kind==="duvida"?"dúvida":"tarefa"}</button></div></div>
+  <button type="button" class="btn sm" id="tkX">Fechar</button></div>
+ ${can?`<input class="tti" id="tkT" value="${esc(t.title||"")}" aria-label="Título">`:`<h3 class="tt">${esc(t.title||"(sem título)")}</h3>`}
+ <small class="muted">Criada por ${esc(nameOf(t.createdBy))} · ${fmtDate(t.createdAt)} · ${esc(planName(t.planId))}${t.x==null?" · <b>sem posição na planta</b>":""}</small>
+ ${can?`<textarea id="tkD" class="tdi" rows="2" placeholder="Descrição (@ para avisar alguém)">${esc(t.text||"")}</textarea>`:t.text?`<p class="tdesc">${esc(t.text)}</p>`:""}
+ ${can?`<div class="seg tstseg">${["aberta","curso","resolvida","verificada"].map(s=>`<button type="button" data-tst="${s}" aria-pressed="${st===s}"${s==="verificada"&&!canVerify(t)?' disabled title="Só quem criou ou a coordenação pode verificar"':""}>${tStN(t,s)}</button>`).join("")}</div>`:""}
+ <div class="tgrid">
+  <label class="f">Responsável<select id="tkWho"${dis}>${peopleOpts(t.assignee||"")}</select></label>
+  <label class="f">Especialidade<select id="tkCat"${dis}>${catOpts(t.cat||"")}</select></label>
+  <label class="f">Prioridade<select id="tkPrio"${dis}>${prioOpts(t.prio)}</select></label>
+  <label class="f">Início<input type="date" id="tkStart" value="${esc(t.start||"")}"${dis}></label>
+  <label class="f">Prazo<input type="date" id="tkDue" value="${esc(t.due||"")}"${dis}${late?' class="late"':""}></label>
+  <label class="f">Horas (mão de obra)<input type="number" min="0" step="0.5" id="tkHrs" value="${esc(t.hours||"")}" placeholder="0"${dis}></label>
+  <label class="f">Custo (€)<input type="number" min="0" step="0.01" id="tkCost" value="${esc(t.cost||"")}" placeholder="0,00"${dis}></label>
+  <label class="f">Equipamento ligado<select id="tkItem"${dis}><option value="">Nenhum</option>${items.map(i=>`<option value="${esc(i.id)}"${t.linkItem===i.id?" selected":""}>${esc(i.code||"")}${i.devId?" · "+esc(i.devId):""}</option>`).join("")}</select></label>
+  <label class="f">Etiquetas<input id="tkTags" value="${esc((t.tags||[]).join(", "))}" placeholder="ex.: piso 3, urgente"${dis}></label></div>
+ ${li?`<div class="tli"><button type="button" class="linkb" id="tkOpenItem">Abrir equipamento ${esc(li.code||"")}</button></div>`:""}
+ <div class="tsec"><h4>Seguidores <small>recebem os avisos</small></h4><div class="tfol">${fol.map(u=>`<span class="pchip">${esc(nameOf(u))}${can?`<button type="button" data-unf="${esc(u)}" aria-label="Retirar">×</button>`:""}</span>`).join("")||`<span class="muted">Ninguém.</span>`}
+  ${can?`<select id="tkFol"><option value="">+ Adicionar…</option>${projPeople().filter(p=>!fol.includes(p.id)).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")}</select>`:""}
+  ${S.meId&&!fol.includes(S.meId)&&t.assignee!==S.meId?`<button type="button" class="btn sm" id="tkFollow">Seguir</button>`:fol.includes(S.meId)?`<button type="button" class="btn sm" id="tkUnfollow">Deixar de seguir</button>`:""}</div></div>
+ <div class="tsec"><h4>Checklist <small>${ck.length?`${cd}/${ck.length} · ${Math.round(cd/ck.length*100)}%`:""}</small>${can&&tplList().length?`<select id="tkTplA" class="sm"><option value="">Aplicar modelo…</option>${tplList().map((x,i)=>`<option value="${i}">${esc(x.name)}</option>`).join("")}</select>`:""}${can&&ck.length?`<button type="button" class="linkb" id="tkTplS">Guardar como modelo</button>`:""}</h4>
+  ${ck.length?`<div class="tbar"><i style="width:${cd/ck.length*100}%"></i></div>`:""}
+  <div class="tck">${ck.map(c=>`<label class="${c.done?"done":""}"><input type="checkbox" data-ck="${esc(c.id)}"${c.done?" checked":""}${dis}><span>${esc(c.t)}</span>${c.done&&c.by?`<small>${esc(initials(nameOf(c.by)))}</small>`:""}${can?`<button type="button" data-ckx="${esc(c.id)}" aria-label="Apagar">×</button>`:""}</label>`).join("")}</div>
+  ${can?`<div class="tcadd"><input id="tkCkN" placeholder="Novo ponto da checklist… (Enter)"><button type="button" class="btn sm" id="tkCkA">Adicionar</button></div>`:""}</div>
+ <div class="tsec"><h4>Fotos e ficheiros</h4><div class="tph">${tFiles(t).map(r=>`<img data-ref="${esc(r)}" data-pv="${esc(r)}" alt="">`).join("")}
+  ${fls.map((f,i)=>`<button type="button" class="tfile" data-fo="${i}"><b>${esc(docExt(f.name).slice(0,4))}</b><span>${esc(f.name)}</span></button>`).join("")}
+  ${can?`<button type="button" class="btn sm" id="tkAddPh">+ Foto</button><button type="button" class="btn sm" id="tkAddF">+ Ficheiro</button>`:""}${!tFiles(t).length&&!fls.length&&!can?`<span class="muted">Sem anexos.</span>`:""}</div></div>
+ <div class="tsec"><h4>Relacionadas</h4><div class="tfol">${rel.map(r=>`<span class="pchip tlink" data-rel="${esc(r.id)}" style="--c:${tCol(r)}"><i></i>${esc(tRef(r))} ${esc(String(r.title||"").slice(0,30))}${can?`<button type="button" data-unrel="${esc(r.id)}" aria-label="Retirar">×</button>`:""}</span>`).join("")||`<span class="muted">Nenhuma.</span>`}
+  ${can?`<select id="tkRel"><option value="">+ Ligar…</option>${S.issues.filter(x=>isTk(x)&&x.id!==t.id&&!(t.related||[]).includes(x.id)).map(x=>`<option value="${esc(x.id)}">${esc(tRef(x))} · ${esc(String(x.title||"").slice(0,40))}</option>`).join("")}</select>`:""}</div></div>
+ <div class="tconv"><h4>${t.kind==="duvida"?"Respostas e histórico":"Conversa e histórico"} <small>${cm.length} mensage${cm.length===1?"m":"ns"}</small></h4>
+  ${tl.map(c=>c.ty==="l"?`<div class="tlog"><b>${esc(nameOf(c.by))}</b> ${esc(c.t)} · ${fmtDate(c.at)}</div>`:`<div class="tc${c.by===S.meId?" me":""}"><span class="ini">${esc(initials(nameOf(c.by)))}</span><div><small><b>${esc(nameOf(c.by))}</b> · ${fmtDate(c.at)}</small><p>${esc(c.text)}</p>${c.photo?`<img data-ref="${esc(c.photo)}" data-pv="${esc(c.photo)}" class="tcph" alt="">`:""}</div></div>`).join("")}
+  ${S.meId?`<div class="tcin"><textarea id="tkMsg" rows="2" placeholder="${t.kind==="duvida"?"Responder…":"Escrever mensagem…"} (@ para avisar alguém)"></textarea><div class="tcb"><button type="button" class="btn sm" id="tkMsgPh" title="Juntar foto à mensagem">📷</button><button type="button" class="btn primary" id="tkSend">Enviar</button></div></div>`:""}</div>
+ <div class="toolrow"><button type="button" class="btn sm" id="tkGo">${t.x==null?"Colocar na planta":"Ver na planta"}</button>${can?`<button type="button" class="btn sm" id="tkMove">Mover</button><button type="button" class="btn sm" id="tkDup">Duplicar</button><span style="flex:1"></span><button type="button" class="btn sm danger" id="tkDel">Apagar</button>`:""}</div>`;
+ hydrate($("tkBody"));const B=$("tkBody");
+ B.querySelectorAll("[data-pv]").forEach(im=>im.onclick=()=>openPhoto(null,im.dataset.pv));
+ $("tkX").onclick=()=>$("dlgTask").close();
+ const up=(patch,msg,logT)=>{tUpd(t,patch,logT);if(msg)toast(msg);setTimeout(drawTask,60)};
+ /* partilhar / integrações */
+ $("tkSh").onclick=e=>{e.stopPropagation();$("tkShM").hidden=!$("tkShM").hidden};
+ B.querySelectorAll("[data-sh]").forEach(b=>b.onclick=()=>{$("tkShM").hidden=true;tShare(t,b.dataset.sh)});
+ if(can){
+  $("tkT").onchange=e=>{const v=e.target.value.trim();if(v)up({title:v},null,"mudou o título")};
+  $("tkD").onchange=e=>up({text:e.target.value.trim()},null,"editou a descrição");
+  $("tkWho").onchange=e=>up({assignee:e.target.value||null},e.target.value?nameOf(e.target.value)+" vai ser avisado.":"Sem responsável.",e.target.value?"atribuiu a "+nameOf(e.target.value):"retirou o responsável");
+  $("tkCat").onchange=e=>up({cat:e.target.value},null,"especialidade: "+((TCAT[e.target.value]||{}).n||"nenhuma"));
+  $("tkPrio").onchange=e=>up({prio:e.target.value},null,"prioridade: "+PRIO[e.target.value]);
+  $("tkStart").onchange=e=>up({start:e.target.value||""},null,"início: "+(e.target.value?fmtDay(e.target.value):"—"));
+  $("tkDue").onchange=e=>up({due:e.target.value||""},null,"prazo: "+(e.target.value?fmtDay(e.target.value):"—"));
+  $("tkHrs").onchange=e=>up({hours:e.target.value},null,"horas: "+(e.target.value||"—"));
+  $("tkCost").onchange=e=>up({cost:e.target.value},null,"custo: "+(e.target.value?e.target.value+" €":"—"));
+  $("tkItem").onchange=e=>up({linkItem:e.target.value||null},null,e.target.value?"ligou ao equipamento "+((S.items.find(i=>i.id===e.target.value)||{}).code||""):"desligou o equipamento");
+  $("tkTags").onchange=e=>up({tags:[...new Set(e.target.value.split(/[,;#]/).map(s=>s.trim()).filter(Boolean))]},null,"etiquetas: "+(e.target.value||"—"));
+  B.querySelectorAll("[data-tst]").forEach(b=>b.onclick=()=>{const s=b.dataset.tst;if(s===st)return;
+   const p=s==="verificada"?{status:"resolvida",resolvedBy:t.resolvedBy||S.meId,resolvedAt:t.resolvedAt||now(),verifiedBy:S.meId,verifiedAt:now()}:s==="resolvida"?{status:s,resolvedBy:S.meId,resolvedAt:now(),verifiedBy:null,verifiedAt:null}:{status:s,resolvedBy:null,resolvedAt:null,verifiedBy:null,verifiedAt:null};
+   if(s==="resolvida"&&ck.length&&cd<ck.length&&!confirm(`A checklist tem ${ck.length-cd} ponto(s) por fazer. Marcar como ${tStN(t,s).toLowerCase()} mesmo assim?`))return;
+   up(p,tStN(t,s),"estado: "+tStN(t,s))});
+  const fs=$("tkFol");if(fs)fs.onchange=e=>{const u=e.target.value;if(u)up({followers:[...fol,u]},nameOf(u)+" passa a seguir.","adicionou "+nameOf(u)+" aos seguidores")};
+  B.querySelectorAll("[data-unf]").forEach(b=>b.onclick=()=>up({followers:fol.filter(x=>x!==b.dataset.unf)},null,"retirou "+nameOf(b.dataset.unf)+" dos seguidores"));
+  B.querySelectorAll("[data-ck]").forEach(c=>c.onchange=()=>{const it=ck.find(x=>x.id===c.dataset.ck);up({checklist:ck.map(x=>x.id===it.id?{...x,done:c.checked,by:c.checked?S.meId:null,at:c.checked?now():null}:x)},null,(c.checked?"concluiu":"reabriu")+" «"+it.t+"»")});
+  B.querySelectorAll("[data-ckx]").forEach(b=>b.onclick=e=>{e.preventDefault();const it=ck.find(x=>x.id===b.dataset.ckx);up({checklist:ck.filter(x=>x.id!==it.id)},null,"apagou «"+it.t+"» da checklist")});
+  const addCk=()=>{const v=$("tkCkN").value.trim();if(!v)return;const lines=v.split(/\n/).map(s=>s.trim()).filter(Boolean);up({checklist:[...ck,...lines.map(x=>({id:uid(),t:x,done:false}))]},null,"juntou à checklist: "+lines.join(", "));setTimeout(()=>{const n=$("tkCkN");if(n)n.focus()},120)};
+  $("tkCkA").onclick=addCk;$("tkCkN").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();addCk()}};
+  const ta=$("tkTplA");if(ta)ta.onchange=e=>{const tp=tplList()[+e.target.value];if(tp)up({checklist:[...ck,...tp.items.map(x=>({id:uid(),t:x,done:false}))]},"Modelo aplicado.","aplicou o modelo «"+tp.name+"»")};
+  const ts=$("tkTplS");if(ts)ts.onclick=()=>{const name=prompt("Nome do modelo de checklist:",(TCAT[t.cat]||{}).n||t.title);if(!name)return;const list=[...tplList().filter(x=>x.name!==name),{name,items:ck.map(c=>c.t)}];S.meta={...S.meta,taskTpl:list};api.set("meta","project",{...S.meta});toast("Modelo «"+name+"» guardado para esta obra.")};
+  $("tkAddPh").onclick=async()=>{const fs=await pickFile("image/*");const refs=[];for(const f of fs){try{refs.push(await putFile(await shrink(f,2048,.9),"image/jpeg"))}catch(err){toast("Foto não guardada: "+err.message)}}if(refs.length)up({photos:[...(t.photos||[]),...refs],photo:t.photo||refs[0]},refs.length+" foto(s) juntada(s).","juntou "+refs.length+" foto(s)")};
+  $("tkAddF").onclick=async()=>{const fs=await pickFile("");const add=[];for(const f of fs){try{add.push({ref:await putFile(f,f.type||"application/octet-stream"),name:f.name,type:f.type||"",size:f.size})}catch(err){toast(f.name+": "+err.message)}}if(add.length)up({files:[...fls,...add]},"Ficheiro juntado.","juntou "+add.map(f=>f.name).join(", "))};
+  const rs=$("tkRel");if(rs)rs.onchange=e=>{const id=e.target.value;if(!id)return;const o=S.issues.find(x=>x.id===id);up({related:[...(t.related||[]),id]},null,"ligou a "+tRef(o));if(o&&!(o.related||[]).includes(t.id))tUpd(o,{related:[...(o.related||[]),t.id]},"ligou a "+tRef(t))};
+  B.querySelectorAll("[data-unrel]").forEach(b=>b.onclick=e=>{e.stopPropagation();const id=b.dataset.unrel,o=S.issues.find(x=>x.id===id);up({related:(t.related||[]).filter(x=>x!==id)},null,"desligou "+(o?tRef(o):""));if(o)tUpd(o,{related:(o.related||[]).filter(x=>x!==t.id)})});
+  $("tkMove").onclick=()=>{S.movingTask=t.id;$("dlgTask").close();if(S.view!=="obra"||S.planId!==t.planId)openPlan(t.planId);toast("Toca no novo sítio na planta.")};
+  $("tkDup").onclick=()=>{$("dlgTask").close();newTask(t.x!=null?{x:Math.min(.99,t.x+.02),y:t.y}:null,{kind:t.kind,title:t.title,text:t.text,assignee:t.assignee||"",prio:t.prio,cat:t.cat||"",start:t.start||"",due:t.due||"",tags:t.tags||[],hours:t.hours,cost:t.cost,photos:[],files:[],planId:t.planId,linkItem:t.linkItem,checklist:(t.checklist||[]).map(c=>({id:uid(),t:c.t,done:false})),dupOf:tRef(t)})};
+  $("tkDel").onclick=()=>{const b=$("tkDel");if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Confirmar apagar";return}api.del("issues",t.id);$("dlgTask").close();toast(k.n+" apagada.")}}
+ B.querySelectorAll("[data-fo]").forEach(b=>b.onclick=async()=>{const f=fls[+b.dataset.fo];try{const bl=await blobOf(f.ref);const blob=bl.type?bl:new Blob([bl],{type:f.type});if(/pdf|image\//.test(f.type)){const u=URL.createObjectURL(blob);if(!window.open(u,"_blank"))saveBlob(f.name,blob)}else saveBlob(f.name,blob)}catch(e){toast("Ficheiro indisponível.")}});
+ B.querySelectorAll("[data-rel]").forEach(el=>el.onclick=e=>{if(e.target.closest("button"))return;openTask(el.dataset.rel)});
+ const oi=$("tkOpenItem");if(oi)oi.onclick=()=>{$("dlgTask").close();openItem(t.linkItem)};
+ const fw=$("tkFollow");if(fw)fw.onclick=()=>{tUpd(t,{followers:[...fol,S.meId]},"passou a seguir");toast("Vais receber os avisos desta "+(t.kind==="duvida"?"dúvida":"tarefa")+".");setTimeout(drawTask,60)};
+ const uf=$("tkUnfollow");if(uf)uf.onclick=()=>{tUpd(t,{followers:fol.filter(x=>x!==S.meId)},"deixou de seguir");setTimeout(drawTask,60)};
+ let msgPh=null;const mp=$("tkMsgPh");if(mp)mp.onclick=async()=>{const fs=await pickFile("image/*");if(!fs[0])return;try{msgPh=await putFile(await shrink(fs[0],2048,.9),"image/jpeg");mp.textContent="📷 1";toast("Foto pronta: escreve a mensagem e envia.")}catch(err){toast("Foto não guardada: "+err.message)}};
+ const sd=$("tkSend");if(sd)sd.onclick=async()=>{const txt=$("tkMsg").value.trim();if(!txt&&!msgPh)return;const found=findMentions(txt);
+  const c={id:uid(),by:S.meId,at:now(),text:txt||"(foto)"};if(msgPh)c.photo=msgPh;
+  const patch={comments:[...(t.comments||[]),c],lastComment:c.text.slice(0,300),lastCommentBy:S.meId};
+  if(found.length){patch.mentions=[...new Set([...(t.mentions||[]),...found])];patch.mentionText=txt.slice(0,400);patch.followers=[...new Set([...(t.followers||[]),...found.filter(u=>u!==t.assignee)])]}
+  if(t.kind==="duvida"&&t.status==="aberta"&&t.createdBy!==S.meId)patch.status="curso";
+  await api.update("issues",t.id,{...patch,updatedAt:now(),updatedBy:S.meId});toast(found.length?"Enviado. "+found.map(nameOf).join(", ")+" vai ser avisado.":"Enviado.");setTimeout(drawTask,60)};
+ $("tkGo").onclick=()=>{$("dlgTask").close();if(t.x==null){S.movingTask=t.id;openPlan(t.planId||S.planId||(S.plans[0]||{}).id);toast("Toca no sítio da planta onde fica.");return}showTaskOnPlan(t)}}
+document.addEventListener("click",e=>{const m=$("tkShM");if(m&&!m.hidden&&!e.target.closest(".tkshare"))m.hidden=true});
+function showTaskOnPlan(t){const go1=()=>{const p=plan();if(!p||p.id!==t.planId||!$("planImg").naturalWidth){setTimeout(go1,150);return}
+  const r=viewer.getBoundingClientRect();const z=Math.max(view.z,Math.min((r.width-40)/p.w,(r.height-40)/p.h)*2.5);view.z=z;view.x=r.width/2-t.x*p.w*z;view.y=r.height/2-t.y*p.h*z;applyView();S.taskSel=t.id;render();setTimeout(()=>{S.taskSel=null},2500)};
+ if(S.view!=="obra"||S.planId!==t.planId)openPlan(t.planId);setTimeout(go1,150)}
+
+/* ---------- integrações ---------- */
+function tSummary(t){return`${tRef(t)} — ${t.title||""}\n${S.meta&&S.meta.name?"Obra: "+S.meta.name+"\n":""}Planta: ${planName(t.planId)}\nEstado: ${tStN(t)}${t.assignee?"\nResponsável: "+nameOf(t.assignee):""}${t.due?"\nPrazo: "+fmtDay(t.due):""}${t.text?"\n\n"+t.text:""}`}
+const ymd=d=>d.replace(/-/g,"");
+const addDay=d=>{const x=new Date(d+"T12:00:00");x.setDate(x.getDate()+1);return x.toISOString().slice(0,10)};
+async function tShare(t,how){const link=tLink(t),txt=tSummary(t);
+ if(how==="link"){try{await navigator.clipboard.writeText(link);toast("Ligação copiada. Quem tem acesso à obra abre diretamente esta "+(t.kind==="duvida"?"dúvida.":"tarefa."))}catch(e){prompt("Copia a ligação:",link)}}
+ else if(how==="wa")window.open("https://wa.me/?text="+encodeURIComponent(txt+"\n\n"+link),"_blank");
+ else if(how==="mail"){const to=[t.assignee,...(t.followers||[])].map(u=>(members.find(m=>m.user_id===u)||{}).email).filter(Boolean).join(",");location.href=`mailto:${encodeURIComponent(to).replace(/%2C/g,",")}?subject=${encodeURIComponent((S.meta.name?S.meta.name+" · ":"")+tRef(t)+": "+(t.title||""))}&body=${encodeURIComponent(txt+"\n\nAbrir no ObraFlow: "+link)}`}
+ else if(how==="gcal"){const a=t.start||t.due,b=t.due||t.start;window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(tRef(t)+": "+(t.title||""))}&dates=${ymd(a)}/${ymd(addDay(b))}&details=${encodeURIComponent(txt+"\n\n"+link)}&location=${encodeURIComponent((S.meta.address||S.meta.name||"")+" · "+planName(t.planId))}`,"_blank")}
+ else if(how==="ics"){const a=t.start||t.due,b=t.due||t.start;const e=s=>String(s).replace(/[\\;,]/g,m=>"\\"+m).replace(/\n/g,"\\n");
+  const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//ObraFlow//PT","BEGIN:VEVENT",`UID:${t.id}@obraflow`,`DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").slice(0,15)}Z`,`DTSTART;VALUE=DATE:${ymd(a)}`,`DTEND;VALUE=DATE:${ymd(addDay(b))}`,
+   `SUMMARY:${e(tRef(t)+": "+(t.title||""))}`,`DESCRIPTION:${e(txt+"\n\n"+link)}`,`LOCATION:${e(planName(t.planId))}`,`URL:${link}`,"BEGIN:VALARM","TRIGGER:-PT9H","ACTION:DISPLAY",`DESCRIPTION:${e(tRef(t))}`,"END:VALARM","END:VEVENT","END:VCALENDAR"].join("\r\n");
+  saveBlob(`${tRef(t).replace(/\W+/g,"_")}.ics`,new Blob([ics],{type:"text/calendar"}))}
+ else if(how==="pdf")taskReport([t])}
+/* recorte da planta à volta da gota */
+function tCrop(t){try{const im=$("planImg");const p=S.plans.find(x=>x.id===t.planId);if(t.x==null||!im||!im.naturalWidth||!p||(S.planId!==t.planId))return null;
+ const W=im.naturalWidth,H=im.naturalHeight,cw=Math.min(W,Math.max(700,W*.4)),ch=cw*.62,sx=Math.max(0,Math.min(W-cw,t.x*W-cw/2)),sy=Math.max(0,Math.min(H-ch,t.y*H-ch/2));
+ const cv=document.createElement("canvas");cv.width=900;cv.height=Math.round(900*ch/cw);const cx=cv.getContext("2d");cx.fillStyle="#fff";cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(im,sx,sy,cw,ch,0,0,cv.width,cv.height);
+ const px=(t.x*W-sx)/cw*cv.width,py=(t.y*H-sy)/ch*cv.height;cx.save();cx.translate(px,py);cx.scale(1.6,1.6);cx.translate(-15,-39);const P=new Path2D("M15 39C15 39 2.5 25.5 2.5 14.5a12.5 12.5 0 0 1 25 0C27.5 25.5 15 39 15 39z");
+ cx.fillStyle=tCol(t);cx.strokeStyle="#fff";cx.lineWidth=2;cx.fill(P);cx.stroke(P);cx.fillStyle="#fff";cx.font="800 14px sans-serif";cx.textAlign="center";cx.textBaseline="middle";cx.fillText((TK[t.kind]||TK.tarefa).g,15,15);cx.restore();
+ return cv.toDataURL("image/jpeg",.85)}catch(e){return null}}
+async function taskReport(list){const w=window.open("","_blank");if(!w){toast("O navegador bloqueou a janela do relatório. Permite janelas para este site.");return}
+ w.document.write("<p style='font-family:sans-serif'>A preparar o relatório…</p>");
+ const imgs={};for(const t of list)for(const r of tFiles(t).slice(0,6)){try{imgs[r]=await new Promise(async(res)=>{const b=await blobOf(r);const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b)})}catch(e){}}
+ const e=esc,row=(a,b)=>b?`<tr><th>${a}</th><td>${b}</td></tr>`:"";
+ const body=list.map(t=>{const ck=t.checklist||[],crop=tCrop(t);return`<section><div class="h"><span class="k" style="background:${tCol(t)}">${e(tRef(t))}</span><span class="s">${e(tStN(t))}</span></div><h2>${e(t.title||"")}</h2>
+  ${t.text?`<p>${e(t.text).replace(/\n/g,"<br>")}</p>`:""}
+  <table>${row("Planta",e(planName(t.planId)))}${row("Especialidade",e((TCAT[t.cat]||{}).n||""))}${row("Prioridade",e(PRIO[t.prio]||""))}${row("Responsável",e(t.assignee?nameOf(t.assignee):""))}${row("Seguidores",e((t.followers||[]).map(nameOf).join(", ")))}
+  ${row("Início",t.start?fmtDay(t.start):"")}${row("Prazo",t.due?fmtDay(t.due):"")}${row("Horas",e(t.hours||""))}${row("Custo",t.cost?e(t.cost)+" €":"")}${row("Etiquetas",e((t.tags||[]).join(", ")))}
+  ${row("Equipamento",e(((S.items.find(i=>i.id===t.linkItem)||{}).code)||""))}${row("Criada",e(nameOf(t.createdBy))+" · "+fmtDate(t.createdAt))}${row("Concluída",t.resolvedAt?e(nameOf(t.resolvedBy))+" · "+fmtDate(t.resolvedAt):"")}${row("Verificada",t.verifiedAt?e(nameOf(t.verifiedBy))+" · "+fmtDate(t.verifiedAt):"")}</table>
+  ${crop?`<h3>Localização na planta</h3><img class="crop" src="${crop}">`:""}
+  ${ck.length?`<h3>Checklist (${ck.filter(c=>c.done).length}/${ck.length})</h3><ul class="ck">${ck.map(c=>`<li>${c.done?"☑":"☐"} ${e(c.t)}</li>`).join("")}</ul>`:""}
+  ${tFiles(t).some(r=>imgs[r])?`<h3>Fotos</h3><div class="ph">${tFiles(t).filter(r=>imgs[r]).map(r=>`<img src="${imgs[r]}">`).join("")}</div>`:""}
+  ${(t.comments||[]).length?`<h3>${t.kind==="duvida"?"Respostas":"Mensagens"}</h3>${t.comments.map(c=>`<p class="c"><b>${e(nameOf(c.by))}</b> <small>${fmtDate(c.at)}</small><br>${e(c.text)}</p>`).join("")}`:""}</section>`}).join("");
+ w.document.open();w.document.write(`<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${e(list.length===1?tRef(list[0])+" "+(list[0].title||""):"Tarefas e dúvidas")} — ObraFlow</title><style>
+ body{font-family:Arial,sans-serif;color:#1d2421;margin:24px;font-size:13px}header{display:flex;justify-content:space-between;border-bottom:3px solid #e8a317;padding-bottom:8px;margin-bottom:16px}header b{font-size:20px}header b i{color:#e8a317;font-style:normal}
+ section{page-break-inside:avoid;margin-bottom:28px;border-bottom:1px solid #ddd;padding-bottom:16px}section+section{page-break-before:always}.h{display:flex;gap:8px}.k{color:#fff;font-weight:bold;padding:3px 10px;border-radius:99px}.s{background:#eee;padding:3px 10px;border-radius:99px;font-weight:bold}
+ h2{margin:10px 0 6px}h3{margin:16px 0 6px;font-size:14px}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eee;vertical-align:top}th{width:130px;color:#5e6b66;font-weight:normal}
+ .crop{width:100%;max-width:640px;border:1px solid #ccc;border-radius:6px}.ph{display:flex;flex-wrap:wrap;gap:8px}.ph img{width:200px;height:150px;object-fit:cover;border-radius:6px}.ck{list-style:none;padding:0}.c{background:#f5f5f2;padding:6px 10px;border-radius:6px}
+ @media print{.np{display:none}}</style></head><body><header><b>Obra<i>Flow</i></b><span>${e(S.meta.name||"Obra")} · ${fmtDate(now())}</span></header>
+ <p class="np"><button onclick="print()">Imprimir / Guardar como PDF</button></p>${body}<script>setTimeout(()=>print(),600)<\/script></body></html>`);w.document.close()}
+
+/* ---------- abrir pela ligação (#tarefa=…) ---------- */
+let tDeep=(()=>{const m=location.hash.match(/tarefa=([^&]+)(?:&obra=([^&]+))?/);if(m){try{sessionStorage.setItem("of-deep",JSON.stringify({t:decodeURIComponent(m[1]),p:m[2]?decodeURIComponent(m[2]):null}))}catch(e){}history.replaceState(null,"",location.pathname+location.search)}
+ try{return JSON.parse(sessionStorage.getItem("of-deep")||"null")}catch(e){return null}})();
+window.addEventListener("hashchange",()=>{const m=location.hash.match(/tarefa=([^&]+)(?:&obra=([^&]+))?/);if(!m)return;tDeep={t:decodeURIComponent(m[1]),p:m[2]?decodeURIComponent(m[2]):null};history.replaceState(null,"",location.pathname+location.search)});
+let tDeepTries=0;
+setInterval(()=>{if(!tDeep||!S.meId)return;if(++tDeepTries>120){tDeep=null;try{sessionStorage.removeItem("of-deep")}catch(e){}return}
+ if(tDeep.p&&S.projectId!==tDeep.p){if(typeof openProject==="function"&&(S.projects||[]).some(p=>p.id===tDeep.p)&&!tDeep.opening){tDeep.opening=1;openProject(tDeep.p)}return}
+ const t=S.issues.find(x=>x.id===tDeep.t);if(!t)return;tDeep=null;try{sessionStorage.removeItem("of-deep")}catch(e){}
+ if(t.x!=null){showTaskOnPlan(t);setTimeout(()=>openTask(t.id),700)}else openTask(t.id)},500);
+
+/* ---------- página de tarefas: abrir, exportar e importar do Fieldwire ---------- */
+const renderPageBase4=renderPage;
+renderPage=function(v){renderPageBase4(v);if(v!=="issues")return;const W=$("pageWrap");
+ W.querySelectorAll("[data-task]").forEach(el=>el.onclick=e=>{if(e.target.closest("select,input,button"))return;const t=S.issues.find(x=>x.id===el.dataset.task);if(!t)return;if(t.x!=null){showTaskOnPlan(t);setTimeout(()=>openTask(t.id),700)}else openTask(t.id)});
+ const tabs=W.querySelector(".ptabs");if(tabs&&!$("tkTools")){const d=document.createElement("div");d.className="toolrow tktools";d.id="tkTools";
+  d.innerHTML=`<span class="muted">Tarefas e dúvidas:</span><button class="btn sm" id="tkXls">Exportar Excel</button><button class="btn sm" id="tkCsv">CSV</button><button class="btn sm" id="tkRep">Relatório PDF</button>${S.canWrite?`<button class="btn sm" id="tkImp" title="Importa a exportação de tarefas do Fieldwire (Excel ou CSV)">Importar do Fieldwire</button>`:""}`;
+  tabs.after(d);$("tkXls").onclick=()=>tExport("xlsx");$("tkCsv").onclick=()=>tExport("csv");$("tkRep").onclick=()=>{const l=tList();if(!l.length){toast("Não há tarefas nem dúvidas.");return}taskReport(l)};const im=$("tkImp");if(im)im.onclick=fwImport}};
+function tList(){const k=(typeof ISF!=="undefined"&&ISF.kind)||"";return S.issues.filter(x=>isTk(x)&&(!k||k==="anomalia"||x.kind===k)).sort((a,b)=>(+a.seq||0)-(+b.seq||0))}
+function tRows(){return tList().map(t=>({"Nº":t.seq||"","Tipo":(TK[t.kind]||{}).n,"Título":t.title||"","Descrição":t.text||"","Estado":tStN(t),"Especialidade":(TCAT[t.cat]||{}).n||"","Prioridade":PRIO[t.prio]||"","Responsável":t.assignee?nameOf(t.assignee):"","Seguidores":(t.followers||[]).map(nameOf).join(", "),
+ "Início":t.start||"","Prazo":t.due||"","Horas":t.hours||"","Custo (€)":t.cost||"","Etiquetas":(t.tags||[]).join(", "),"Checklist":(t.checklist||[]).length?`${t.checklist.filter(c=>c.done).length}/${t.checklist.length}`:"","Planta":planName(t.planId),"Equipamento":((S.items.find(i=>i.id===t.linkItem)||{}).code)||"",
+ "Mensagens":(t.comments||[]).length,"Criada por":nameOf(t.createdBy),"Criada em":String(t.createdAt||"").slice(0,10),"Concluída em":String(t.resolvedAt||"").slice(0,10),"Ligação":tLink(t)}))}
+async function tExport(fmt){const rows=tRows();if(!rows.length){toast("Não há tarefas nem dúvidas para exportar.");return}const name=`Tarefas_${slug()}`;
+ if(fmt==="xlsx"){try{await loadScript(XLSX_URL);const ws=XLSX.utils.json_to_sheet(rows);ws["!cols"]=Object.keys(rows[0]).map(k=>({wch:Math.min(50,Math.max(8,k.length+2,...rows.map(r=>String(r[k]).length/1.6)))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Tarefas");
+  saveBlob(name+".xlsx",new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));return}catch(e){toast("Excel indisponível sem rede — a descarregar CSV.")}}
+ const c=v=>{v=String(v??"");return/[;"\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};saveFile(name+".csv","﻿"+[Object.keys(rows[0]).join(";"),...rows.map(r=>Object.values(r).map(c).join(";"))].join("\n"))}
+/* importação: aceita a exportação de tarefas do Fieldwire (colunas em inglês ou português) */
+const FWCOL={title:/^(title|name|task( name)?|t[ií]tulo|nome|tarefa)$/i,status:/^(status|estado)$/i,cat:/^(category|categoria|especialidade|trade)$/i,who:/^(assignee|assigned to|owner|respons[aá]vel|atribu[ií]da a)$/i,
+ prio:/^(priority|prioridade)$/i,start:/^(start( date)?|in[ií]cio|data de in[ií]cio)$/i,due:/^(end( date)?|due( date)?|prazo|fim|data de fim)$/i,plan:/^(plan|sheet|planta|folha|location|localiza[cç][aã]o)$/i,text:/^(description|descri[cç][aã]o|notes|notas|message|mensagem)$/i,
+ tags:/^(tags?|etiquetas?)$/i,hours:/^(manpower|man ?hours|horas)$/i,cost:/^(cost|custo)$/i,id:/^(id|task id|n[ºo°]?|number)$/i,check:/^(checklist|checklists)$/i};
+const fwStatus=s=>{s=normN(s);return/verif/.test(s)?"verificada":/complet|conclu|done|feito|fechad|closed/.test(s)?"resolvida":/progress|curso|andamento/.test(s)?"curso":"aberta"};
+const fwPrio=s=>{s=normN(s);return/1|high|alta|urg/.test(s)?"alta":/3|low|baixa/.test(s)?"baixa":"media"};
+const fwCat=s=>{const n=normN(s);if(!n)return"";const hit=Object.entries(TCAT).find(([k,v])=>normN(v.n).includes(n)||n.includes(normN(v.n).split(/[ /]/)[0]));if(hit)return hit[0];
+ return/fire|incend|sadi|deteç|detec/.test(n)?"sadi":/elec|eletr|electr/.test(n)?"ele":/hvac|avac|clima/.test(n)?"avac":/plumb|hidra|agua/.test(n)?"hid":/tele|ited|data|rede/.test(n)?"tel":/cctv|secur|segur|intrus|acess/.test(n)?"seg":/civil|struct|estrut/.test(n)?"cc":/arch|arquit|acaba|finish/.test(n)?"arq":"out"};
+const fwDate=s=>{s=String(s||"").trim();if(!s)return"";let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m.slice(1).join("-");m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);if(m){const y=m[3].length===2?"20"+m[3]:m[3];return`${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`}
+ const d=new Date(s);return isNaN(d)?"":d.toISOString().slice(0,10)};
+async function fwImport(){const fs=await pickFile(".xlsx,.xls,.csv,text/csv");const f=fs[0];if(!f)return;let rows=[];
+ try{if(/\.csv$/i.test(f.name)){const txt=await f.text();const sep=(txt.split("\n")[0].match(/;/g)||[]).length>(txt.split("\n")[0].match(/,/g)||[]).length?";":",";rows=csvParse(txt,sep)}
+  else{await loadScript(XLSX_URL);const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});const ws=wb.Sheets[wb.SheetNames.find(n=>/task|tarefa/i.test(n))||wb.SheetNames[0]];rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""})}}
+ catch(e){toast("Não foi possível ler o ficheiro: "+e.message);return}
+ const hi=rows.findIndex(r=>r.some(c=>FWCOL.title.test(String(c).trim())));if(hi<0){toast("Não encontrei a coluna do título (Title / Título).");return}
+ const H=rows[hi].map(c=>String(c).trim());const col={};for(const[k,re]of Object.entries(FWCOL)){const i=H.findIndex(h=>re.test(h));if(i>=0)col[k]=i}
+ const ppl=projPeople();const findP=s=>{const n=normN(s);if(!n)return null;const p=ppl.find(p=>normN(p.name)===n||normN(p.email)===n||normN(p.name).startsWith(n)||n.startsWith(normN(p.name)));return p?p.id:null};
+ const findPlan=s=>{const n=normN(s);if(!n)return null;const p=S.plans.find(p=>normN(p.name)===n)||S.plans.find(p=>normN(p.name).includes(n)||n.includes(normN(p.name)));return p?p.id:null};
+ const data=rows.slice(hi+1).filter(r=>String(r[col.title]||"").trim());if(!data.length){toast("O ficheiro não tem tarefas.");return}
+ const v=(r,k)=>col[k]!=null?String(r[col[k]]??"").trim():"";const noPlan=data.filter(r=>!findPlan(v(r,"plan"))).length;
+ if(!confirm(`Importar ${data.length} tarefa(s) de «${f.name}»?${noPlan?`\n${noPlan} sem planta reconhecida ficam na planta atual (${planName(S.planId)||"—"}), sem posição: depois usas «Colocar na planta».`:""}\nAs tarefas importadas ficam sem posição até as colocares na planta.`))return;
+ let seq=nextSeq(),n=0;for(const r of data){const st=fwStatus(v(r,"status"));const ref=v(r,"id");
+  await api.set("issues",uid(),{kind:/d[uú]vida|rfi|question|pergunta/i.test(v(r,"cat")+" "+v(r,"tags"))?"duvida":"tarefa",seq:seq++,title:v(r,"title").slice(0,200),text:v(r,"text"),status:st==="verificada"?"resolvida":st,
+   resolvedAt:st==="resolvida"||st==="verificada"?now():null,resolvedBy:st==="resolvida"||st==="verificada"?S.meId:null,verifiedAt:st==="verificada"?now():null,verifiedBy:st==="verificada"?S.meId:null,
+   cat:fwCat(v(r,"cat")),prio:fwPrio(v(r,"prio")),assignee:findP(v(r,"who")),start:fwDate(v(r,"start")),due:fwDate(v(r,"due")),planId:findPlan(v(r,"plan"))||S.planId||(S.plans[0]||{}).id||null,x:null,y:null,itemId:null,
+   tags:[...v(r,"tags").split(/[,;#]/).map(s=>s.trim()).filter(Boolean),"fieldwire"],hours:v(r,"hours"),cost:v(r,"cost"),checklist:v(r,"check")?v(r,"check").split(/\n|;|\|/).map(s=>s.replace(/^\s*[-☐☑✓x\[\]]+\s*/i,"").trim()).filter(Boolean).map(t=>({id:uid(),t,done:false})):[],
+   comments:[],followers:[],related:[],photos:[],files:[],fwId:ref||null,log:[{at:now(),by:S.meId,t:"importou do Fieldwire"+(ref?" (ID "+ref+")":"")+(v(r,"who")&&!findP(v(r,"who"))?" · responsável original: "+v(r,"who"):"")}],createdBy:S.meId,createdAt:now()});n++}
+ toast(n+" tarefa(s) importada(s) do Fieldwire.");renderPage("issues")}
+function csvParse(txt,sep){const out=[];let row=[],cell="",q=false;for(let i=0;i<txt.length;i++){const ch=txt[i];if(q){if(ch==='"'){if(txt[i+1]==='"'){cell+='"';i++}else q=false}else cell+=ch}
+ else if(ch==='"')q=true;else if(ch===sep){row.push(cell);cell=""}else if(ch==="\n"||ch==="\r"){if(ch==="\r"&&txt[i+1]==="\n")i++;row.push(cell);out.push(row);row=[];cell=""}else cell+=ch}
+ if(cell||row.length){row.push(cell);out.push(row)}return out.map(r=>r.map(c=>c.replace(/^﻿/,"")))}
+/* nomes no menu */
+(()=>{const t=document.querySelector('.side [data-nav="issues"] span:not(.cnt)');if(t)t.textContent="Tarefas e anomalias";const b=document.querySelector('.bnav [data-nav="issues"] span');if(b)b.textContent="Tarefas"})();
+
+/* =========================================================
+   ObraFlow · Notificações da plataforma (sino)
+   "Para mim": menções, atribuições, respostas e comentários nas minhas tarefas/dúvidas,
+   tarefas concluídas, prazos de hoje/ultrapassados e (coordenação) novas dúvidas.
+   "Atividade": o que acontece na obra.
+   Também aparecem como notificação do aparelho (telemóvel/computador) se a pessoa ativar.
+   ========================================================= */
+/* registo de quando alguém é identificado (@) ou recebe uma atribuição — para a notificação ter hora certa */
+const apiSetN=api.set,apiUpdN=api.update;
+function withNLog(c,id,data){if(!["items","issues","meta"].includes(c)||!data)return data;const base=(L[c]&&L[c][id])||{};const at=now(),by=S.meId;let out=data;
+ const prevM=new Set((base.mentions||[]).filter(Boolean));const newM=(data.mentions||[]).filter(u=>u&&!prevM.has(u)&&u!==by);
+ if(newM.length)out={...out,mlog:[...(base.mlog||[]),...newM.map(u=>({u,at,by,t:String(data.mentionText||"").slice(0,160)}))].slice(-30)};
+ if("assignee" in data&&data.assignee&&data.assignee!==base.assignee&&data.assignee!==by)out={...out,alog:[...(base.alog||[]),{u:data.assignee,at,by}].slice(-20)};
+ return out}
+api.set=function(c,id,data){const b=L[c]&&L[c][id];return apiSetN.call(api,c,id,withNLog(c,id,withMentions(c,id,data,b)))};
+api.update=function(c,id,patch){const b=L[c]&&L[c][id];return apiUpdN.call(api,c,id,withNLog(c,id,withMentions(c,id,patch,b)))};
+
+const isTaskK=x=>x.kind==="tarefa"||x.kind==="duvida";
+const issueLabel=x=>isTaskK(x)?`${x.kind==="duvida"?"dúvida":"tarefa"} #${x.seq||""} «${String(x.title||"").slice(0,50)}»`:`pendência${(S.items.find(i=>i.id===x.itemId)||{}).code?" "+(S.items.find(i=>i.id===x.itemId)).code:""} «${String(x.text||"").slice(0,50)}»`;
+function myNotifs(){const me=S.meId;if(!me)return[];const out=[];const td=today();
+ const add=(o)=>{if(o.at&&o.by!==me)out.push(o)};
+ for(const it of S.items){const w=`o equipamento ${it.devId||it.code||""}`.trim();
+  for(const m of it.mlog||[])if(m.u===me)add({id:`m|i|${it.id}|${m.at}`,ty:"mencao",at:m.at,by:m.by,t:`identificou-te n${w.startsWith("o ")?w:"o "+w}`,d:m.t,go:{item:it.id}});
+  for(const a of it.alog||[])if(a.u===me)add({id:`a|i|${it.id}|${a.at}`,ty:"atribuido",at:a.at,by:a.by,t:`atribuiu-te ${w}`,go:{item:it.id}});
+  if(it.assignee===me&&isLate(it))out.push({id:`p|i|${it.id}|${it.due}`,ty:"prazo",at:it.due+"T08:00:00.000Z",by:null,t:`Prazo ultrapassado: ${w}`,go:{item:it.id}})}
+ for(const x of S.issues){const lab=issueLabel(x),mine=x.createdBy===me,asg=x.assignee===me,open=x.status!=="resolvida";const go=isTaskK(x)&&x.x!=null?{task:x.id}:x.itemId?{item:x.itemId}:{view:"issues"};
+  for(const m of x.mlog||[])if(m.u===me)add({id:`m|x|${x.id}|${m.at}`,ty:"mencao",at:m.at,by:m.by,t:`identificou-te na ${lab}`,d:m.t,go});
+  const alog=x.alog||[];for(const a of alog)if(a.u===me)add({id:`a|x|${x.id}|${a.at}`,ty:"atribuido",at:a.at,by:a.by,t:`atribuiu-te a ${lab}`,d:x.due?"Prazo "+fmtDay(x.due):"",go});
+  if(asg&&!alog.length&&x.createdAt)add({id:`a|x|${x.id}|c`,ty:"atribuido",at:x.createdAt,by:x.createdBy,t:`atribuiu-te a ${lab}`,d:x.due?"Prazo "+fmtDay(x.due):"",go});
+  const fol=(x.followers||[]).includes(me);const involved=mine||asg||fol||(x.comments||[]).some(c=>c.by===me);
+  if(fol){const fl=(x.log||[]).filter(l=>/aos seguidores$/.test(l.t||"")&&l.by!==me&&(l.t||"").includes(nameOf(me))).pop();if(fl)add({id:`f|${x.id}|${fl.at}`,ty:"atribuido",at:fl.at,by:fl.by,t:`adicionou-te como seguidor da ${lab}`,go})}
+  if((mine||asg||fol)&&x.verifiedAt)add({id:`v|${x.id}|${x.verifiedAt}`,ty:"resolvida",at:x.verifiedAt,by:x.verifiedBy,t:`verificou a ${lab}`,go});
+  if(involved)for(const c of x.comments||[])if(c.by!==me&&!(x.mlog||[]).some(m=>m.u===me&&Math.abs(Date.parse(m.at)-Date.parse(c.at))<15000))add({id:`c|${x.id}|${c.id||c.at}`,ty:"comentario",at:c.at,by:c.by,t:`${x.kind==="duvida"?"respondeu à":"comentou na"} ${lab}`,d:String(c.text||"").slice(0,140),go});
+  if((mine||asg||fol)&&x.resolvedAt&&!open)add({id:`r|${x.id}|${x.resolvedAt}`,ty:"resolvida",at:x.resolvedAt,by:x.resolvedBy,t:`${x.kind==="duvida"?"marcou como respondida":x.kind==="tarefa"?"concluiu":"resolveu"} a ${lab}`,go});
+  if(asg&&open&&x.due&&x.due<=td)out.push({id:`p|x|${x.id}|${x.due}|${x.due<td?"l":"h"}`,ty:"prazo",at:x.due+"T08:00:00.000Z",by:null,t:`${x.due<td?"Prazo ultrapassado":"Prazo hoje"}: ${lab}`,go});
+  if((S.isCoord||S.isProjAdmin)&&x.kind==="duvida"&&!mine&&!asg&&x.createdAt)add({id:`n|${x.id}`,ty:"nova",at:x.createdAt,by:x.createdBy,t:`colocou uma nova ${lab}`,d:x.text?String(x.text).slice(0,140):"",go})}
+ for(const[id,v]of Object.entries(L.meta||{}))for(const m of (v&&v.mlog)||[])if(m.u===me)add({id:`m|d|${id}|${m.at}`,ty:"mencao",at:m.at,by:m.by,t:id.startsWith("diary_")?`identificou-te no diário de ${fmtDay(id.slice(6))}`:"identificou-te na obra",d:m.t,go:{view:id.startsWith("diary_")?"diary":"home"}});
+ const seen=new Set();return out.filter(o=>!seen.has(o.id)&&seen.add(o.id)).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,80)}
+
+/* estado de leitura: por pessoa e por obra, neste aparelho */
+const nKey=k=>`of-n-${k}:${S.projectId||"p0"}:${S.meId||""}`;
+const nGet=(k,d)=>{try{return JSON.parse(localStorage.getItem(nKey(k)))??d}catch(e){return d}};
+const nPut=(k,v)=>{try{localStorage.setItem(nKey(k),JSON.stringify(v))}catch(e){}};
+function nState(){return{all:nGet("all",""),ids:new Set(nGet("ids",[]))}}
+function nIsNew(o,st){return !(o.at<=st.all)&&!st.ids.has(o.id)}
+function nMark(ids){const st=nState();ids.forEach(i=>st.ids.add(i));nPut("ids",[...st.ids].slice(-400))}
+function nMarkAll(){nPut("all",now());nPut("ids",[])}
+const NTY={mencao:{c:"#7c3aed",g:"@"},atribuido:{c:"#2563eb",g:"→"},comentario:{c:"#0e7490",g:"💬"},resolvida:{c:"#15803d",g:"✓"},prazo:{c:"#c2402f",g:"!"},nova:{c:"#7c3aed",g:"?"}};
+let nTab="me";
+/* contador no sino, no título da página e no ícone da app */
+renderBell=function(){const b=$("bellN");if(!b)return;const st=nState();const n=myNotifs().filter(o=>nIsNew(o,st)).length;
+ const act=feedItems().filter(e=>e.at>feedSeen&&e.by!==S.meId).length;
+ b.hidden=!n&&!act;b.textContent=n?(n>99?"99+":n):"";b.classList.toggle("dot",!n&&!!act);
+ $("bell").title=n?`${n} notificaç${n>1?"ões":"ão"} para ti`:"Notificações";
+ const t=document.title.replace(/^\(\d+\+?\)\s*/,"");document.title=n?`(${n>99?"99+":n}) ${t}`:t;
+ try{if(navigator.setAppBadge){n?navigator.setAppBadge(n):navigator.clearAppBadge()}}catch(e){}
+ nPush()};
+openFeed=function(){const F=$("feed");const st=nState();const mine=myNotifs(),ev=feedItems(),seen=feedSeen;const nNew=mine.filter(o=>nIsNew(o,st)).length,aNew=ev.filter(e=>e.at>seen&&e.by!==S.meId).length;
+ const perm=("Notification" in window)?Notification.permission:"na";
+ const rowMe=(o,i)=>{const k=NTY[o.ty]||NTY.mencao;return`<div class="fe nf${nIsNew(o,st)?" new":""}" data-nf="${i}"><span class="nic" style="--c:${k.c}">${o.by?esc(initials(nameOf(o.by))):k.g}</span><div><span>${o.by?`<b>${esc(nameOf(o.by))}</b> `:""}${esc(o.t)}</span>${o.d?`<q>${esc(o.d)}</q>`:""}<small>${o.ty==="prazo"?"Lembrete":fmtDate(o.at)}</small></div>${nIsNew(o,st)?'<i class="ndot"></i>':""}</div>`};
+ const rowAct=(e,i)=>`<div class="fe${e.at>seen&&e.by!==S.meId?" new":""}" data-fe="${i}"><span class="ini" style="--h:${hue(e.by||"x")}">${esc(initials(nameOf(e.by)))}</span><div><b>${esc(nameOf(e.by))}</b> ${esc(e.t)}<small>${esc(e.code||"")}${e.code?" · ":""}${fmtDate(e.at)}</small></div></div>`;
+ F.innerHTML=`<h4><span>Notificações</span><span class="nh">${nTab==="me"&&nNew?`<button class="linkb" id="nfAll">Marcar todas como lidas</button>`:""}<button class="linkb" id="feedX">Fechar</button></span></h4>
+ <div class="ntabs"><button data-nt="me" class="${nTab==="me"?"on":""}">Para mim${nNew?` <b>${nNew}</b>`:""}</button><button data-nt="act" class="${nTab==="act"?"on":""}">Atividade da obra${aNew?` <b class="g">${aNew}</b>`:""}</button></div>
+ ${perm==="default"&&nTab==="me"?`<div class="npush"><span>Recebe estes avisos também no ecrã do aparelho.</span><button class="btn sm primary" id="nfPush">Ativar</button></div>`:""}
+ <div class="nlist">${nTab==="me"?(mine.map(rowMe).join("")||`<div class="empty">Sem notificações para ti.<br><small>Aparecem aqui quando alguém te identifica com @, te atribui uma tarefa, responde às tuas dúvidas ou um prazo chega.</small></div>`)
+  :(ev.map(rowAct).join("")||`<div class="empty">Sem atividade ainda.</div>`)}</div>`;
+ F.hidden=false;
+ F.querySelectorAll("[data-nt]").forEach(b=>b.onclick=e=>{e.stopPropagation();nTab=b.dataset.nt;openFeed()});
+ F.querySelectorAll("[data-nf]").forEach(el=>el.onclick=()=>{const o=mine[+el.dataset.nf];nMark([o.id]);F.hidden=true;nGo(o.go);renderBell()});
+ F.querySelectorAll("[data-fe]").forEach(el=>el.onclick=()=>{const e=ev[+el.dataset.fe];F.hidden=true;if(e.item)openItem(e.item);else if(e.doc)openDoc(e.doc)});
+ $("feedX").onclick=()=>{F.hidden=true};const ma=$("nfAll");if(ma)ma.onclick=e=>{e.stopPropagation();nMarkAll();openFeed();renderBell()};
+ const np=$("nfPush");if(np)np.onclick=async e=>{e.stopPropagation();await nAskPush();openFeed()};
+ if(nTab==="act"){feedSeen=now();try{localStorage.setItem("cp-feed-seen",feedSeen)}catch(x){}}
+ renderBell()};
+function nGo(g){if(!g)return;if(g.task){const t=S.issues.find(x=>x.id===g.task);if(t){showTaskOnPlan(t);setTimeout(()=>openTask(t.id),700)}}else if(g.item)openItem(g.item);else if(g.view)go(g.view)}
+
+/* notificações do aparelho (enquanto a app está aberta ou em segundo plano) */
+async function nAskPush(){if(!("Notification" in window)){toast("Este navegador não permite notificações. No iPhone, instala a app no ecrã principal primeiro.");return}
+ const r=await Notification.requestPermission();if(r==="granted"){nPut("pushed",myNotifs().map(o=>o.id));toast("Notificações ativadas neste aparelho.");nShow({t:"Notificações ativadas",d:"Vais ver aqui os avisos do ObraFlow.",id:"test"})}
+ else toast("Notificações bloqueadas. Podes ativá-las nas definições do navegador.")}
+async function nShow(o){try{const title=o.by?`${nameOf(o.by)} ${o.t}`:o.t;const opt={body:o.d||(S.meta&&S.meta.name)||"ObraFlow",tag:o.id,icon:"icons/icon-192.png",badge:"icons/icon-192.png",data:{n:o.id,p:S.projectId}};
+ const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(reg&&reg.showNotification)await reg.showNotification(title,opt);else new Notification(title,opt)}catch(e){}}
+let nPushT=0;
+function nPush(){if(!("Notification" in window)||Notification.permission!=="granted"||!S.meId||!S.projectId||S.demo)return;clearTimeout(nPushT);nPushT=setTimeout(()=>{
+ const pushed=nGet("pushed",null);const list=myNotifs();if(pushed===null){nPut("pushed",list.map(o=>o.id));return}
+ const done=new Set(pushed),st=nState(),lim=new Date(Date.now()-2*864e5).toISOString();
+ const fresh=list.filter(o=>!done.has(o.id)&&nIsNew(o,st)&&(o.ty==="prazo"||o.at>lim));fresh.slice(0,3).forEach(nShow);
+ if(fresh.length)nPut("pushed",[...pushed,...fresh.map(o=>o.id)].slice(-500))},800)}
+/* tocar numa notificação do aparelho abre o sítio certo */
+if(navigator.serviceWorker)navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};if(d.type!=="notif")return;const go1=()=>{const o=myNotifs().find(x=>x.id===d.n);if(o){nMark([o.id]);nGo(o.go);renderBell()}};
+ if(d.p&&d.p!==S.projectId&&typeof openProject==="function"){openProject(d.p);setTimeout(go1,1500)}else go1()});
+/* ao abrir o sino a partir do email/aparelho: #notificacoes */
+window.addEventListener("hashchange",()=>{if(location.hash==="#notificacoes"&&S.meId){nTab="me";openFeed()}});
+
+/* cartão nas Definições: notificações no aparelho */
+function pushCard(){const ok="Notification" in window,perm=ok?Notification.permission:"na";
+ return`<section class="block" id="pushCard"><h2>Notificações na plataforma</h2><p class="muted" style="margin:0 0 10px">O sino <b>🔔</b> no topo mostra o que é para ti: quando te identificam com @, te atribuem uma tarefa, respondem às tuas dúvidas, concluem uma tarefa tua ou um prazo chega.</p>
+ <div class="toolrow"><span>${perm==="granted"?"✅ Avisos no ecrã deste aparelho: <b>ativos</b>":perm==="denied"?"⛔ Avisos no ecrã bloqueados no navegador (desbloqueia nas definições do site).":perm==="na"?"Este navegador não mostra avisos no ecrã (no iPhone: instala a app no ecrã principal).":"Avisos no ecrã deste aparelho: desligados"}</span>
+ ${perm==="default"?`<button class="btn primary sm" id="pcOn">Ativar neste aparelho</button>`:perm==="granted"?`<button class="btn sm" id="pcTest">Enviar teste</button>`:""}</div>
+ <small class="muted">Com a app fechada continuas a receber por email (ver “Notificações por email”).</small></section>`}
+const renderPageN=renderPage;
+renderPage=function(v){renderPageN(v);if(v!=="settings")return;const W=$("pageWrap");if(!W||$("pushCard"))return;const nc=[...W.querySelectorAll("section.block")].find(s=>/Notificações por email/i.test(s.querySelector("h2")?.textContent||""));
+ const h=document.createElement("div");h.innerHTML=pushCard();const el=h.firstElementChild;if(nc)nc.before(el);else W.appendChild(el);
+ const on=$("pcOn");if(on)on.onclick=async()=>{await nAskPush();renderPage("settings")};const ts=$("pcTest");if(ts)ts.onclick=()=>nShow({id:"t"+Date.now(),t:"Teste do ObraFlow",d:"As notificações estão a funcionar."})};
+
+/* =========================================================
+   ObraFlow · ligação ao módulo "Técnico" (tecnico.js, carregado só quando é aberto
+   e guardado no aparelho para funcionar sem rede)
+   ========================================================= */
+PAGE_VIEWS.push("tecnico");
+let tecP=null;
+function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=33";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
+let tecOpts=null;
+function openTec(o){tecOpts=o||null;go("tecnico")}
+const renderPageTec=renderPage;
+renderPage=function(v){if(v!=="tecnico")return renderPageTec(v);const W=$("pageWrap");
+ if(!window.TEC)W.innerHTML=`<div class="empty" style="padding:40px;text-align:center">A abrir o módulo Técnico…</div>`;
+ loadTec().then(()=>{if(S.view!=="tecnico")return;const o=tecOpts;tecOpts=null;TEC.render(W,o||undefined)}).catch(e=>{W.innerHTML=`<div class="empty" style="padding:40px;text-align:center">${esc(e.message)}. Liga-te à rede uma vez para o guardar neste aparelho.</div>`})};
+/* entrada no menu lateral (depois de Documentos) */
+(()=>{const ref=document.querySelector('.side [data-nav="docs"]');if(!ref)return;const b=document.createElement("button");b.type="button";b.className="nv";b.dataset.nav="tecnico";
+ b.innerHTML=`<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span>Técnico (RTIEBT)</span><span class="cnt" hidden></span>`;ref.after(b);
+ b.onclick=e=>{e.stopPropagation();openTec()}})();
+/* a partir de uma tarefa/dúvida: abrir o Técnico com contexto (os resultados guardam-se nela) */
+const drawTaskTec=drawTask;
+drawTask=function(){drawTaskTec();const t=S.issues.find(x=>x.id===S.taskSel);const row=document.querySelector("#tkBody .toolrow:last-child");if(!t||!row||$("tkTec"))return;
+ const b=document.createElement("button");b.type="button";b.className="btn sm";b.id="tkTec";b.textContent="Técnico / calcular";b.title="Abrir calculadoras e assistente técnico para esta "+(t.kind==="duvida"?"dúvida":"tarefa");
+ b.onclick=()=>{$("dlgTask").close();openTec({ctx:{kind:"task",id:t.id,label:tRef(t)+" «"+String(t.title||"").slice(0,40)+"»"},...(t.kind==="duvida"?{q:t.title}:{})})};row.insertBefore(b,row.children[1]||null)};
+/* preparar o módulo em segundo plano (para ficar disponível sem rede) */
+setTimeout(()=>{if(navigator.onLine)("requestIdleCallback" in window?requestIdleCallback:setTimeout)(()=>loadTec().catch(()=>{}),{timeout:15000})},12000);
+/* acesso logo no início: na página de projetos e na visão geral da obra */
+let tecFrom=null;
+const tecCard=()=>`<section class="teclaunch"><div class="tlx"><span class="tli">⚡</span><div><b>Técnico (RTIEBT)</b><span>Calculadoras, guia de bolso, esquemas, automação e assistente — funciona sem rede, sem escolher obra.</span></div></div>
+ <div class="tlb"><button type="button" class="btn" data-tl="calc">Calcular</button><button type="button" class="btn" data-tl="cons">Consultar</button><button type="button" class="btn" data-tl="ia">Assistente</button><button type="button" class="btn primary" data-tl="inicio">Abrir →</button></div></section>`;
+function wireTecCard(root,from){root.querySelectorAll("[data-tl]").forEach(b=>b.onclick=()=>{tecFrom=from;openTec({tab:b.dataset.tl})})}
+const renderProjectsTec=renderProjects;
+renderProjects=function(){renderProjectsTec();const W=$("pageWrap");if(!W||W.querySelector(".teclaunch"))return;const ft=W.querySelector(".ftool");const d=document.createElement("div");d.innerHTML=tecCard();const el=d.firstElementChild;
+ if(ft)ft.before(el);else W.appendChild(el);wireTecCard(el,"projects")};
+const renderHomeTec=renderHome;
+renderHome=function(){renderHomeTec();const W=$("homeWrap");if(!W||W.querySelector(".teclaunch"))return;const k=W.querySelector(".kpis");const d=document.createElement("div");d.innerHTML=tecCard();const el=d.firstElementChild;
+ if(k)k.after(el);else W.appendChild(el);wireTecCard(el,"home")};
+/* voltar ao sítio de onde se veio */
+const renderPageTec2=renderPage;
+renderPage=function(v){renderPageTec2(v);if(v!=="tecnico")return;let n=0;const fix=()=>{const c=document.querySelector("#pageWrap .crumb button[data-go]");if(!c){if(++n<60&&S.view==="tecnico")setTimeout(fix,120);return}
+ if(tecFrom==="projects"){c.textContent="Projetos";c.onclick=()=>{tecFrom=null;go("projects")}}else c.onclick=()=>{tecFrom=null;go("home")}};fix()};
+
+/* =========================================================
+   ObraFlow · (1) Seleção múltipla: "todos" de uma vez
+              (2) Captura de ecrã contínua: manter o ecrã escolhido e ler sozinho
+                  cada etiqueta nova que aparecer nele (ex.: Fieldwire)
+   ========================================================= */
+/* ---------- 1) seleção múltipla: barra flutuante na planta ---------- */
+(()=>{const v=$("viewer");if(!v)return;const b=document.createElement("div");b.className="mfloat";b.id="mFloat";b.hidden=true;v.appendChild(b)})();
+function renderMFloat(){const b=$("mFloat");if(!b)return;if(!S.multi||S.view!=="obra"){b.hidden=true;return}b.hidden=false;
+ const all=planItems(),vis=all.filter(i=>inFilter(i)&&matchQ(i)),noId=all.filter(i=>!String(i.devId||"").trim()),n=S.multi.size,allOn=all.length&&all.every(i=>S.multi.has(i.id));
+ const k=[n,all.length,vis.length,noId.length,allOn].join("|");if(b.dataset.k===k)return;b.dataset.k=k;
+ b.innerHTML=`<b>${n} selecionado${n===1?"":"s"}</b>
+  <button type="button" class="btn sm ${allOn?"":"primary"}" data-mf="all">${allOn?"✓ Todos":"Selecionar todos"} (${all.length})</button>
+  ${vis.length!==all.length?`<button type="button" class="btn sm" data-mf="vis">Só os filtrados (${vis.length})</button>`:""}
+  ${noId.length&&noId.length!==all.length?`<button type="button" class="btn sm" data-mf="noid">Sem ID (${noId.length})</button>`:""}
+  ${n?`<button type="button" class="btn sm" data-mf="none">Limpar</button>`:""}<button type="button" class="btn sm dark" data-mf="exit">Terminar</button>`;
+ b.querySelectorAll("[data-mf]").forEach(x=>x.onclick=e=>{e.stopPropagation();const m=x.dataset.mf;
+  if(m==="all"){if(allOn)S.multi.clear();else all.forEach(i=>S.multi.add(i.id))}else if(m==="vis")vis.forEach(i=>S.multi.add(i.id));else if(m==="noid"){S.multi.clear();noId.forEach(i=>S.multi.add(i.id))}
+  else if(m==="none")S.multi.clear();else if(m==="exit")S.multi=null;const bb=$("bulkBar");if(bb)bb.dataset.k="";render()})}
+["pointerdown","pointerup","click"].forEach(t=>document.addEventListener(t,e=>{if(e.target.closest&&e.target.closest("#mFloat")&&t!=="click")e.stopPropagation()},true));
+const renderBulkW=renderBulk;renderBulk=function(){renderBulkW();renderMFloat();const a=$("bbAll");if(a&&S.multi){const n=planItems().length;a.textContent=`Selecionar todos (${n})`;
+ a.onclick=()=>{planItems().forEach(i=>S.multi.add(i.id));$("bulkBar").dataset.k="";render()}}};
+/* Ctrl+A na planta com a seleção múltipla ativa = todos */
+document.addEventListener("keydown",e=>{if(!S.multi||S.view!=="obra"||e.target.matches("input,textarea,select"))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="a"){e.preventDefault();planItems().forEach(i=>S.multi.add(i.id));const bb=$("bulkBar");if(bb)bb.dataset.k="";render()}});
+
+/* ---------- 2) captura de ecrã contínua ---------- */
+let shotStream=null;   // ecrã partilhado da última captura
+const WT={on:false,stream:null,video:null,r:null,timer:0,last:null,stable:0,busy:false,n:0,seen:new Set(),pending:null,lastId:"",fails:0};
+let wKeep=(()=>{try{return localStorage.getItem("of-watch-keep")==="1"}catch(e){return false}})();
+/* captura: o ecrã fica aberto até se decidir no recorte */
+screenShot=async function(){const it=cur()||(WT.on?wTarget():null);if(!it&&!WT.on){toast("Seleciona primeiro um equipamento.");return}const id=it&&it.id;
+ if($("dlgPhoto").open)$("dlgPhoto").close();
+ if(!canShot){await pasteShot(id);return}
+ let st=WT.on&&WT.stream&&WT.stream.active?WT.stream:null;
+ if(!st){try{st=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:"window"},audio:false,selfBrowserSurface:"include",surfaceSwitching:"include"})}
+  catch(e){if(!e||e.name!=="NotAllowedError")toast("Não foi possível capturar o ecrã neste navegador.");return}}
+ try{const v=WT.on&&WT.video?WT.video:document.createElement("video");if(!WT.on){v.srcObject=st;v.muted=true;v.playsInline=true;await v.play();await new Promise(r=>setTimeout(r,400))}
+  const cv=document.createElement("canvas");cv.width=v.videoWidth;cv.height=v.videoHeight;cv.getContext("2d").drawImage(v,0,0);
+  if(!WT.on){shotStream={st,v}}openCrop(cv,id)}
+ catch(e){toast("Não foi possível capturar o ecrã.");if(!WT.on)st.getTracks().forEach(t=>t.stop())}};
+/* opção no recorte: manter o ecrã e ler sozinho */
+(()=>{const acts=document.querySelector("#dlgCrop .acts");if(!acts)return;const w=document.createElement("label");w.className="wkeep";w.id="wKeepW";
+ w.innerHTML=`<input type="checkbox" id="wKeep"><span><b>Manter este ecrã e ler automaticamente</b><small>Cada etiqueta nova que aparecer nesta zona é lida sozinha e o ID vai para o equipamento selecionado (ou para o próximo sem ID). Seleciona a zona onde aparece o ID.</small></span>`;
+ acts.before(w);$("wKeep").checked=wKeep;$("wKeep").onchange=e=>{wKeep=e.target.checked;try{localStorage.setItem("of-watch-keep",wKeep?"1":"0")}catch(x){}}})();
+const openCropW=openCrop;openCrop=function(cv,itemId,mode){openCropW(cv,itemId,mode);const w=$("wKeepW");if(w)w.hidden=!(shotStream&&(mode||"photo")==="photo")||WT.on};
+const crUseBase=$("crUse").onclick,crCancelBase=$("crCancel").onclick;
+$("crUse").onclick=async e=>{if(WT.zoneMode){WT.zoneMode=false;WT.r=crop&&crop.r||null;crop=null;$("dlgCrop").close();WT.last=frameSig();WT.cand=null;drawChip(WT.r?"Zona atualizada.":"A ler o ecrã inteiro.");return}
+ const keep=shotStream&&$("wKeep")&&$("wKeep").checked&&!$("wKeepW").hidden;const r=crop&&crop.r;const ss=shotStream;shotStream=null;
+ await crUseBase(e);
+ if(keep){startWatch(ss,r)}else if(ss&&!WT.on)ss.st.getTracks().forEach(t=>t.stop())};
+$("crCancel").onclick=e=>{WT.zoneMode=false;const ss=shotStream;shotStream=null;crCancelBase(e);if(ss&&!WT.on)ss.st.getTracks().forEach(t=>t.stop())};
+$("dlgCrop").addEventListener("close",()=>{if(shotStream&&!$("dlgCrop").open){const ss=shotStream;shotStream=null;if(!WT.on)ss.st.getTracks().forEach(t=>t.stop())}});
+/* janela de estado (canto da planta) */
+(()=>{const d=document.createElement("div");d.className="wchip";d.id="wChip";d.hidden=true;document.body.appendChild(d)})();
+function drawChip(msg,kind){const d=$("wChip");if(!d)return;if(!WT.on){d.hidden=true;return}d.hidden=false;d.className="wchip"+(kind?" "+kind:"");
+ const tgt=wTarget();d.innerHTML=`<span class="wdot"></span><div><b>A ler o ecrã partilhado</b><small>${msg||"À espera de uma etiqueta nova…"}</small><small class="wt">${WT.pending?`ID lido: <b>${esc(WT.pending)}</b> — seleciona o equipamento`:tgt?`Próximo: <b>${esc(tgt.code||"")}</b>${tgt.id===S.sel?" (selecionado)":""}`:"Sem equipamentos sem ID nesta planta"}</small></div>
+  ${WT.pending&&cur()?`<button class="btn sm primary" id="wAssign">Atribuir a ${esc(cur().code||"")}</button>`:""}<button class="btn sm" id="wNow" title="Ler agora">Ler agora</button><button class="btn sm" id="wZone" title="Escolher outra zona">Zona</button><button class="btn sm dark" id="wStop">Parar</button>`;
+ $("wStop").onclick=stopWatch;$("wNow").onclick=()=>{WT.last=null;WT.stable=9;tick(true)};$("wZone").onclick=()=>{WT.zoneMode=true;screenShot()};
+ const a=$("wAssign");if(a)a.onclick=()=>{const it=cur();if(it&&WT.pendingBlob){const b=WT.pendingBlob;WT.pending=null;WT.pendingBlob=null;applyShot(it,b,"")}}}
+/* equipamento a preencher: o selecionado (se ainda não tiver ID) ou o próximo sem ID desta planta */
+function wTarget(){const c=cur();if(c&&!String(c.devId||"").trim())return c;
+ const hasId=i=>String(i.devId||"").trim();return nextOf(c?c.id:null,i=>!hasId(i)&&i.x!=null)||nextOf(null,i=>!hasId(i))}
+async function startWatch(ss,r){if(!ss)return;WT.on=true;WT.stream=ss.st;WT.video=ss.v;WT.r=r||null;WT.last=null;WT.stable=0;WT.n=0;WT.seen=new Set(S.items.map(i=>String(i.devId||"").toUpperCase()).filter(Boolean));WT.fails=0;
+ ss.st.getVideoTracks().forEach(t=>t.addEventListener("ended",stopWatch,{once:true}));
+ // a captura que acabou de ser usada já conta como vista (não volta a ser lida)
+ WT.last=frameSig();toast(r?"A ler a zona escolhida sempre que mudar.":"A ler o ecrã sempre que mudar (escolhe uma zona para ser mais rápido).");drawChip();
+ clearInterval(WT.timer);WT.timer=setInterval(()=>tick(false),900)}
+function stopWatch(){if(!WT.on)return;WT.on=false;clearInterval(WT.timer);try{WT.stream.getTracks().forEach(t=>t.stop())}catch(e){}WT.stream=null;WT.video=null;WT.pending=null;drawChip();toast(`Leitura do ecrã terminada${WT.n?` — ${WT.n} ID${WT.n>1?"s":""} registado${WT.n>1?"s":""}`:""}.`)}
+function regionCanvas(maxW){const v=WT.video;if(!v||!v.videoWidth)return null;const r=WT.r||{x:0,y:0,w:1,h:1};
+ const sx=Math.round(r.x*v.videoWidth),sy=Math.round(r.y*v.videoHeight),sw=Math.max(8,Math.round(r.w*v.videoWidth)),sh=Math.max(8,Math.round(r.h*v.videoHeight));
+ const k=maxW?Math.min(1,maxW/sw):1;const cv=document.createElement("canvas");cv.width=Math.max(4,Math.round(sw*k));cv.height=Math.max(4,Math.round(sh*k));
+ const cx=cv.getContext("2d",{willReadFrequently:true});cx.imageSmoothingQuality="high";cx.drawImage(v,sx,sy,sw,sh,0,0,cv.width,cv.height);return cv}
+/* "assinatura" pequena da zona, para saber se mudou */
+function frameSig(){const cv=regionCanvas(160);if(!cv)return null;const d=cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data;const g=new Uint8Array(d.length/4);for(let i=0,j=0;i<d.length;i+=4,j++)g[j]=(d[i]*3+d[i+1]*6+d[i+2])/10;return g}
+/* % de pontos que mudaram claramente (sensível a um código novo, insensível a ruído de vídeo) */
+function sigDiff(a,b){if(!a||!b||a.length!==b.length)return 100;let n=0;for(let i=0;i<a.length;i++)if(Math.abs(a[i]-b[i])>40)n++;return n*100/a.length}
+async function tick(force){if(!WT.on||WT.busy)return;if(!WT.stream||!WT.stream.active){stopWatch();return}
+ const sig=frameSig();if(!sig)return;const d=sigDiff(sig,WT.last);
+ if(!force){if(d>0.4){WT.cand=sig;WT.stable=0;WT.last=sig;drawChip("Mudou… à espera que fique estável");return}   // mudou: espera que estabilize
+  if(!WT.cand)return;if(++WT.stable<1)return;WT.cand=null}
+ WT.busy=true;try{drawChip("A ler a etiqueta nova…","busy");
+  let cv=regionCanvas(0);if(Math.max(cv.width,cv.height)<900){const k=900/Math.max(cv.width,cv.height);const up=document.createElement("canvas");up.width=Math.round(cv.width*k);up.height=Math.round(cv.height*k);const c=up.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(cv,0,0,up.width,up.height);cv=up}
+  const blob=await new Promise(res=>cv.toBlob(res,"image/jpeg",.92));if(!blob)return;
+  const r=await (WT.r?readCrop(blob):readOne(blob));let cands=r.cands||[];if(typeof refFix==="function"){try{cands=refFix(cands,null)}catch(e){}}
+  let best=cands.filter(c=>c.k==="id").sort((a,b)=>b.s-a.s)[0];
+  if(!best||best.s<6){WT.fails++;drawChip(`Não encontrei um ID nesta imagem${WT.fails>1?" — escolhe uma zona mais justa (botão Zona)":""}.`,"warn");return}
+  WT.fails=0;const v=best.v.toUpperCase();
+  if(WT.seen.has(v)||S.items.some(i=>String(i.devId||"").toUpperCase()===v)){const ex=S.items.find(i=>String(i.devId||"").toUpperCase()===v);drawChip(`${v} já está registado${ex?" em "+esc(ex.code||""):""} — abre a próxima etiqueta.`,"warn");return}
+  if(v===WT.lastId){drawChip(`${v} acabou de ser lido.`);return}
+  const it=wTarget();if(!it){WT.pending=v;WT.pendingBlob=blob;drawChip(`Li ${v}, mas não há equipamento sem ID nesta planta.`,"warn");return}
+  await applyShot(it,blob,v)}
+ catch(e){drawChip("Erro na leitura: "+esc(e.message||e),"warn")}finally{WT.busy=false}}
+/* guarda a captura como foto do equipamento e regista o ID (pelo fluxo normal de leitura) */
+async function applyShot(it,blob,v){WT.lastId=v;if(v)WT.seen.add(v);WT.n++;
+ if(S.sel!==it.id)select(it.id);
+ await addPhotos(it,[new File([blob],"captura.jpg",{type:"image/jpeg"})]);
+ toast(`${v||"Captura"} → ${it.code||"equipamento"}`);
+ // a seguir, o próximo sem ID fica selecionado para a próxima etiqueta
+ setTimeout(()=>{const n=wTarget();if(n&&n.id!==it.id&&String((S.items.find(i=>i.id===it.id)||{}).devId||"").trim()){select(n.id);if(typeof centerOn==="function")centerOn(n)}drawChip(`Último: ${v||"—"} → ${it.code||""}`,"ok")},2500)}
+setInterval(()=>{if(WT.on&&!WT.busy)drawChip($("wChip")&&$("wChip").querySelector("small")?$("wChip").querySelector("small").innerHTML:"")},4000);
 
 boot();
