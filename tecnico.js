@@ -109,6 +109,11 @@ function tubo({linhas,inst="embebida"}){let area=0;const det=[];for(const l of l
  if(inst==="coluna"&&dn&&dn<D.ocupacao.entradaMin){dn=D.ocupacao.entradaMin;const i=T.dn.indexOf(dn);di=T.di[i];occ=area/(Math.PI*di*di/4)*100}
  const all=T.dn.map((x,i)=>({dn:x,occ:area/(Math.PI*T.di[i]*T.di[i]/4)*100}));
  return{area,need,pct,dn,di,occ,det,all}}
+/* corte do tubo com os condutores (desenho à escala) */
+function tuboSvg(r){const R=50,k=R/(r.di/2);const cs=[];r.det.forEach(l=>{for(let i=0;i<l.n;i++)cs.push(l.d/2*k)});
+ const pts=[];cs.sort((a,b)=>b-a).forEach((c,i)=>{let best=null;for(let a=0;a<360&&!best;a+=7)for(let d=0;d<=R-c&&!best;d+=1.5){const x=60+Math.cos(a*Math.PI/180)*(R-c-d),y=60+Math.sin(a*Math.PI/180)*(R-c-d);if(pts.every(p=>Math.hypot(p.x-x,p.y-y)>=p.r+c-.3))best={x,y,r:c}}if(best)pts.push(best)});
+ const col=["#7a4a21","#4f9ad6","#2e9d4b","#111","#8a8f94"];
+ return`<svg class="ttubo" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="${R+5}" class="tt-w"/><circle cx="60" cy="60" r="${R}" class="tt-i"/>${pts.map((p,i)=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.r.toFixed(1)}" fill="${col[i%5]}" class="tt-c" style="animation-delay:${i*60}ms"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(p.r*.55).toFixed(1)}" class="tt-cu"/>`).join("")}<text x="60" y="${R*2+20}" class="g-lb">VD ${r.dn}</text></svg>`}
 function tuboTabela(S,n){const r=D.tuboColuna.l[S];return r?r[n-1]:null}
 function eredes({kva,sis}){return{kva,I:sis==="tri"?kva*1000/(Math.sqrt(3)*D.U):kva*1000/D.U0}}
 function escalao({P,sis}){const kva=P/1000;const l=D.eredes.kva.filter(k=>sis==="tri"?k>=D.eredes.triMin:k<=13.8);return l.find(k=>k>=kva-1e-9)||null}
@@ -231,6 +236,74 @@ const PROTO=[
  {n:"DMX512",uso:"Iluminação cénica, fachadas e LED RGB",meio:"RS-485, cabo 120 Ω (XLR ou RJ45)",vel:"250 kbit/s",lim:"512 canais por universo; 32 dispositivos por linha; ≈300 m recomendado",top:"Barramento (daisy-chain)",term:"120 Ω no último aparelho",norma:"ANSI E1.11"},
  {n:"M-Bus",uso:"Leitura de contadores (água, energia térmica, gás, eletricidade)",meio:"2 fios sem polaridade, alimenta os escravos",vel:"300 – 9 600 bit/s",lim:"Até 250 escravos por mestre; distâncias de centenas de metros a ≈1 km (depende do cabo e da velocidade)",top:"Livre (barramento, estrela, árvore)",term:"Não",norma:"EN 13757"}
 ];
+/* detalhe de cada protocolo: exemplo, demonstração, vantagens, desvantagens, erros frequentes e site oficial */
+const PX={
+ "KNX TP":{url:"https://www.knx.org",site:"knx.org (KNX Association)",
+  ex:"Escritório: a botoneira da sala envia «ligar» para o grupo 1/0/1; o atuador no quadro liga o circuito da iluminação. O sensor de presença apaga quando a sala fica vazia e a estação meteorológica recolhe os estores quando há vento.",
+  demo:{n:["Fonte KNX 640 mA (com bobina)","Botoneira 1.1.3","Telegrama → grupo 1/0/1","Atuador 1.1.10","Iluminação"],p:["A fonte alimenta a linha com ≈ 29 V DC (vermelho +, preto −).","Ao carregar, a botoneira envia um telegrama para o endereço de grupo 1/0/1 «Luz sala ON».","Todos os dispositivos ouvem; só os que estão associados a 1/0/1 reagem — o atuador fecha o relé.","O atuador pode responder com o estado (1/0/101) para o visor ou a GTC."]},
+  pro:["Norma aberta (EN 50090) — centenas de fabricantes compatíveis","Descentralizado: sem controlador central, uma avaria não pára o edifício","Uma só ferramenta (ETS) para todos os fabricantes","Cobre iluminação, estores, AVAC, energia e alarmes técnicos"],
+  con:["Custo por ponto mais alto que soluções convencionais","Programação com ETS (licença paga) e formação","Velocidade baixa (9 600 bit/s) — não serve para vídeo ou dados pesados","Precisa de cabo de bus dedicado"],
+  err:[["O dispositivo não aparece no ETS","Polaridade trocada ou falta de bus: medir 21–30 V DC nos bornes vermelho(+)/preto(−)."],["Tensão da linha baixa, falhas aleatórias","Demasiados dispositivos ou fonte pequena: máx. 64 por linha, dividir com acoplador de linha ou fonte maior."],
+   ["Telegramas repetidos / colisões","Duas fontes muito próximas: manter ≥ 200 m de cabo entre fontes na mesma linha."],["Comportamento errático depois de alterações","Endereço físico duplicado: usar «Verificar endereço físico» no ETS."],
+   ["Linha a falhar após ampliação","Foi fechado um anel: a topologia é livre mas sem anéis — abrir o laço."],["Interferências ou não conformidade","Respeitar a separação do cabo de energia (EN 50174) ou usar cabo KNX certificado com o isolamento indicado."]]},
+ "DALI / DALI-2":{url:"https://www.dali-alliance.org",site:"dali-alliance.org (DiiA)",
+  ex:"Open space com 40 luminárias LED: cada driver tem um endereço (0–63); 4 grupos por zona e cenas «reunião» e «limpeza». O sensor DALI-2 regula a luz pela luz do dia e a avaria de uma luminária aparece logo na GTC.",
+  demo:{n:["Fonte / controlador DALI","DA+ DA− (no mesmo cabo 5G1,5)","Driver LED end. 0","Driver LED end. 1…63","Grupos e cenas"],p:["A fonte do bus dá ≈ 16 V (máx. 250 mA) — os dois fios DALI não têm polaridade.","O controlador endereça cada driver (endereço curto 0–63).","Comando «Grupo 2 → 60%»: todos os drivers do grupo 2 regulam ao mesmo tempo.","O controlador pergunta «avaria?» e o driver responde — manutenção sabe qual a luminária a trocar."]},
+  pro:["Endereçamento individual e retorno de estado / avarias","Fios DALI sem polaridade e no mesmo cabo da alimentação","Regulação suave e cenas memorizadas nos próprios drivers","DALI-2 certificado: sensores e botões de fabricantes diferentes funcionam juntos"],
+  con:["Só 64 endereços por linha (mais linhas = mais controladores)","Comunicação lenta (1 200 bit/s) — muitos comandos individuais atrasam","Não é SELV: os fios DALI precisam de isolamento como a rede","Equipamento DALI-1 antigo pode não ser totalmente compatível"],
+  err:[["Luminárias não respondem a nada","Falta a fonte do bus ou está dupla (> 250 mA): confirmar uma só fonte e ≈ 16 V nos DA."],["Funciona perto e falha ao fundo da linha","Queda de tensão > 2 V: usar 1,5 mm² até 300 m e encurtar a linha."],
+   ["Endereços trocados depois de substituir drivers","Endereços duplicados: fazer novo endereçamento só dos novos."],["Driver avariado na montagem","Foi ligada a fase (230 V) aos bornes DA: verificar antes de ligar."],["Regulação estranha ou sem regulação","Mistura de drivers 1–10 V / Push-dim com DALI: confirmar a referência do driver."]]},
+ "Modbus RTU":{url:"https://modbus.org",site:"modbus.org (Modbus Organization)",
+  ex:"Dez analisadores de energia nos quadros parciais ligados em série por RS-485 a um autómato/GTC, que lê de 5 em 5 s tensão, corrente e kWh de cada um.",
+  demo:{n:["Mestre (GTC / autómato)","Pergunta: escravo 5 · função 03 · registo 3000","RS-485 em série (120 Ω nas pontas)","Analisador end. 5","Resposta: 2 registos = 231,4 V"],p:["Só o mestre fala por iniciativa própria — pergunta a um escravo de cada vez (polling).","Trama: endereço do escravo + função (03 = ler registos) + registo inicial + quantidade + CRC.","Só o escravo 5 responde, com os valores e o CRC.","O mestre passa ao escravo seguinte; com muitos escravos o ciclo fica mais lento."]},
+  pro:["Simples, aberto e gratuito","Suportado por quase todos os contadores, analisadores e variadores","Barato e robusto: até 1 200 m em par entrançado","Fácil de diagnosticar com um conversor USB-RS485"],
+  con:["Um só mestre e polling — lento com muitos equipamentos","Cada fabricante tem o seu mapa de registos (sem significado normalizado)","Sem segurança nem autenticação","Erros de configuração (paridade, ordem dos bytes) são frequentes"],
+  err:[["Nenhum escravo responde","A/B trocados (os fabricantes não usam a mesma letra): trocar os dois fios e testar."],["Respostas intermitentes / erros de CRC","Terminação errada: 120 Ω só nas duas pontas do bus; confirmar polarização."],
+   ["Funciona com um e falha com vários","Ligação em estrela ou derivações longas: refazer em série (daisy-chain)."],["Timeout em todos","Parâmetros diferentes: velocidade, paridade e stop bits iguais em todos."],
+   ["Valores deslocados ou sem sentido","Registo base 0 vs 1 (tentar ±1) e ordem dos bytes/palavras nos valores float (word swap)."],["Ruído / avarias de portas","Laço de terra: ligar a blindagem à terra num só ponto."]]},
+ "Modbus TCP":{url:"https://modbus.org",site:"modbus.org (Modbus Organization)",
+  ex:"Gateway Modbus TCP no quadro geral: o SCADA lê pela rede IP os analisadores RS-485 ligados por trás da gateway.",
+  demo:{n:["SCADA / GTC (cliente)","Rede IP · porta 502","Gateway (Unit ID = escravo)","Bus RS-485","Analisadores"],p:["O cliente abre uma ligação TCP à porta 502 do servidor.","Envia a mesma pergunta Modbus (sem CRC) com o Unit ID.","A gateway traduz para RTU e devolve a resposta.","Vários clientes podem ler ao mesmo tempo."]},
+  pro:["Usa a rede Ethernet existente","Rápido e com vários clientes em simultâneo","Mesmo modelo de dados do Modbus RTU","Fácil de integrar em SCADA e IoT"],
+  con:["Sem segurança nativa (porta 502 aberta)","Precisa de IP fixo e gestão de rede","Mapa de registos continua a ser do fabricante","100 m máximo por troço de cobre"],
+  err:[["Sem ligação","IP, máscara ou gateway de rede errados; testar com ping."],["Liga mas não lê através da gateway","Unit ID errado (deve ser o endereço do escravo RTU)."],["Bloqueado na rede da empresa","Firewall a bloquear a porta 502: pedir regra à informática."],["Timeouts com muitos pedidos","Reduzir a frequência ou agrupar registos num só pedido."]]},
+ "BACnet MS/TP · BACnet/IP":{url:"https://bacnet.org",site:"bacnet.org (ASHRAE SSPC 135)",
+  ex:"Chillers, UTA e quadros de AVAC integrados na GTC: cada equipamento expõe objetos (temperatura de ida = Analog Input, ordem de marcha = Binary Output) com alarmes e horários.",
+  demo:{n:["GTC (BACnet/IP)","Router / BBMD","Bus MS/TP (RS-485)","Controlador UTA (Device 1201)","Objetos AI/AO/BI/BO"],p:["A GTC descobre os equipamentos com «Who-Is» / «I-Am».","Lê propriedades dos objetos (ex.: AI-1 Present_Value = 7,2 °C).","Pode subscrever alterações (COV) em vez de perguntar sempre.","Alarmes, calendários e tendências são normalizados."]},
+  pro:["Modelo de dados rico e normalizado (objetos e propriedades)","Norma ISO 16484-5, independente do fabricante","Alarmes, horários e tendências nativos","IP e RS-485 na mesma rede com routers"],
+  con:["Mais complexo de configurar","MS/TP é lento em redes grandes","Atravessar sub-redes IP exige BBMD","Equipamentos suportam partes diferentes da norma (ver PICS)"],
+  err:[["Equipamentos aparecem e desaparecem","Device Instance duplicado: cada dispositivo com número único na rede."],["MS/TP muito lento ou parado","MAC duplicado ou «Max Master» mal configurado; mesma velocidade em todos."],["GTC não vê equipamentos noutra sub-rede","Configurar BBMD / Foreign Device."],["Erros no bus MS/TP","Terminação e polarização nas pontas, como no RS-485."]]},
+ "DMX512":{url:"https://tsp.esta.org",site:"ESTA Technical Standards (ANSI E1.11)",
+  ex:"Fachada com 50 projetores LED RGB: cada um usa 3 canais (R, G, B) → 150 canais num universo; a consola ou o controlador corre cenas e efeitos.",
+  demo:{n:["Controlador DMX","Universo 1 (512 canais)","Projetor 1 · canais 1–3","Projetor 2 · canais 4–6","…terminador 120 Ω"],p:["O controlador envia continuamente os 512 canais (≈ 44 vezes por segundo).","Cada aparelho lê os canais a partir do seu endereço inicial.","O último aparelho da linha leva terminador de 120 Ω.","Com RDM (E1.20) é possível configurar endereços à distância."]},
+  pro:["Muito simples e rápido para efeitos de luz","Padrão no espetáculo e na iluminação arquitetural","Equipamento barato e abundante","512 canais por universo, vários universos por Art-Net/sACN"],
+  con:["Só num sentido (sem retorno, exceto RDM)","Sem deteção de erros nem endereçamento automático","Sensível a interferências e a cabo errado","Máx. 32 aparelhos por linha sem splitter"],
+  err:[["Luzes a piscar ou a mudar sozinhas","Falta o terminador de 120 Ω no último aparelho."],["Falhas com cabos longos","Cabo de microfone (impedância errada): usar cabo DMX/dados de 120 Ω."],["Uma parte da instalação não funciona","Derivações em Y: usar splitter DMX para ramificar."],["Dois aparelhos fazem o mesmo","Endereços iniciais sobrepostos: rever a tabela de canais."]]},
+ "M-Bus":{url:"https://m-bus.com",site:"m-bus.com (documentação M-Bus / EN 13757)",
+  ex:"Leitura de 120 contadores de água e energia térmica de um edifício: o mestre M-Bus lê todos de hora a hora e envia para a plataforma de gestão.",
+  demo:{n:["Mestre M-Bus (concentrador)","2 fios sem polaridade (alimentam os contadores)","Contador água end. 12","Contador térmico end. 13","Leitura → plataforma"],p:["O mestre alimenta o bus e pergunta a cada contador pelo endereço primário ou secundário (n.º de série).","O contador responde com os registos (volume, energia, data).","Muitos contadores funcionam anos sem bateria graças à alimentação pelo bus.","Os dados seguem por IP ou Modbus para a gestão."]},
+  pro:["Os contadores são alimentados pelo bus","Sem polaridade e topologia livre","Norma europeia para contagem (EN 13757)","Muitos fabricantes de contadores"],
+  con:["Lento — feito para leituras periódicas","Distância limitada pela capacidade do cabo","O mestre tem de ser dimensionado ao número de cargas","Só leitura, pouco controlo"],
+  err:[["Alguns contadores não respondem","Mestre subdimensionado (cargas unitárias) — usar mestre maior ou repetidor."],["Erros com cabo longo","Capacidade do cabo alta: baixar a velocidade (ex.: 2 400 bit/s) ou usar cabo melhor."],["Dois contadores com o mesmo endereço","Ler pelo endereço secundário (n.º de série) ou reendereçar."],["Um contador específico não lê","Velocidade do contador diferente da do mestre."]]}
+};
+/* demonstração animada: os blocos em sequência e um «pacote» a percorrer a linha */
+function demoSvg(n){return demoOne(n,false)+demoOne(n,true)}
+function demoOne(n,V){const wrap=(t,m)=>{const w=t.split(" ");const L=[""];w.forEach(x=>{if((L[L.length-1]+" "+x).trim().length>m)L.push(x);else L[L.length-1]=(L[L.length-1]+" "+x).trim()});return L.slice(0,3)};
+ if(!V){const W=640,bw=112,gap=(W-20-bw*n.length)/(n.length-1),y=46;const xs=n.map((_,i)=>10+i*(bw+gap));const path=`M${xs[0]+bw/2} ${y}H${xs[xs.length-1]+bw/2}`;
+  return`<svg class="pdemo h" viewBox="0 0 ${W} 100" role="img"><path d="${path}" class="pd-l"/><circle r="6" class="pd-p"><animateMotion dur="3.2s" repeatCount="indefinite" path="${path}"/></circle><circle r="6" class="pd-p b"><animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" path="${path}"/></circle>
+  ${n.map((t,i)=>`<g><rect x="${xs[i]}" y="${y-30}" width="${bw}" height="60" rx="10" class="pd-b${i===0?" a":i===n.length-1?" z":""}"/>${wrap(t,17).map((l,k,a)=>`<text x="${xs[i]+bw/2}" y="${y-((a.length-1)*7)+k*14+4}" class="pd-t">${esc(l)}</text>`).join("")}</g>`).join("")}</svg>`}
+ const H=62,gap=22,W=300,bw=240,x0=30;const ys=n.map((_,i)=>8+i*(H+gap));const tot=ys[ys.length-1]+H+8;const path=`M${W/2} ${ys[0]+H/2}V${ys[ys.length-1]+H/2}`;
+ return`<svg class="pdemo v" viewBox="0 0 ${W} ${tot}" role="img"><path d="${path}" class="pd-l"/><circle r="6" class="pd-p"><animateMotion dur="3.2s" repeatCount="indefinite" path="${path}"/></circle>
+  ${n.map((t,i)=>`<g><rect x="${x0}" y="${ys[i]}" width="${bw}" height="${H}" rx="10" class="pd-b${i===0?" a":i===n.length-1?" z":""}"/><text x="${x0+12}" y="${ys[i]+18}" class="pd-n">${i+1}</text>${wrap(t,26).map((l,k,a)=>`<text x="${W/2}" y="${ys[i]+H/2-((a.length-1)*8)+k*16+5}" class="pd-t v">${esc(l)}</text>`).join("")}</g>`).join("")}</svg>`}
+function protoDetail(p){const x=PX[p.n]||{};return`<div class="pdx">
+ <div class="pdtabs" data-pd>${[["car","Características"],["ex","Exemplo"],["demo","Demonstração"],["pc","Vantagens / desvantagens"],["err","Erros frequentes"]].map((t,i)=>`<button type="button" data-pdt="${t[0]}" class="${i===0?"on":""}">${t[1]}</button>`).join("")}</div>
+ <div class="pdp" data-pdp="car"><table class="tt2">${[["Uso típico",p.uso],["Meio / cabo",p.meio],["Velocidade",p.vel],["Limites",p.lim],["Topologia",p.top],["Terminação",p.term],["Norma",p.norma]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</table></div>
+ <div class="pdp" data-pdp="ex" hidden><p class="pdex">${x.ex||"—"}</p></div>
+ <div class="pdp" data-pdp="demo" hidden>${x.demo?demoSvg(x.demo.n)+`<ol class="pdst">${x.demo.p.map(s=>`<li>${s}</li>`).join("")}</ol>`:"—"}</div>
+ <div class="pdp" data-pdp="pc" hidden><div class="pdpc"><div class="pro"><h5>Vantagens</h5><ul>${(x.pro||[]).map(s=>`<li>${s}</li>`).join("")}</ul></div><div class="con"><h5>Desvantagens</h5><ul>${(x.con||[]).map(s=>`<li>${s}</li>`).join("")}</ul></div></div></div>
+ <div class="pdp" data-pdp="err" hidden><div class="pderr">${(x.err||[]).map(e=>`<div><b>⚠ ${e[0]}</b><span>✔ ${e[1]}</span></div>`).join("")}</div></div>
+ ${x.url?`<a class="btn sm pdmore" href="${x.url}" target="_blank" rel="noopener">Ler mais — ${esc(x.site)} ↗</a><span class="mut"> (abre o site oficial; precisa de rede)</span>`:""}</div>`}
+function wireProto(root){root.querySelectorAll("[data-pd]").forEach(t=>t.querySelectorAll("[data-pdt]").forEach(b=>b.onclick=()=>{const box=t.parentElement;t.querySelectorAll("[data-pdt]").forEach(x=>x.classList.toggle("on",x===b));box.querySelectorAll("[data-pdp]").forEach(p=>p.hidden=p.dataset.pdp!==b.dataset.pdt)}))}
 const SELEC=[
  {q:"Regular a luz (dimming) e cenas de iluminação",r:["DALI / DALI-2","KNX TP"],p:"DALI para a iluminação; ligar ao KNX por gateway se houver mais sistemas."},
  {q:"Automação completa (luz, estores, AVAC, cenas) num edifício",r:["KNX TP"],p:"KNX como espinha dorsal; DALI nas luminárias através de gateway KNX-DALI."},
@@ -253,6 +326,24 @@ const TOPO={
 /* ---------------------------------------------------------
    6) ESTADO E UI
    --------------------------------------------------------- */
+const ICO={
+ qt:'<path d="M3 12c2.5-6 5.5-6 8 0s5.5 6 8 0"/><path d="M19 4v6m0 0-2.5-2.5M19 10l2.5-2.5"/>',
+ tubo:'<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="2"/><circle cx="15" cy="10" r="2"/><circle cx="12" cy="15.2" r="2"/>',
+ prot:'<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 7v5"/><rect x="9.5" y="12" width="5" height="4" rx="1"/>',
+ pot:'<path d="M4 17a8 8 0 1 1 16 0"/><path d="m12 17 4-6"/><path d="M7 17h0M17 17h0"/>',
+ guia:'<path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/><path d="M20 4h-6a3 3 0 0 0-3 3"/><path d="M20 4v14h-7"/>',
+ esq:'<circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12h4l6-6M11 12l6 6"/>',
+ auto:'<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/>',
+ ia:'<path d="M4 5h16v11H9l-5 4z"/><path d="m13 7-3 4h4l-3 4"/>',
+ inicio:'<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>',calc:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>',cons:'<path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/><path d="M20 4h-6a3 3 0 0 0-3 3"/><path d="M20 4v14h-7"/>'};
+const ic=k=>`<svg viewBox="0 0 24 24" aria-hidden="true" class="tic">${ICO[k]||""}</svg>`;
+/* mostrador analógico (0 → max; zona verde até ao limite) */
+function gauge(v,lim,max,unit,lab){const cl=x=>Math.max(0,Math.min(1,x/max));const P=t=>{const a=Math.PI*(1-t);return[60+48*Math.cos(a),60-48*Math.sin(a)]};const arc=(t0,t1)=>{const[a,b]=P(t0),[c,d]=P(t1);return`M${a.toFixed(1)} ${b.toFixed(1)}A48 48 0 0 1 ${c.toFixed(1)} ${d.toFixed(1)}`};
+ const tl=lim!=null?cl(lim):1,tv=cl(v),ang=-90+180*tv,over=lim!=null&&v>lim;
+ return`<svg class="tgauge" viewBox="0 0 120 74" aria-hidden="true"><path d="${arc(0,1)}" class="g-bg"/><path d="${arc(0,tl)}" class="g-ok"/>${lim!=null&&tl<1?`<path d="${arc(tl,1)}" class="g-bad"/>`:""}
+  ${[0,.25,.5,.75,1].map(t=>{const[a,b]=P(t),[c,d]=[60+(a-60)*.82,60+(b-60)*.82];return`<line x1="${a.toFixed(1)}" y1="${b.toFixed(1)}" x2="${c.toFixed(1)}" y2="${d.toFixed(1)}" class="g-tk"/>`}).join("")}
+  <g class="g-nd${over?" over":""}" style="--a:${ang.toFixed(1)}deg"><line x1="60" y1="60" x2="60" y2="18"/><circle cx="60" cy="60" r="5"/></g>
+  <text x="60" y="72" class="g-lb">${lab||""}</text><text x="10" y="72" class="g-mm">0</text><text x="110" y="72" class="g-mm" text-anchor="end">${n2(max,0)}${unit||""}</text></svg>`}
 const st={tab:"inicio",sub:{calc:"qt",cons:"guia",auto:"tab",esq:"escada"},guia:null,pre:{},ctx:null,chat:[]};
 const HKEY="of-tec-hist";
 const hist=()=>{try{return JSON.parse(localStorage.getItem(HKEY)||"[]")}catch(e){return[]}};
@@ -263,8 +354,12 @@ const CONS=[["guia","Guia de bolso"],["esq","Esquemas"],["auto","Automação"],[
 let root=null;
 function render(Wr,opts){root=Wr;try{D=S.meta&&S.meta.tecData&&typeof S.meta.tecData==="object"?deepMerge(BASE,S.meta.tecData):BASE}catch(e){D=BASE}if(opts){if(opts.tab)st.tab=opts.tab;if(opts.sub)st.sub[opts.tab==="cons"?"cons":"calc"]=opts.sub;if(opts.pre)st.pre=opts.pre;if(opts.ctx!==undefined)st.ctx=opts.ctx;if(opts.q){st.tab="ia";setTimeout(()=>ask(opts.q),50)}if(opts.esq){st.sub.esq=opts.esq}if(opts.auto)st.sub.auto=opts.auto}
  const ctx=st.ctx?`<div class="tecctx">A trabalhar para <b>${esc(st.ctx.label)}</b> — os resultados podem ser guardados aí. <button class="linkb" id="tcCtxX">Limpar</button></div>`:"";
- Wr.innerHTML=pageHead("Técnico","Técnico — RTIEBT","Manual, calculadoras e assistente. Funciona sem rede.",`<span class="tecoff" title="Tudo corre neste aparelho">● Sem rede OK</span>`)+ctx+
-  `<div class="ptabs tectabs">${TABS.map(([k,n])=>`<button data-tt="${k}" class="${st.tab===k?"on":""}">${n}</button>`).join("")}</div><div class="tecbody" id="tecBody"></div>`;
+ Wr.innerHTML=`<div class="crumb"><button type="button" data-go="home">${esc(S.meta.name||"Projeto")}</button><span>›</span><b>Técnico</b></div>
+ <section class="techero"><svg class="thwave" viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="w1" d="M0 60 Q37.5 0 75 60 T150 60 T225 60 T300 60 T375 60 T450 60 T525 60 T600 60"/><path class="w2" d="M0 60 Q37.5 110 75 60 T150 60 T225 60 T300 60 T375 60 T450 60 T525 60 T600 60"/><path class="w3" d="M0 60 Q50 20 100 60 T200 60 T300 60 T400 60 T500 60 T600 60"/></svg>
+  <div class="thtxt"><span class="thk">ObraFlow · bancada técnica</span><h2>Técnico <em>RTIEBT</em></h2><p>Calcular, consultar e perguntar — tudo neste aparelho, mesmo sem rede.</p>
+  <div class="thchips"><span class="on">● Sem rede OK</span><span>Tabelas ${TEC_VERSION}</span><span>${hist().length} cálculo${hist().length===1?"":"s"} guardado${hist().length===1?"":"s"}</span></div></div>
+  <div class="thsym" aria-hidden="true"><span>Ω</span><span>⏚</span><span>~</span><span>Δ</span></div></section>`+ctx+
+  `<nav class="tectabs2">${TABS.map(([k,n])=>`<button data-tt="${k}" class="${st.tab===k?"on":""}">${ic(k==="ia"?"ia":k)}<span>${n}</span></button>`).join("")}</nav><div class="tecbody" id="tecBody"></div>`;
  Wr.querySelectorAll("[data-tt]").forEach(b=>b.onclick=()=>{st.tab=b.dataset.tt;render(Wr)});
  const cx=$("tcCtxX");if(cx)cx.onclick=()=>{st.ctx=null;render(Wr)};
  Wr.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
@@ -275,9 +370,10 @@ const goTec=(tab,sub,extra)=>{st.tab=tab;if(sub){if(tab==="calc")st.sub.calc=sub
 const DEST=[["Queda de tensão","3% iluminação · 5% outros usos","cons","guia","queda"],["Coordenação","IB ≤ In ≤ IZ (fusível gG: In ≤ 0,9 IZ)","cons","guia","coord"],["Diferencial","R × IΔn ≤ 50 V (25 V em locais húmidos)","cons","guia","dr"],
  ["Circuitos","Iluminação 1,5 mm²/10 A · Tomadas 2,5 mm²/16 A · máx. 8 pontos","cons","guia","circ"],["Tubos embebidos","Ocupação ≤ ⅓ da secção interior","cons","guia","tubos"],["Entradas","≥ 6 mm² · tubo ≥ 32 mm","cons","guia","entrada"]];
 function pInicio(B){const h=hist();
- B.innerHTML=`<div class="tecgrid">${CALCS.map(c=>`<button class="teccard" data-c="${c[0]}"><span class="tci">${c[2]}</span><b>${c[1]}</b><small>Calcular</small></button>`).join("")}
-  <button class="teccard" data-cs="guia"><span class="tci">📘</span><b>Guia de bolso</b><small>Regras rápidas</small></button><button class="teccard" data-cs="esq"><span class="tci">⌁</span><b>Esquemas</b><small>Escada, inversor, quadro, sensor</small></button>
-  <button class="teccard" data-cs="auto"><span class="tci">⇄</span><b>Automação</b><small>KNX · DALI · Modbus</small></button><button class="teccard ia" data-ia="1"><span class="tci">?</span><b>Assistente</b><small>Pergunta em português</small></button></div>
+ const card=(attr,k,code,t,sub,cls="")=>`<button class="teccard ${cls}" ${attr}><span class="tcode">${code}</span><span class="tci">${ic(k)}</span><b>${t}</b><small>${sub}</small><i class="tgo">→</i></button>`;
+ B.innerHTML=`<h3 class="tsec-h"><span>Calcular</span><i></i></h3><div class="tecgrid">${CALCS.map((c,i)=>card(`data-c="${c[0]}"`,c[0],"CALC-0"+(i+1),c[1],{qt:"ΔU %, fator K, secção mínima",tubo:"VD embebido, à vista, colunas",prot:"IZ, disjuntor, fusível gG",pot:"kVA ↔ A, habitação"}[c[0]],"c-"+c[0])).join("")}</div>
+  <h3 class="tsec-h"><span>Consultar e perguntar</span><i></i></h3><div class="tecgrid">${card('data-cs="guia"',"guia","DOC-01","Guia de bolso","Regras rápidas e tabelas","c-guia")}${card('data-cs="esq"',"esq","ESQ-04","Esquemas","Escada, inversor, quadro, sensor","c-esq")}
+  ${card('data-cs="auto"',"auto","BUS-07","Automação","KNX · DALI · Modbus · BACnet","c-auto")}${card('data-ia="1"',"ia","IA-00","Assistente","Pergunta em português","c-ia")}</div>
   <section class="block"><h2>Destaques</h2><div class="tecdest">${DEST.map(d=>`<button data-dg="${d[4]}"><b>${d[0]}</b><span>${d[1]}</span></button>`).join("")}</div></section>
   <section class="block"><h2>Últimos cálculos <small class="muted">neste aparelho</small></h2>${h.length?`<div class="techist">${h.slice(0,8).map((x,i)=>`<div><b>${esc(x.t)}</b><span>${esc(x.r)}</span><small>${fmtDate(x.at)}${x.dest?" · guardado em "+esc(x.dest):""}</small><button class="btn sm" data-hr="${i}">Abrir</button></div>`).join("")}</div>`:`<p class="muted">Ainda sem cálculos. Os resultados que guardares aparecem aqui.</p>`}</section>`;
  B.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>goTec("calc",b.dataset.c));B.querySelectorAll("[data-cs]").forEach(b=>b.onclick=()=>goTec("cons",b.dataset.cs));
@@ -293,7 +389,7 @@ const segB=(name,opts,val)=>`<div class="seg tecseg" data-seg="${name}">${opts.m
 function wireSeg(E,cb){E.querySelectorAll("[data-seg]").forEach(g=>g.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{g.querySelectorAll("[data-v]").forEach(x=>x.setAttribute("aria-pressed",x===b));cb()}))}
 const bindIn=(el,fn)=>{if(el.tagName==="SELECT")el.onchange=fn;else el.oninput=fn};
 const segV=(E,n)=>{const b=E.querySelector(`[data-seg="${n}"] [aria-pressed="true"]`);return b?b.dataset.v:null};
-const resBox=(ok,big,lines,save)=>`<div class="tecres ${ok===true?"ok":ok===false?"bad":""}"><div class="trb">${big}</div>${lines.map(l=>`<p>${l}</p>`).join("")}${save?`<div class="toolrow"><button class="btn sm primary" id="tcSave">Guardar resultado</button><button class="btn sm" id="tcAsk">Explicar</button></div>`:""}</div>`;
+const resBox=(ok,big,lines,save,g)=>`<div class="tecres ${ok===true?"ok":ok===false?"bad":""}${g?" hasg":""}">${g?`<div class="tecg">${g}</div>`:""}<div class="trb"><span class="tled"></span>${big}</div>${lines.map(l=>`<p>${l}</p>`).join("")}${save?`<div class="toolrow"><button class="btn sm primary" id="tcSave">Guardar resultado</button><button class="btn sm" id="tcAsk">Explicar</button></div>`:""}</div>`;
 function cQueda(E){const p={sis:"mono",modo:"I",I:16,P:"",cos:1,L:25,S:2.5,mat:"cu",tipo:"outros",...st.pre};
  E.innerHTML=`<div class="tecform">${segB("sis",[["mono","Monofásico 230 V"],["tri","Trifásico 400 V"]],p.sis)}${segB("tipo",[["iluminacao","Iluminação (3%)"],["outros","Outros usos (5%)"]],p.tipo)}
   <div class="tgrid">${fld("qI","Corrente de serviço (A)",p.I)}${fld("qP","ou Potência (W)",p.P,'placeholder="opcional"')}${fld("qCos","cos φ",p.cos)}${fld("qL","Comprimento L (m)",p.L)}
@@ -304,7 +400,7 @@ function cQueda(E){const p={sis:"mono",modo:"I",I:16,P:"",cos:1,L:25,S:2.5,mat:"
   const r=queda({sis,I,L,S,mat,cos,tipo});const pre={sis,tipo,I,cos,L,S,mat};
   const txt=`ΔU = ${n2(r.dU,2)} V (${n2(r.pct,2)}%) — limite ${r.max}% · ${sis==="tri"?"tri":"mono"} · I=${n2(I,1)} A · L=${n2(L)} m · S=${n2(S)} mm² ${mat==="al"?"Al":"Cu"}`;
   $("qR").innerHTML=resBox(r.ok,`${n2(r.pct,2)} %<small>${n2(r.dU,2)} V</small>`,[r.ok?`✓ Dentro do limite de <b>${r.max}%</b>.`:`✗ Acima do limite de <b>${r.max}%</b>.`,
-   `Fator K desta secção: <b>${n2(r.kAm,0)} A·m</b> → distância máxima com ${n2(I,1)} A: <b>${n2(r.Lmax,0)} m</b>.`,r.smin?`Secção mínima para ${n2(L)} m: <b>${n2(r.smin)} mm²</b>${r.smin>S?" — aumentar a secção":""}.`:"Nem 240 mm² chega — rever o traçado ou a alimentação."],true);
+   `Fator K desta secção: <b>${n2(r.kAm,0)} A·m</b> → distância máxima com ${n2(I,1)} A: <b>${n2(r.Lmax,0)} m</b>.`,r.smin?`Secção mínima para ${n2(L)} m: <b>${n2(r.smin)} mm²</b>${r.smin>S?" — aumentar a secção":""}.`:"Nem 240 mm² chega — rever o traçado ou a alimentação."],true,gauge(r.pct,r.max,r.max*2,"%","ΔU"));
   wireRes("Queda de tensão",txt,"qt",pre,`queda de tensão ${n2(I,0)} A ${n2(L)} m ${n2(S)} mm2`)};
  E.querySelectorAll("input,select").forEach(i=>bindIn(i,run));wireSeg(E,run);run()}
 function cTubo(E){const p={inst:"embebida",linhas:[{n:3,s:2.5,tipo:"U"}],...st.pre};let L=p.linhas.map(x=>({...x}));
@@ -321,7 +417,7 @@ function cTubo(E){const p={inst:"embebida",linhas:[{n:3,s:2.5,tipo:"U"}],...st.p
   let tab="";if(inst==="coluna"&&ls.length===1&&!ls[0].d){const v=tuboTabela(ls[0].s,ls[0].n);if(v)tab=`Tabela de colunas/entradas (1.º estabelecimento): <b>VD ${v} mm</b>.`}
   const txt=`Tubo mínimo VD ${r.dn||"> 110"} mm para ${desc} (${inst==="embebida"?"embebida ≤ ⅓":inst==="vista"?"à vista ≤ 40%":"coluna/entrada ≤ 20%"}) — ocupação ${n2(r.occ,0)}%`;
   $("tR").innerHTML=resBox(r.dn?true:false,r.dn?`VD ${r.dn} mm<small>ocupação ${n2(r.occ,0)}%</small>`:"> 110 mm",[`Área dos condutores: <b>${n2(r.area,0)} mm²</b> · área interior necessária: ${n2(r.need,0)} mm².`,tab,inst==="coluna"&&r.dn===D.ocupacao.entradaMin?`Mínimo de ${D.ocupacao.entradaMin} mm em entradas aplicado.`:"",
-   `<span class="tocc">${r.all.filter(a=>a.dn<=110).map(a=>`<i class="${a.occ<=r.pct?"y":"n"}" title="${n2(a.occ,0)}%">${a.dn}<em>${n2(a.occ,0)}%</em></i>`).join("")}</span>`].filter(Boolean),true);
+   `<span class="tocc">${r.all.filter(a=>a.dn<=110).map(a=>`<i class="${a.occ<=r.pct?"y":"n"}" title="${n2(a.occ,0)}%">${a.dn}<em>${n2(a.occ,0)}%</em></i>`).join("")}</span>`].filter(Boolean),true,r.dn?tuboSvg(r):gauge(r.occ||100,r.pct,100,"%","ocupação"));
   wireRes("Ocupação de tubos",txt,"tubo",{inst,linhas:L},`tubo para ${desc}`)};
  draw()}
 function cProt(E){const p={IB:14,P:"",sis:"mono",cos:1,S:2.5,iso:"pvc",met:"B1",nc:2,t:30,ng:1,dev:"disj",...st.pre};
@@ -338,7 +434,7 @@ function cProt(E){const p={IB:14,P:"",sis:"mono",cos:1,S:2.5,iso:"pvc",met:"B1",
   $("pR").innerHTML=resBox(r.ok,`${r.In?r.In+" A":"—"}<small>I<sub>Z</sub> = ${n2(r.z.iz,1)} A</small>`,[
    `I<sub>Z</sub> = ${n2(r.z.iz0,1)} A (quadro, ${met}, ${nc} carregados) × ${n2(r.z.kt,2)} (temp.) × ${n2(r.z.kg,2)} (agrupamento).`,
    r.ok?`✓ I<sub>B</sub> ${n2(IB,1)} ≤ I<sub>n</sub> ${r.In} ≤ ${dev==="fus"?"0,9 × ":""}I<sub>Z</sub> ${n2(r.lim,1)} A.`:`✗ ${r.In?`I<sub>n</sub> ${r.In} A > ${dev==="fus"?"0,9 × I<sub>Z</sub>":"I<sub>Z</sub>"} (${n2(r.lim,1)} A).`:"Corrente acima dos calibres da tabela."}`,
-   r.sug?`Secção mínima nestas condições: <b>${n2(r.sug)} mm²</b> (e nunca menos de 1,5 mm² em iluminação ou 2,5 mm² em tomadas).`:"",`Não esquecer: verificar também a queda de tensão. <button class="linkb" id="pGoQ">Calcular queda →</button>`].filter(Boolean),true);
+   r.sug?`Secção mínima nestas condições: <b>${n2(r.sug)} mm²</b> (e nunca menos de 1,5 mm² em iluminação ou 2,5 mm² em tomadas).`:"",`Não esquecer: verificar também a queda de tensão. <button class="linkb" id="pGoQ">Calcular queda →</button>`].filter(Boolean),true,r.z&&r.In?gauge(r.In,dev==="fus"?r.lim:r.z.iz,Math.max(r.z.iz,r.In)*1.4,"A","In / IZ"):"");
   const gq=$("pGoQ");if(gq)gq.onclick=()=>{st.pre={sis,I:IB,S:r.ok?S:(r.sug||S),tipo:"outros"};goTec("calc","qt")};
   wireRes("Proteção / amperagem",txt,"prot",{IB,sis,S,iso,met,nc,t,ng,dev},`que disjuntor para ${n2(IB,0)} A em ${n2(S)} mm2`)};
  E.querySelectorAll("input,select").forEach(i=>{if(i.id!=="pSis"){bindIn(i,run)}});wireSeg(E,run);run()}
@@ -358,7 +454,7 @@ function cPot(E){const p={modo:"kva",kva:6.9,sis:"mono",P:"",comp:3,...st.pre};
    lines=[`Potência simultânea: ${n2(P,0)} W × ${n2(f,2)} = <b>${n2(Pt,0)} W</b> (${n2(Pt/1000,2)} kVA, com cos φ ≈ 1).`,e?`Escalão mínimo: <b>${n2(e)} kVA</b> → ${n2(eredes({kva:e,sis}).I,1)} A.`:"Acima de 41,4 kVA: BTE / outra solução."];txt=`${n2(Pt,0)} W simultâneos → ${e?n2(e)+" kVA":"> BTN"} ${sis}`;pre={modo:m,P,f,sis}}
   else{const c=num($("mC").value),A=num($("mA").value);if(!(c>0)){$("pmR").innerHTML=resBox(null,"Indica o número de compartimentos.",[]);return}const k=habMin(c);ok=true;
    big=`${n2(k)} kVA<small>mínimo (monofásico)</small>`;lines=[`Habitação com ${c} compartimento${c>1?"s":""}: potência mínima <b>${n2(k)} kVA</b>.`,A>0?`Iluminação e tomadas de uso geral: ${n2(A,0)} m² × 25 VA/m² = <b>${n2(A*25,0)} VA</b>.`:""].filter(Boolean);txt=`Habitação ${c} compart. → mínimo ${n2(k)} kVA`;pre={modo:m,comp:c,A}}
-  $("pmR").innerHTML=resBox(ok,big,lines,true);wireRes("Potência E-REDES",txt,"pot",pre,"potencia "+txt)};
+  $("pmR").innerHTML=resBox(ok,big,lines,true,m!=="hab"?gauge(m==="kva"?eredes({kva:num($("mK").value),sis:$("mS").value}).I:(eredes({kva:escalao({P:num($("mP").value)*(num($("mF").value)||1),sis:$("mS").value})||41.4,sis:$("mS").value}).I),null,$("mS").value==="tri"?63:63,"A","corrente"):"");wireRes("Potência E-REDES",txt,"pot",pre,"potencia "+txt)};
  wireSeg(E,form);form()}
 function wireRes(title,txt,c,pre,q){const s=$("tcSave");if(s)s.onclick=()=>saveResult(title,txt,c,pre);const a=$("tcAsk");if(a)a.onclick=()=>{st.tab="ia";render(root);ask(q)}}
 /* guardar numa tarefa, num equipamento ou só no histórico */
@@ -398,9 +494,10 @@ function kEsq(E){const k=st.sub.esq;const s=ESQ2[k];
 function kAuto(E){const k=st.sub.auto||"tab";
  E.innerHTML=`<div class="tecsub sm">${[["tab","Tabela de protocolos"],["sel","Seleção de redes"],["topo","Tipologias bus"]].map(x=>`<button data-a="${x[0]}" class="${x[0]===k?"on":""}">${x[1]}</button>`).join("")}</div><div id="kaB"></div>`;
  E.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{st.sub.auto=b.dataset.a;kAuto(E)});const B=$("kaB");
- if(k==="tab")B.innerHTML=`<div class="tprotos">${PROTO.map(p=>`<details class="tproto"><summary><b>${p.n}</b><span>${p.uso}</span></summary><table class="tt2">${[["Meio / cabo",p.meio],["Velocidade",p.vel],["Limites",p.lim],["Topologia",p.top],["Terminação",p.term],["Norma",p.norma]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</table></details>`).join("")}</div><p class="mut">Valores de referência das normas indicadas — confirmar nas fichas dos fabricantes.</p>`;
+ if(k==="tab")B.innerHTML=`<div class="tprotos">${PROTO.map((p,i)=>`<details class="tproto"${i===0?" open":""}><summary><span class="pbadge">${esc(p.n.split(" ")[0])}</span><span class="pst"><b>${p.n}</b><span>${p.uso}</span></span></summary>${protoDetail(p)}</details>`).join("")}</div><p class="mut">Valores de referência das normas indicadas — confirmar nas fichas dos fabricantes.</p>`;
  else if(k==="sel")B.innerHTML=`<p>O que precisas de fazer?</p><div class="tsel">${SELEC.map((s,i)=>`<button data-s="${i}">${s.q}</button>`).join("")}</div><div id="ksR"></div>`;
  else B.innerHTML=Object.values(TOPO).map(t=>`<section class="block tecTopo"><h2>${t.t}</h2>${t.svg()}<p>${t.p}</p></section>`).join("");
+ wireProto(B);
  B.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{B.querySelectorAll("[data-s]").forEach(x=>x.classList.toggle("on",x===b));const s=SELEC[+b.dataset.s];
   $("ksR").innerHTML=`<div class="tecres"><div class="trb">${s.r.join(" + ")}</div><p>${s.p}</p>${s.r.map(n=>PROTO.find(p=>p.n===n)).filter(Boolean).map(p=>`<p><b>${p.n}:</b> ${p.lim}</p>`).join("")}</div>`})}
 function kTab(E){const can=S.isCoord||S.isProjAdmin;const custom=!!(S.meta&&S.meta.tecData);
@@ -464,13 +561,18 @@ function interpret(q){const n=normQ(q),v=nums(q),tri=/trifas|400 ?v|tri\b/.test(
  // esquemas e protocolos
  const esq=/comutador|escada|lustre/.test(n)?"escada":/inversor|3 pontos|tres pontos/.test(n)?"inversor":/quadro|unifilar|\bqe\b/.test(n)?"quadro":/sensor|fotocel|crepusc|presenca|movimento/.test(n)?"sensor":null;
  if(esq){const s=ESQ2[esq];out.html=`<p><b>${s.t}</b></p><div class="esqwrap mini">${s.svg()}</div><ol>${s.passos.map(p=>`<li>${p}</li>`).join("")}</ol>`;out.acts.push(["Abrir esquema","cons","esq",{esq}]);return out}
- const pr=PROTO.find(p=>n.includes(normQ(p.n.split(" ")[0])));if(pr){out.html=`<p><b>${pr.n}</b> — ${pr.uso}.</p><table class="tt2">${[["Meio / cabo",pr.meio],["Velocidade",pr.vel],["Limites",pr.lim],["Topologia",pr.top],["Terminação",pr.term]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</table>`;out.acts.push(["Tabela de protocolos","cons","auto",{auto:"tab"}]);out.src.push(pr.norma);return out}
+ const pkey=p=>({"M-Bus":"mbus","DMX512":"dmx"})[p.n]||normQ(p.n).match(/[a-z]+/)[0];const nn=n.replace(/-/g,"");const pr=PROTO.find(p=>nn.includes(pkey(p))&&(!/tcp|ip\b/.test(n)||/tcp|ip/.test(normQ(p.n))));if(pr){const x=PX[pr.n]||{};
+  if(/erro|problema|falha|nao funciona|avaria|nao responde|diagnost/.test(n)&&x.err)out.html=`<p><b>${pr.n} — erros frequentes</b></p><div class="pderr">${x.err.map(e=>`<div><b>⚠ ${e[0]}</b><span>✔ ${e[1]}</span></div>`).join("")}</div>`;
+  else if(/vantage|desvantage|pros|contra|comparar|melhor/.test(n)&&x.pro)out.html=`<p><b>${pr.n}</b></p><div class="pdpc"><div class="pro"><h5>Vantagens</h5><ul>${x.pro.map(s=>`<li>${s}</li>`).join("")}</ul></div><div class="con"><h5>Desvantagens</h5><ul>${x.con.map(s=>`<li>${s}</li>`).join("")}</ul></div></div>`;
+  else if(/exempl|como funciona|demonstr|funcionamento/.test(n)&&x.demo)out.html=`<p><b>${pr.n}</b> — ${x.ex}</p>${demoSvg(x.demo.n)}<ol class="pdst">${x.demo.p.map(s=>`<li>${s}</li>`).join("")}</ol>`;
+  else out.html=`<p><b>${pr.n}</b> — ${pr.uso}.</p><table class="tt2">${[["Meio / cabo",pr.meio],["Velocidade",pr.vel],["Limites",pr.lim],["Topologia",pr.top],["Terminação",pr.term]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</table><p class="mut">Pergunta também «${esc(pr.n.split(" ")[0])} erros frequentes», «vantagens» ou «exemplo».</p>`;
+  if(x.url)out.html+=`<p><a class="btn sm" href="${x.url}" target="_blank" rel="noopener">Ler mais — ${esc(x.site)} ↗</a></p>`;out.acts.push(["Tabela de protocolos","cons","auto",{auto:"tab"}]);out.src.push(pr.norma);return out}
  // procura no guia
  const hits=KB.map(k=>({k,s:score(k,n)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,3);
  if(hits.length){const k=hits[0].k;if(k.go){out.html=`<p>Encontrei: <b>${k.t}</b>.</p>`;out.acts.push(["Abrir",k.go[0],k.go[1],k.go[0]==="cons"&&k.go[1]==="esq"?{esq:k.go[2]}:{auto:k.go[2]}]);return out}
   out.html=`<p><b>${k.t}</b></p>${k.h()}`+(hits.length>1?`<p class="mut">Também relacionado: ${hits.slice(1).map(h=>`<button class="linkb" data-ask="${esc(h.k.t)}">${esc(h.k.t)}</button>`).join(" · ")}</p>`:"");if(k.calc)out.acts.push(["Abrir calculadora","calc",k.calc,{}]);out.src.push(F(k.f));return out}
  out.html=`<p>Ainda não sei responder a isso. Tenta com termos como <i>queda de tensão, disjuntor, tubo, diferencial, potência, cores, KNX, comutador de escada</i> — ou com números (ex.: <i>«que secção para 25 A a 40 m»</i>).</p><p class="mut">O assistente funciona só com o guia e as tabelas desta app, sem internet.</p>`;return out}
-const QUICK=["Queda de tensão 16 A 35 m 2,5 mm²","Que secção para 32 A a 20 m?","Tubo para 5 cabos de 2,5 mm²","6,9 kVA trifásico quantos amperes?","Resistência de terra máxima com 30 mA","Que DR para placa de indução?","Cores dos condutores","Como ligar comutador de escada","DALI quantos dispositivos por linha?","Potência mínima T3 4 compartimentos"];
+const QUICK=["Erros frequentes no Modbus RTU","Queda de tensão 16 A 35 m 2,5 mm²","Que secção para 32 A a 20 m?","Tubo para 5 cabos de 2,5 mm²","6,9 kVA trifásico quantos amperes?","Resistência de terra máxima com 30 mA","Que DR para placa de indução?","Cores dos condutores","Como ligar comutador de escada","DALI quantos dispositivos por linha?","Potência mínima T3 4 compartimentos"];
 function pIA(B){B.innerHTML=`<div class="tecchat"><div class="tcmsgs" id="tcMsgs">${st.chat.length?"":`<div class="tcm bot"><p>Olá! Sou o assistente técnico. Respondo com base no guia e nas tabelas RTIEBT desta app — <b>sem internet</b>. Faz uma pergunta ou escolhe um atalho.</p></div>`}</div>
   <div class="tcquick">${QUICK.map(q=>`<button data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
   <form class="tcin" id="tcF"><input id="tcQ" placeholder="Escreve a tua dúvida… (ex.: disjuntor para 20 A em 2,5 mm²)" autocomplete="off"><button class="btn primary">Perguntar</button></form>
@@ -479,11 +581,166 @@ function pIA(B){B.innerHTML=`<div class="tecchat"><div class="tcmsgs" id="tcMsgs
  B.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>ask(b.dataset.q));$("tcF").onsubmit=e=>{e.preventDefault();const q=$("tcQ").value.trim();if(q){ask(q);$("tcQ").value=""}}}
 function ask(q){if(st.tab!=="ia"||!$("tcMsgs")){st.tab="ia";render(root)}const r=interpret(q);const m={q,r,at:now()};st.chat.push(m);st.chat=st.chat.slice(-30);appendMsg(m,true)}
 function appendMsg(m,scroll){const box=$("tcMsgs");if(!box)return;const d=document.createElement("div");d.className="tcpair";
- d.innerHTML=`<div class="tcm me"><p>${esc(m.q)}</p></div><div class="tcm bot">${m.r.html}${m.r.src.length?`<p class="tcsrc">Fonte: ${[...new Set(m.r.src)].map(esc).join(" · ")}</p>`:""}<div class="toolrow">${m.r.acts.map((a,i)=>`<button class="btn sm" data-act="${i}">${a[0]}</button>`).join("")}<button class="btn sm" data-sv="1">Guardar resposta</button></div></div>`;
+ d.innerHTML=`<div class="tcm me"><p>${esc(m.q)}</p></div><div class="tcm bot"><span class="tbav">${ic("ia")}</span>${m.r.html}${m.r.src.length?`<p class="tcsrc">Fonte: ${[...new Set(m.r.src)].map(esc).join(" · ")}</p>`:""}<div class="toolrow">${m.r.acts.map((a,i)=>`<button class="btn sm" data-act="${i}">${a[0]}</button>`).join("")}<button class="btn sm" data-sv="1">Guardar resposta</button></div></div>`;
  box.appendChild(d);d.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=m.r.acts[+b.dataset.act];if(a[1]==="calc"){st.pre=a[3]||{};goTec("calc",a[2])}else{const ex=a[3]||{};if(ex.esq)st.sub.esq=ex.esq;if(ex.auto)st.sub.auto=ex.auto;goTec("cons",a[2],ex.guia?{guia:ex.guia}:null)}});
  d.querySelectorAll("[data-ask]").forEach(b=>b.onclick=()=>ask(b.dataset.ask));
  d.querySelector("[data-sv]").onclick=()=>{const t=document.createElement("div");t.innerHTML=m.r.html;saveResult("Assistente: "+m.q,t.textContent.replace(/\s+/g," ").trim().slice(0,600),null,null)};
  if(scroll)d.scrollIntoView({block:"end",behavior:"smooth"})}
+
+/* ---------------------------------------------------------
+   8) INTERATIVO — esquemas que se podem ligar/desligar e simuladores de protocolos
+   --------------------------------------------------------- */
+const LV=(d,c,live,w=3)=>`<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" class="${live?"lv":"dd"}"/>`;
+const lampI=(x,y,on)=>`<g class="lamp${on?" on":""}"><circle cx="${x}" cy="${y}" r="26" class="glow"/>${on?[0,45,90,135,180,225,270,315].map(a=>{const r=a*Math.PI/180;return`<line x1="${x+Math.cos(r)*21}" y1="${y+Math.sin(r)*21}" x2="${x+Math.cos(r)*29}" y2="${y+Math.sin(r)*29}" class="ray"/>`}).join(""):""}<circle cx="${x}" cy="${y}" r="16" class="bulb"/>${W(`M${x-11} ${y-11}L${x+11} ${y+11}M${x+11} ${y-11}L${x-11} ${y+11}`,C.K,2.5)}</g>`;
+function comutI(x,y,lab,pos,fl,key){const f=fl?-1:1;return`<g class="sw" data-sw="${key}" role="button" tabindex="0" aria-label="${lab}: carregar para mudar"><rect x="${x-30}" y="${y-32}" width="60" height="64" rx="9" class="swb"/>${dot(x-14*f,y+18)}${dot(x+14*f,y-18)}${dot(x+14*f,y+18)}
+ <line x1="${x-14*f}" y1="${y+18}" x2="${x+12*f}" y2="${pos?y+16:y-16}" class="lever"/>${Tx(x,y-40,lab,'text-anchor="middle"')}${Tx(x-14*f,y+46,"C",'text-anchor="middle"')}${Tx(x+(fl?-36:26),y-14,"1")}${Tx(x+(fl?-36:26),y+22,"2")}<text x="${x}" y="${y+62}" class="swhint">toca</text></g>`}
+function inverI(x,y,lab,cross){return`<g class="sw" data-sw="x" role="button" tabindex="0" aria-label="${lab}: carregar para mudar"><rect x="${x-32}" y="${y-32}" width="64" height="64" rx="9" class="swb"/>${dot(x-16,y-18)}${dot(x-16,y+18)}${dot(x+16,y-18)}${dot(x+16,y+18)}
+ ${cross?`<line x1="${x-16}" y1="${y-18}" x2="${x+16}" y2="${y+18}" class="lever"/><line x1="${x-16}" y1="${y+18}" x2="${x+16}" y2="${y-18}" class="lever"/>`:`<line x1="${x-16}" y1="${y-18}" x2="${x+16}" y2="${y-18}" class="lever"/><line x1="${x-16}" y1="${y+18}" x2="${x+16}" y2="${y+18}" class="lever"/>`}${Tx(x,y-40,lab,'text-anchor="middle"')}<text x="${x}" y="${y+50}" class="swhint">toca</text></g>`}
+const ESQS={escada:{a:0,b:1},inversor:{a:0,x:0,b:1},sensor:{mov:0,dark:1,man:0},quadro:{dr:0,trip:{}}};
+const IESQ={
+ escada:s=>{const on=s.a===s.b;return{on,svg:`<svg viewBox="0 0 640 340" class="esq int" role="img">${legend}
+  ${Tx(16,72,"L")}${LV("M36 68H110V218H156",C.L,1)}${LV("M198 182V130H436V182",C.T,s.a===0)}${LV("M198 218V262H436V218",C.T,s.a===1)}
+  ${comutI(184,200,"Comutador 1",s.a,0,"a")}${comutI(450,200,"Comutador 2",s.b,1,"b")}
+  ${LV("M464 218H540V186",C.L,on)}${lampI(540,160,on)}${LV("M540 134V96H600V300H36",C.N,on)}${Tx(16,304,"N")}
+  ${Tx(300,122,"retorno 1",'text-anchor="middle"')}${Tx(300,282,"retorno 2",'text-anchor="middle"')}</svg>`,
+  msg:on?`A lâmpada acende: os dois comutadores estão no <b>retorno ${s.a+1}</b> — a fase chega ao comum do comutador 2.`:`Apagada: o comutador 1 está no retorno ${s.a+1} e o comutador 2 no retorno ${s.b+1} — o circuito está aberto. Muda qualquer um para acender.`}},
+ inversor:s=>{const idx=s.x?1-s.a:s.a,on=idx===s.b;return{on,svg:`<svg viewBox="0 0 640 340" class="esq int" role="img">${legend}
+  ${Tx(16,72,"L")}${LV("M36 68H90V218H120",C.L,1)}${comutI(150,200,"Comutador",s.a,0,"a")}
+  ${LV("M164 182V140H274V182",C.T,s.a===0)}${LV("M164 218V258H274V218",C.T,s.a===1)}${inverI(290,200,"Inversor",s.x)}
+  ${LV("M306 182V140H416V182",C.T,idx===0)}${LV("M306 218V258H416V218",C.T,idx===1)}${comutI(430,200,"Comutador",s.b,1,"b")}
+  ${LV("M444 218H540V186",C.L,on)}${lampI(540,160,on)}${LV("M540 134V96H600V300H36",C.N,on)}${Tx(16,304,"N")}</svg>`,
+  msg:`${on?"Acesa":"Apagada"}: a fase sai do 1.º comutador pelo retorno ${s.a+1}, o inversor ${s.x?"<b>cruza</b>":"passa <b>direto</b>"} para o retorno ${idx+1} e o último comutador está no ${s.b+1}. Qualquer um dos três pontos muda o estado.`}},
+ sensor:s=>{const on=!!(s.man||(s.mov&&s.dark));return{on,svg:`<svg viewBox="0 0 640 320" class="esq int" role="img">${legend}
+  ${Tx(16,72,"L")}${LV("M36 68H200V150",C.L,1)}${Tx(16,292,"N")}${LV("M36 288H560V206",C.N,on)}${LV("M260 288V190",C.N,1)}
+  <rect x="180" y="130" width="120" height="70" rx="10" class="swb"/>${Tx(240,122,"Sensor / fotocélula",'text-anchor="middle" font-weight="700"')}
+  ${dot(200,150)}${dot(260,190)}${dot(280,150)}${Tx(194,176,"L")}${Tx(266,178,"N")}${Tx(286,146,"L'")}
+  <circle cx="240" cy="168" r="9" class="${s.mov?"pir on":"pir"}"/>
+  ${LV("M280 150H560V134",C.L,on&&(!s.man||(s.mov&&s.dark)))}${lampI(560,160,on)}
+  ${LV("M120 68V100H378",C.L,1,2)}${LV("M422 100H560V134",C.L,!!s.man,2)}
+  <g class="sw" data-sw="man" role="button" tabindex="0"><rect x="378" y="86" width="44" height="28" rx="6" class="swb${s.man?" act":""}"/><line x1="384" y1="100" x2="${s.man?416:410}" y2="${s.man?100:90}" class="lever"/></g>${Tx(400,80,"interruptor «forçar»",'text-anchor="middle" font-size="11"')}
+  ${!s.dark?`<g class="sun"><circle cx="90" cy="200" r="14"/>${[0,60,120,180,240,300].map(a=>{const r=a*Math.PI/180;return`<line x1="${90+Math.cos(r)*19}" y1="${200+Math.sin(r)*19}" x2="${90+Math.cos(r)*26}" y2="${200+Math.sin(r)*26}"/>`}).join("")}</g>`:`<path d="M100 186a16 16 0 1 0 0 28a12 12 0 1 1 0-28z" class="moon"/>`}</svg>`,
+  msg:on?(s.man?"Acesa pelo interruptor em paralelo (forçar ligado).":"Acesa: há movimento e está escuro — o relé do sensor fecha L → L'."):`Apagada: ${!s.dark?"há luz do dia (a fotocélula bloqueia)":"sem movimento detetado"}.`}},
+ quadro:s=>{const cs=[["il","Iluminação","10 A","1,5"],["tm","Tomadas","16 A","2,5"],["tc","Tomadas cozinha","16 A","2,5"],["ml","Máq. lavar","16 A","2,5"],["tr","Termo.","16 A","2,5"],["fg","Fogão/placa","32 A","6"]];
+  const live=!s.dr;return{on:live,svg:`<svg viewBox="0 0 640 404" class="esq int" role="img">
+   ${Tx(20,30,"Rede E-REDES → contador → DCP")}${LV("M60 40V70",C.L,1)}
+   <rect x="30" y="70" width="60" height="44" rx="6" class="swb"/>${Tx(60,96,"IG",'text-anchor="middle" font-weight="700"')}${Tx(100,96,"Interruptor geral")}
+   ${LV("M60 114V140",C.L,1)}<g class="sw" data-sw="dr" role="button" tabindex="0"><rect x="30" y="140" width="60" height="44" rx="6" class="swb ${s.dr?"trip":"ok"}"/>${Tx(60,160,"DR",'text-anchor="middle" font-weight="700"')}${Tx(60,176,s.dr?"OFF":"30 mA",'text-anchor="middle" font-size="10"')}</g>${Tx(100,160,s.dr?"Diferencial disparou — toca para rearmar":"Diferencial 40 A / 30 mA")}
+   ${LV("M60 184V214H"+(60+(cs.length-1)*100),C.L,live)}
+   ${cs.map((c,i)=>{const x=60+i*100,t=!!s.trip[c[0]],on=live&&!t;return`${LV(`M${x} 214V236`,C.L,live)}<g class="sw" data-sw="cb:${c[0]}" role="button" tabindex="0"><rect x="${x-28}" y="236" width="56" height="42" rx="6" class="swb ${t?"trip":on?"ok":""}"/>${Tx(x,256,c[2],'text-anchor="middle" font-weight="700"')}${Tx(x,271,t?"OFF":"ON",'text-anchor="middle" font-size="10"')}</g>${LV(`M${x} 278V306`,C.L,on)}<circle cx="${x}" cy="314" r="6" class="${on?"pt on":"pt"}"/>${Tx(x,336,c[1],'text-anchor="middle" font-size="12"')}${Tx(x,352,c[3]+" mm²",'text-anchor="middle" font-size="11" class="sv mutd"')}`}).join("")}
+   ${W("M30 392H610",C.PE,4)}${Tx(30,382,"Barramento de terra (PE)",'font-size="12"')}</svg>`,
+  msg:s.dr?"O diferencial cortou todos os circuitos a jusante (defeito à terra). Primeiro elimina o defeito; depois toca no DR para rearmar.":Object.keys(s.trip).filter(k=>s.trip[k]).length?"Um disjuntor disparou: só esse circuito ficou sem energia. Toca nele para rearmar.":"Tudo ligado. Simula avarias com os botões abaixo, ou toca num disjuntor para o desligar."}}
+};
+const ESQ_ACTS={quadro:[["Defeito à terra nas tomadas","dr"],["Sobrecarga no fogão","cb:fg"],["Curto-circuito na iluminação","cb:il"],["Rearmar tudo","reset"]],sensor:[["Passar alguém","mov"],["Dia / noite","dark"]],escada:[["Comutador 1","a"],["Comutador 2","b"]],inversor:[["Comutador","a"],["Inversor","x"],["Comutador","b"]]};
+kEsq=function(E){const k=st.sub.esq;const s=ESQ2[k];const S0=ESQS[k];
+ E.innerHTML=`<div class="tecsub sm">${Object.entries(ESQ2).map(([kk,v])=>`<button data-e="${kk}" class="${kk===k?"on":""}">${v.t.split(" — ")[0].split(" (")[0]}</button>`).join("")}</div>
+  <section class="block esqint"><h2>${s.t} <span class="livetag">● interativo</span></h2><div class="esqwrap" id="esqW"></div><div class="esqmsg" id="esqM"></div>
+  <div class="esqacts">${(ESQ_ACTS[k]||[]).map(a=>`<button class="btn sm" data-ea="${a[1]}">${a[0]}</button>`).join("")}<button class="btn sm" data-ea="sim">▶ Demonstração automática</button></div>
+  <div class="tec2"><div><h5>Como ligar</h5><ol>${s.passos.map(p=>`<li>${p}</li>`).join("")}</ol></div><div><h5>Erros comuns</h5><ul class="terr">${s.erros.map(p=>`<li>${p}</li>`).join("")}</ul><p class="mut">${s.mat}</p></div></div>
+  <div class="toolrow"><button class="btn sm" id="eAsk">Perguntar sobre este esquema</button></div></section>`;
+ let auto=null;
+ const act=key=>{if(key==="mov"){S0.mov=1;clearTimeout(S0._t);S0._t=setTimeout(()=>{S0.mov=0;draw()},4000)}else if(key==="dark")S0.dark=S0.dark?0:1;else if(key==="man")S0.man=S0.man?0:1;
+  else if(key==="reset"){S0.dr=0;S0.trip={}}else if(key==="dr"&&k==="quadro")S0.dr=S0.dr?0:1;else if(key.startsWith("cb:")){const c=key.slice(3);S0.trip[c]=!S0.trip[c]}else if(key in S0)S0[key]=S0[key]?0:1;draw()};
+ const draw=()=>{const r=IESQ[k](S0);const w=$("esqW");if(!w)return;w.innerHTML=r.svg;$("esqM").innerHTML=`<span class="${r.on?"led on":"led"}"></span>${r.msg}`;
+  w.querySelectorAll("[data-sw]").forEach(g=>{g.onclick=()=>{stopAuto();act(g.dataset.sw)};g.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();act(g.dataset.sw)}}})};
+ const stopAuto=()=>{if(auto){clearInterval(auto);auto=null;const b=E.querySelector('[data-ea="sim"]');if(b)b.textContent="▶ Demonstração automática"}};
+ E.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{if(b.dataset.ea!=="sim"){stopAuto();act(b.dataset.ea);return}
+  if(auto){stopAuto();return}b.textContent="■ Parar demonstração";const seq=(ESQ_ACTS[k]||[]).map(a=>a[1]).filter(x=>x!=="reset");let i=0;auto=setInterval(()=>{if(!document.body.contains(b)){stopAuto();return}act(seq[i++%seq.length])},1800)});
+ E.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{stopAuto();st.sub.esq=b.dataset.e;kEsq(E)});$("eAsk").onclick=()=>{stopAuto();st.tab="ia";render(root);ask(s.t)};draw()};
+
+/* ---------- simuladores de protocolos ---------- */
+const crc16=b=>{let c=0xFFFF;for(const x of b){c^=x;for(let i=0;i<8;i++)c=c&1?(c>>1)^0xA001:c>>1}return[c&255,c>>8]};
+const hx=a=>a.map(x=>x.toString(16).toUpperCase().padStart(2,"0")).join(" ");
+const SIMS={
+ "KNX TP":{nodes:[["PS","Fonte 640 mA"],["B1","Botão sala 1 · 1.1.3"],["B2","Botão sala 2 · 1.1.4"],["AT","Atuador 1.1.10"],["VS","Visor 1.1.20"]],
+  st:()=>({l1:0,l2:0}),faults:[["pol","Polaridade trocada no botão 1.1.3"],["ps","Fonte KNX desligada"],["dup","Endereço físico 1.1.4 duplicado"]],
+  ctl:s=>`<button class="btn sm primary" data-a="b1">Carregar botão sala 1</button><button class="btn sm primary" data-a="b2">Carregar botão sala 2</button><button class="btn sm" data-a="rd">Ler estado (visor)</button>`,
+  out:s=>`<div class="simouts"><div class="so ${s.l1?"on":""}"><i></i>Sala 1 · 1/0/1</div><div class="so ${s.l2?"on":""}"><i></i>Sala 2 · 1/0/2</div></div>`,
+  act:async(a,s,F,ui)=>{if(F.ps){ui.log("✗ Sem tensão no bus (0 V) — nenhum dispositivo comunica. Verificar a fonte.","err");ui.flash("PS","bad");return}
+   if(a==="rd"){await ui.send("VS","*","GroupValueRead 1/0/101");await ui.send("AT","VS",`GroupValueResponse 1/0/101 = ${s.l1?"ON":"OFF"} · 1/0/102 = ${s.l2?"ON":"OFF"}`);return}
+   const B=a==="b1"?"B1":"B2",g=a==="b1"?"1/0/1":"1/0/2",k=a==="b1"?"l1":"l2";
+   if(a==="b1"&&F.pol){ui.log("✗ 1.1.3 sem bus (polaridade trocada): mede-se −29 V. Trocar vermelho/preto.","err");ui.flash("B1","bad");return}
+   s[k]=s[k]?0:1;await ui.send(B,"*",`${a==="b1"?"1.1.3":"1.1.4"} → ${g} GroupValueWrite ${s[k]?"ON":"OFF"}`);
+   if(a==="b2"&&F.dup){ui.log("⚠ Dois dispositivos responderam como 1.1.4 — colisão; ETS: «Verificar endereço físico».","warn");ui.flash("B2","bad")}
+   ui.flash("AT","ok");await ui.send("AT","*",`1.1.10 → 1/0/10${a==="b1"?1:2} estado ${s[k]?"ON":"OFF"}`);ui.out()}},
+ "DALI / DALI-2":{nodes:[["CT","Controlador + fonte DALI"],["L0","Luminária 0 · G1"],["L1","Luminária 1 · G1"],["L2","Luminária 2 · G2"],["L3","Luminária 3 · G2"],["L4","Luminária 4 · G2"]],
+  st:()=>({lv:[0,0,0,0,0],g:"0"}),faults:[["nops","Sem fonte do bus DALI"],["vd","Queda de tensão > 2 V (linha longa)"],["drv","Driver da luminária 4 avariado"]],
+  ctl:s=>`<label class="simf">Destino<select data-k="g"><option value="0">Todos (broadcast)</option><option value="1">Grupo 1</option><option value="2">Grupo 2</option></select></label><label class="simf">Nível <b data-v>60%</b><input type="range" min="0" max="100" step="5" value="60" data-k="lv"></label><button class="btn sm primary" data-a="go">Enviar</button><button class="btn sm" data-a="q">Perguntar avarias</button>`,
+  out:s=>`<div class="simouts">${s.lv.map((v,i)=>`<div class="so lum ${v?"on":""}" style="--l:${v/100}"><i></i>L${i} · ${v}%</div>`).join("")}</div>`,
+  act:async(a,s,F,ui,c)=>{if(F.nops){ui.log("✗ Bus DALI sem tensão (0 V): nenhuma luminária responde. Ligar uma fonte DALI (≈16 V, ≤250 mA).","err");ui.flash("CT","bad");return}
+   if(a==="q"){await ui.send("CT","*","QUERY LAMP FAILURE (broadcast)");if(F.drv){await ui.send("L4","CT","Resposta: sim — avaria na luminária 4");ui.flash("L4","bad")}else ui.log("Sem respostas: nenhuma avaria.","ok");return}
+   const g=c.g||"0",lv=+c.lv;const tgt=[0,1,2,3,4].filter(i=>g==="0"||(g==="1"?i<2:i>=2));await ui.send("CT","*",`DAPC ${g==="0"?"broadcast":"grupo "+g} → ${lv}%`);
+   for(const i of tgt){if(F.vd&&i>=3){ui.log(`✗ L${i} não recebeu (tensão < 9,5 V no fim da linha). Aumentar secção/encurtar.`,"err");ui.flash("L"+i,"bad");continue}if(F.drv&&i===4){ui.flash("L4","bad");continue}s.lv[i]=lv;ui.flash("L"+i,"ok")}ui.out()}},
+ "Modbus RTU":{nodes:[["M","Mestre (GTC)"],["S1","Analisador 1"],["S2","Analisador 2"],["S3","Analisador 3"],["S4","Analisador 4"]],
+  st:()=>({}),faults:[["ab","Fios A/B trocados"],["term","Sem terminação de 120 Ω"],["baud","Analisador 3 com outra velocidade"],["dup","Analisadores 2 e 4 com o mesmo endereço"]],
+  ctl:s=>`<label class="simf">Escravo<select data-k="id"><option>1</option><option>2</option><option>3</option><option>4</option></select></label><label class="simf">Registo<select data-k="reg"><option value="3000">3000 Tensão (V)</option><option value="3002">3002 Corrente (A)</option><option value="3004">3004 Energia (kWh)</option></select></label><button class="btn sm primary" data-a="go">Ler (função 03)</button>`,
+  out:s=>"",
+  act:async(a,s,F,ui,c)=>{const id=+c.id||1,reg=+c.reg||3000;const req=[id,3,reg>>8,reg&255,0,2];const fr=[...req,...crc16(req)];
+   await ui.send("M","S"+id,`TX ${hx(fr)}  (escravo ${id}, função 03, registo ${reg}, 2 registos)`);
+   if(F.ab){ui.log("✗ Timeout: nenhum escravo entende a trama (A/B trocados). Trocar os dois fios.","err");ui.flash("S"+id,"bad");return}
+   if(F.baud&&id===3){ui.log("✗ Timeout no escravo 3: velocidade/paridade diferentes. Igualar a todos (ex.: 9600 8N1).","err");ui.flash("S3","bad");return}
+   if(F.dup&&(id===2||id===4)){await ui.send("S2","M","RX ?? ?? ?? (duas respostas ao mesmo tempo)");ui.log("✗ Erro de CRC: dois escravos responderam (endereço duplicado). Dar endereços únicos.","err");ui.flash("S4","bad");return}
+   const val=reg===3000?230+id*0.7:reg===3002?5+id*1.3:1200+id*311;const f32=new DataView(new ArrayBuffer(4));f32.setFloat32(0,val);const by=[0,1,2,3].map(i=>f32.getUint8(i));
+   let resp=[id,3,4,...by];resp=[...resp,...crc16(resp)];if(F.term&&Math.random()<.5){resp[5]^=0x20;await ui.send("S"+id,"M",`RX ${hx(resp)}`);ui.log("✗ CRC inválido (reflexões no cabo sem terminação). Pôr 120 Ω nas duas pontas.","err");return}
+   await ui.send("S"+id,"M",`RX ${hx(resp)}`);ui.log(`✓ Valor (float): ${val.toLocaleString("pt-PT",{maximumFractionDigits:1})} ${reg===3000?"V":reg===3002?"A":"kWh"}`,"ok");ui.flash("S"+id,"ok")}},
+ "Modbus TCP":{nodes:[["C","SCADA 192.168.1.10"],["SW","Switch"],["GW","Gateway 192.168.1.50 :502"],["S1","Analisador (Unit 1)"],["S2","Analisador (Unit 2)"]],
+  st:()=>({}),faults:[["ip","IP da gateway errado no SCADA"],["fw","Firewall a bloquear a porta 502"],["uid","Unit ID errado"]],
+  ctl:s=>`<label class="simf">Unit ID<select data-k="id"><option>1</option><option>2</option></select></label><button class="btn sm primary" data-a="go">Ler registo 3000</button>`,out:s=>"",
+  act:async(a,s,F,ui,c)=>{const id=+c.id||1;if(F.ip){await ui.send("C","SW","TCP SYN → 192.168.1.55:502");ui.log("✗ Sem resposta: IP errado. Confirmar IP/máscara (ping).","err");return}
+   await ui.send("C","GW",`MBAP 00 01 00 00 00 06 ${hx([F.uid?9:id])} | 03 0B B8 00 02`);if(F.fw){ui.log("✗ Ligação recusada: porta 502 bloqueada pela firewall.","err");ui.flash("SW","bad");return}
+   if(F.uid){ui.log("✗ Exceção 0B (gateway target failed): Unit ID 9 não existe no RS-485.","err");ui.flash("GW","bad");return}
+   await ui.send("GW","S"+id,"RTU → escravo "+id);await ui.send("S"+id,"GW","resposta");await ui.send("GW","C",`MBAP … 03 04 43 66 B3 33  → ${(230+id*.7).toFixed(1)} V`);ui.log("✓ Leitura OK","ok")}},
+ "BACnet MS/TP · BACnet/IP":{nodes:[["G","GTC (BACnet/IP)"],["R","Router / BBMD"],["D1","UTA · Device 1201"],["D2","Chiller · Device 1202"],["D3","Quadro AVAC · 1203"]],
+  st:()=>({}),faults:[["dup","Device 1203 com instância duplicada (1202)"],["bbmd","Sem BBMD (outra sub-rede)"]],
+  ctl:s=>`<button class="btn sm primary" data-a="who">Who-Is (descobrir)</button><button class="btn sm" data-a="rp">ReadProperty AI-1 da UTA</button><button class="btn sm" data-a="cov">Subscrever COV</button>`,out:s=>"",
+  act:async(a,s,F,ui)=>{if(F.bbmd){await ui.send("G","R","Who-Is (broadcast)");ui.log("✗ O broadcast não passa para a sub-rede dos equipamentos: configurar BBMD / Foreign Device.","err");ui.flash("R","bad");return}
+   if(a==="who"){await ui.send("G","*","Who-Is");await ui.send("D1","G","I-Am 1201");await ui.send("D2","G","I-Am 1202");await ui.send("D3","G",`I-Am ${F.dup?1202:1203}`);if(F.dup){ui.log("⚠ Duas respostas «1202»: a GTC alterna entre equipamentos. Instância única por dispositivo.","warn");ui.flash("D3","bad")}else ui.log("✓ 3 dispositivos encontrados","ok");return}
+   if(a==="rp"){await ui.send("G","D1","ReadProperty AI-1 Present_Value");await ui.send("D1","G","ComplexAck 7,2 °C");ui.flash("D1","ok");return}
+   await ui.send("G","D1","SubscribeCOV AI-1 (60 min)");await ui.send("D1","G","SimpleAck");setTimeout(()=>ui.send("D1","G","COV-Notification AI-1 = 7,8 °C"),1500)}},
+ "DMX512":{nodes:[["CT","Controlador DMX"],["F1","Projetor 1 · DMX 1"],["F2","Projetor 2 · DMX 4"],["F3","Projetor 3 · DMX 7"],["F4","Projetor 4 · DMX 10"]],
+  st:()=>({c:[[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}),faults:[["term","Sem terminador de 120 Ω"],["ovl","Projetor 2 com o endereço 1 (sobreposto)"]],
+  ctl:s=>`<label class="simf">Projetor<select data-k="f"><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option><option value="all">Todos</option></select></label><label class="simf">R<input type="range" min="0" max="255" value="255" data-k="r"></label><label class="simf">G<input type="range" min="0" max="255" value="120" data-k="gg"></label><label class="simf">B<input type="range" min="0" max="255" value="0" data-k="b"></label><button class="btn sm primary" data-a="go">Enviar universo</button>`,
+  out:s=>`<div class="simouts">${s.c.map((c,i)=>`<div class="so rgb ${c.some(Boolean)?"on":""}" style="--c:rgb(${c.join(",")})"><i></i>P${i+1} · ${c.join("/")}</div>`).join("")}</div>`,
+  act:async(a,s,F,ui,c)=>{const v=[+c.r,+c.gg,+c.b];const tg=c.f==="all"?[0,1,2,3]:[+c.f];tg.forEach(i=>s.c[i]=v.slice());if(F.ovl)s.c[1]=s.c[0].slice();
+   await ui.send("CT","*",`Universo: canais ${tg.map(i=>`${i*3+1}-${i*3+3}=${v.join("/")}`).join(" · ")}`);ui.out();
+   if(F.ovl)ui.log("⚠ O projetor 2 copia o 1: endereços sobrepostos. Projetor 2 deve começar no canal 4.","warn");
+   if(F.term){ui.log("✗ Sem terminador: reflexões — as cores tremem. Pôr 120 Ω no último aparelho.","err");let n=0;const t=setInterval(()=>{s.c=s.c.map(x=>x.map(y=>Math.max(0,Math.min(255,y+(Math.random()*120-60)|0))));ui.out();if(++n>8)clearInterval(t)},180)}}},
+ "M-Bus":{nodes:[["M","Mestre M-Bus"],["A1","Água · end. 1"],["A2","Água · end. 2"],["T3","Térmico · end. 3"],["T4","Térmico · end. 4"]],
+  st:()=>({r:{}}),faults:[["pow","Mestre subdimensionado (poucas cargas)"],["dup","Contadores 2 e 3 com o mesmo endereço"]],
+  ctl:s=>`<button class="btn sm primary" data-a="all">Ler todos os contadores</button>`,
+  out:s=>`<div class="simouts">${["A1","A2","T3","T4"].map(k=>`<div class="so ${s.r[k]?"on":""}"><i></i>${k} · ${s.r[k]||"—"}</div>`).join("")}</div>`,
+  act:async(a,s,F,ui)=>{s.r={};ui.out();const L=[["A1",1,"152,3 m³"],["A2",2,"98,7 m³"],["T3",3,"4 512 kWh"],["T4",4,"3 980 kWh"]];
+   for(const[k,ad,v]of L){await ui.send("M",k,`REQ_UD2 → end. ${ad}`);if(F.pow&&ad>=3){ui.log(`✗ End. ${ad} sem resposta: tensão do bus baixa (cargas a mais). Mestre maior ou repetidor.`,"err");ui.flash(k,"bad");continue}
+    if(F.dup&&ad===2){await ui.send("A2","M","RSP ?? (colisão)");ui.log("✗ Colisão: dois contadores responderam ao end. 2 — usar endereço secundário (n.º de série).","err");ui.flash("T3","bad");continue}
+    await ui.send(k,"M",`RSP_UD ${v}`);s.r[k]=v;ui.flash(k,"ok");ui.out()}}}
+};
+function simHtml(p){const S=SIMS[p.n];if(!S)return"";const n=S.nodes.length;const W=640,sp=(W-120)/(n-1);
+ return`<div class="sim" data-sim="${esc(p.n)}"><div class="simwrap"><svg class="simbus" viewBox="0 0 ${W} 120" role="img"><line x1="30" y1="86" x2="${W-30}" y2="86" class="sb-l"/>
+  ${S.nodes.map((nd,i)=>{const x=60+i*sp;return`<g class="sb-n" data-n="${nd[0]}" transform="translate(${x},0)"><line x1="0" y1="62" x2="0" y2="86" class="sb-t"/><rect x="-46" y="10" width="92" height="52" rx="10" class="sb-b"/>${(nd[1].length>15?[nd[1].split(" · ")[0],nd[1].split(" · ")[1]||""]:[nd[1],""]).map((l,k)=>`<text x="0" y="${l&&k?48:32+(nd[1].length>15?0:6)}" class="sb-tx${k?" s":""}">${esc(l)}</text>`).join("")}<circle cx="38" cy="18" r="4" class="sb-led"/></g>`}).join("")}
+  <circle r="7" class="sb-pk" cx="-20" cy="86"/></svg></div>
+  <div class="simctl">${S.ctl({})}</div><div class="simout"></div>
+  <details class="simf2"><summary>Simular avarias</summary>${S.faults.map(f=>`<label><input type="checkbox" data-f="${f[0]}"> ${f[1]}</label>`).join("")}</details>
+  <div class="simlog" aria-live="polite"><div class="sl-h">monitor do bus</div></div></div>`}
+function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const S=SIMS[el.dataset.sim];const s=S.st();const F={};const n=S.nodes.length,W=640,sp=(W-120)/(n-1);
+ const X=id=>{const i=S.nodes.findIndex(x=>x[0]===id);return 60+i*sp};const pk=el.querySelector(".sb-pk");const log=el.querySelector(".simlog");let busy=false;
+ const ui={log:(t,k)=>{const d=document.createElement("div");d.className="sl "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${esc(t).replace(/^([✓✗⚠])/,"<b>$1</b>")}`;log.appendChild(d);while(log.children.length>40)log.children[1].remove();log.scrollTop=log.scrollHeight},
+  flash:(id,k)=>{const g=el.querySelector(`[data-n="${id}"]`);if(!g)return;g.classList.remove("ok","bad");void g.getBBox();g.classList.add(k);setTimeout(()=>g.classList.remove(k),1400)},
+  send:(a,b,t)=>new Promise(res=>{ui.log(t,"tx");const x0=X(a),x1=b==="*"?null:X(b);const cls=b==="*"?"bc":"";pk.setAttribute("class","sb-pk "+cls);
+   const pts=b==="*"?[x0,30,W-30,x0]:[x0,x1];const dur=b==="*"?900:Math.max(350,Math.abs(x1-x0)*1.6);
+   const kf=b==="*"?[{cx:x0},{cx:30},{cx:W-30},{cx:x0}]:[{cx:x0},{cx:x1}];
+   try{const an=pk.animate(kf.map(k=>({transform:`translateX(${k.cx+20}px)`})),{duration:dur,easing:"ease-in-out"});an.onfinish=()=>{pk.style.transform=`translateX(-40px)`;if(b!=="*")ui.flash(b,"rx");res()}}catch(e){res()}
+   el.querySelector(`[data-n="${a}"]`)?.classList.add("tx");setTimeout(()=>el.querySelector(`[data-n="${a}"]`)?.classList.remove("tx"),dur)}),
+  out:()=>{el.querySelector(".simout").innerHTML=S.out(s)}};
+ ui.out();ui.log("Pronto. Usa os botões para enviar telegramas; em «Simular avarias» vês o que acontece com os erros mais comuns.","");
+ const ctl=()=>{const c={};el.querySelectorAll(".simctl [data-k]").forEach(i=>c[i.dataset.k]=i.value);return c};
+ el.querySelectorAll(".simctl input[type=range]").forEach(r=>r.oninput=()=>{const v=r.parentElement.querySelector("[data-v]");if(v)v.textContent=r.value+"%"});
+ el.querySelectorAll("[data-f]").forEach(c=>c.onchange=()=>{F[c.dataset.f]=c.checked;ui.log((c.checked?"Avaria ativada: ":"Avaria removida: ")+c.parentElement.textContent.trim(),c.checked?"warn":"ok")});
+ el.querySelectorAll(".simctl [data-a]").forEach(b=>b.onclick=async()=>{if(busy)return;busy=true;el.classList.add("busy");try{await S.act(b.dataset.a,s,F,ui,ctl())}finally{busy=false;el.classList.remove("busy")}})})}
+/* acrescenta o separador «Simular» a cada protocolo */
+const protoDetailBase=protoDetail;
+protoDetail=function(p){let h=protoDetailBase(p);if(!SIMS[p.n])return h;
+ h=h.replace('<button type="button" data-pdt="car" class="on">Características</button>','<button type="button" data-pdt="sim" class="on sim">▶ Simular</button><button type="button" data-pdt="car">Características</button>');
+ h=h.replace('<div class="pdp" data-pdp="car">','<div class="pdp" data-pdp="sim">'+simHtml(p)+'</div><div class="pdp" data-pdp="car" hidden>');return h};
+const wireProtoBase=wireProto;wireProto=function(root){wireProtoBase(root);wireSims(root)};
 
 window.TEC={render,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
 })();

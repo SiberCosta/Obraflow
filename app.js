@@ -2501,7 +2501,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="33";
+const APP_VER="36";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -3732,7 +3732,7 @@ renderPage=function(v){renderPageN(v);if(v!=="settings")return;const W=$("pageWr
    ========================================================= */
 PAGE_VIEWS.push("tecnico");
 let tecP=null;
-function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=33";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
+function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=36";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
 let tecOpts=null;
 function openTec(o){tecOpts=o||null;go("tecnico")}
 const renderPageTec=renderPage;
@@ -3811,7 +3811,7 @@ screenShot=async function(){const it=cur()||(WT.on?wTarget():null);if(!it&&!WT.o
  acts.before(w);$("wKeep").checked=wKeep;$("wKeep").onchange=e=>{wKeep=e.target.checked;try{localStorage.setItem("of-watch-keep",wKeep?"1":"0")}catch(x){}}})();
 const openCropW=openCrop;openCrop=function(cv,itemId,mode){openCropW(cv,itemId,mode);const w=$("wKeepW");if(w)w.hidden=!(shotStream&&(mode||"photo")==="photo")||WT.on};
 const crUseBase=$("crUse").onclick,crCancelBase=$("crCancel").onclick;
-$("crUse").onclick=async e=>{if(WT.zoneMode){WT.zoneMode=false;WT.r=crop&&crop.r||null;crop=null;$("dlgCrop").close();WT.last=frameSig();WT.cand=null;drawChip(WT.r?"Zona atualizada.":"A ler o ecrã inteiro.");return}
+$("crUse").onclick=async e=>{if(WT.zoneMode){WT.zoneMode=false;WT.r=crop&&crop.r||null;crop=null;$("dlgCrop").close();WT.last=frameSig();WT.cand=null;drawChip(WT.r?"zona atualizada":"ecrã inteiro","");WT.last=null;WT.stable=9;setTimeout(()=>tick(true),300);return}
  const keep=shotStream&&$("wKeep")&&$("wKeep").checked&&!$("wKeepW").hidden;const r=crop&&crop.r;const ss=shotStream;shotStream=null;
  await crUseBase(e);
  if(keep){startWatch(ss,r)}else if(ss&&!WT.on)ss.st.getTracks().forEach(t=>t.stop())};
@@ -3819,11 +3819,16 @@ $("crCancel").onclick=e=>{WT.zoneMode=false;const ss=shotStream;shotStream=null;
 $("dlgCrop").addEventListener("close",()=>{if(shotStream&&!$("dlgCrop").open){const ss=shotStream;shotStream=null;if(!WT.on)ss.st.getTracks().forEach(t=>t.stop())}});
 /* janela de estado (canto da planta) */
 (()=>{const d=document.createElement("div");d.className="wchip";d.id="wChip";d.hidden=true;document.body.appendChild(d)})();
-function drawChip(msg,kind){const d=$("wChip");if(!d)return;if(!WT.on){d.hidden=true;return}d.hidden=false;d.className="wchip"+(kind?" "+kind:"");
- const tgt=wTarget();d.innerHTML=`<span class="wdot"></span><div><b>A ler o ecrã partilhado</b><small>${msg||"À espera de uma etiqueta nova…"}</small><small class="wt">${WT.pending?`ID lido: <b>${esc(WT.pending)}</b> — seleciona o equipamento`:tgt?`Próximo: <b>${esc(tgt.code||"")}</b>${tgt.id===S.sel?" (selecionado)":""}`:"Sem equipamentos sem ID nesta planta"}</small></div>
-  ${WT.pending&&cur()?`<button class="btn sm primary" id="wAssign">Atribuir a ${esc(cur().code||"")}</button>`:""}<button class="btn sm" id="wNow" title="Ler agora">Ler agora</button><button class="btn sm" id="wZone" title="Escolher outra zona">Zona</button><button class="btn sm dark" id="wStop">Parar</button>`;
- $("wStop").onclick=stopWatch;$("wNow").onclick=()=>{WT.last=null;WT.stable=9;tick(true)};$("wZone").onclick=()=>{WT.zoneMode=true;screenShot()};
- const a=$("wAssign");if(a)a.onclick=()=>{const it=cur();if(it&&WT.pendingBlob){const b=WT.pendingBlob;WT.pending=null;WT.pendingBlob=null;applyShot(it,b,"")}}}
+function drawChip(msg,kind){const d=$("wChip");if(!d)return;if(!WT.on){d.hidden=true;return}d.hidden=false;if(msg!=null)WT.msg=msg;if(kind!==undefined)WT.kind=kind;
+ d.className="wchip"+(WT.kind?" w-"+WT.kind:"")+(WT.open?" open":"");const tgt=wTarget();
+ const sub=WT.pending?`ID lido <b>${esc(WT.pending)}</b> — escolhe o equipamento`:tgt?`→ <b>${esc(tgt.code||"")}</b>`:"sem equipamentos sem ID";
+ d.innerHTML=`<button class="wmain" id="wTog" title="Leitura do ecrã partilhado — tocar para ver opções"><span class="wdot"></span><span class="wtx"><b>Ecrã</b> ${WT.msg||"à espera de etiqueta nova"}</span><span class="wsub">${sub}</span></button>
+  ${WT.pending&&cur()?`<button class="wb pri" id="wAssign" title="Atribuir ao selecionado">${esc(cur().code||"")}</button>`:""}
+  <button class="wb" id="wNow" title="Ler agora"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg></button>
+  <button class="wb" id="wZone" title="Escolher a zona do ID"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>
+  <button class="wb stop" id="wStop" title="Parar a leitura do ecrã"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>`;
+ $("wTog").onclick=()=>{WT.open=!WT.open;drawChip()};$("wStop").onclick=stopWatch;$("wNow").onclick=()=>{WT.last=null;WT.stable=9;tick(true)};$("wZone").onclick=()=>{WT.zoneMode=true;screenShot()};
+ const a=$("wAssign");if(a)a.onclick=()=>{const it=cur();if(it&&WT.pendingBlob){const b=WT.pendingBlob,v=WT.pending;WT.pending=null;WT.pendingBlob=null;applyShot(it,b,v)}}}
 /* equipamento a preencher: o selecionado (se ainda não tiver ID) ou o próximo sem ID desta planta */
 function wTarget(){const c=cur();if(c&&!String(c.devId||"").trim())return c;
  const hasId=i=>String(i.devId||"").trim();return nextOf(c?c.id:null,i=>!hasId(i)&&i.x!=null)||nextOf(null,i=>!hasId(i))}
@@ -3843,27 +3848,34 @@ function frameSig(){const cv=regionCanvas(160);if(!cv)return null;const d=cv.get
 function sigDiff(a,b){if(!a||!b||a.length!==b.length)return 100;let n=0;for(let i=0;i<a.length;i++)if(Math.abs(a[i]-b[i])>40)n++;return n*100/a.length}
 async function tick(force){if(!WT.on||WT.busy)return;if(!WT.stream||!WT.stream.active){stopWatch();return}
  const sig=frameSig();if(!sig)return;const d=sigDiff(sig,WT.last);
- if(!force){if(d>0.4){WT.cand=sig;WT.stable=0;WT.last=sig;drawChip("Mudou… à espera que fique estável");return}   // mudou: espera que estabilize
+ if(!force){if(d>0.4){WT.cand=sig;WT.stable=0;WT.last=sig;drawChip("mudou… a estabilizar","busy");return}   // mudou: espera que estabilize
   if(!WT.cand)return;if(++WT.stable<1)return;WT.cand=null}
- WT.busy=true;try{drawChip("A ler a etiqueta nova…","busy");
+ WT.busy=true;try{drawChip("a ler a etiqueta…","busy");
   let cv=regionCanvas(0);if(Math.max(cv.width,cv.height)<900){const k=900/Math.max(cv.width,cv.height);const up=document.createElement("canvas");up.width=Math.round(cv.width*k);up.height=Math.round(cv.height*k);const c=up.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(cv,0,0,up.width,up.height);cv=up}
   const blob=await new Promise(res=>cv.toBlob(res,"image/jpeg",.92));if(!blob)return;
   const r=await (WT.r?readCrop(blob):readOne(blob));let cands=r.cands||[];if(typeof refFix==="function"){try{cands=refFix(cands,null)}catch(e){}}
   let best=cands.filter(c=>c.k==="id").sort((a,b)=>b.s-a.s)[0];
-  if(!best||best.s<6){WT.fails++;drawChip(`Não encontrei um ID nesta imagem${WT.fails>1?" — escolhe uma zona mais justa (botão Zona)":""}.`,"warn");return}
-  WT.fails=0;const v=best.v.toUpperCase();
-  if(WT.seen.has(v)||S.items.some(i=>String(i.devId||"").toUpperCase()===v)){const ex=S.items.find(i=>String(i.devId||"").toUpperCase()===v);drawChip(`${v} já está registado${ex?" em "+esc(ex.code||""):""} — abre a próxima etiqueta.`,"warn");return}
-  if(v===WT.lastId){drawChip(`${v} acabou de ser lido.`);return}
-  const it=wTarget();if(!it){WT.pending=v;WT.pendingBlob=blob;drawChip(`Li ${v}, mas não há equipamento sem ID nesta planta.`,"warn");return}
+  if(!best||best.s<6){WT.fails++;drawChip("não encontrei o ID","warn");
+   if((force||WT.fails>=2)&&!WT.zoneAsked&&!$("dlgCrop").open){WT.zoneAsked=true;toast("Não encontrei o ID no ecrã — escolhe a zona onde ele aparece.");WT.zoneMode=true;screenShot()}return}
+  WT.zoneAsked=false;
+  WT.fails=0;WT.zoneAsked=false;const v=best.v.toUpperCase();
+  if(WT.seen.has(v)||S.items.some(i=>String(i.devId||"").toUpperCase()===v)){const ex=S.items.find(i=>String(i.devId||"").toUpperCase()===v);drawChip(`${v} já registado${ex?" ("+esc(ex.code||"")+")":""}`,"warn");return}
+  if(v===WT.lastId){drawChip(`${v} já lido`,"ok");return}
+  const it=wTarget();if(!it){WT.pending=v;WT.pendingBlob=blob;drawChip(`li ${v}`,"warn");return}
   await applyShot(it,blob,v)}
- catch(e){drawChip("Erro na leitura: "+esc(e.message||e),"warn")}finally{WT.busy=false}}
+ catch(e){drawChip("erro na leitura","warn")}finally{WT.busy=false}}
 /* guarda a captura como foto do equipamento e regista o ID (pelo fluxo normal de leitura) */
 async function applyShot(it,blob,v){WT.lastId=v;if(v)WT.seen.add(v);WT.n++;
  if(S.sel!==it.id)select(it.id);
  await addPhotos(it,[new File([blob],"captura.jpg",{type:"image/jpeg"})]);
  toast(`${v||"Captura"} → ${it.code||"equipamento"}`);
  // a seguir, o próximo sem ID fica selecionado para a próxima etiqueta
- setTimeout(()=>{const n=wTarget();if(n&&n.id!==it.id&&String((S.items.find(i=>i.id===it.id)||{}).devId||"").trim()){select(n.id);if(typeof centerOn==="function")centerOn(n)}drawChip(`Último: ${v||"—"} → ${it.code||""}`,"ok")},2500)}
-setInterval(()=>{if(WT.on&&!WT.busy)drawChip($("wChip")&&$("wChip").querySelector("small")?$("wChip").querySelector("small").innerHTML:"")},4000);
+ setTimeout(()=>{const n=wTarget();if(n&&n.id!==it.id&&String((S.items.find(i=>i.id===it.id)||{}).devId||"").trim()){select(n.id);if(typeof centerOn==="function")centerOn(n)}drawChip(`${v||"—"} → ${esc(it.code||"")}`,"ok")},2500)}
+setInterval(()=>{if(WT.on&&!WT.busy)drawChip()},4000);
+
+/* com a leitura do ecrã ativa, marcar um equipamento novo não abre as opções de foto: lê logo o ecrã para ele */
+const addItemW=addItem;addItem=async function(pt){if(!WT.on)return addItemW(pt);const dp=$("dlgPhoto"),sm=dp.showModal;dp.showModal=()=>{};try{await addItemW(pt)}finally{dp.showModal=sm}const it=cur();
+ if(WT.pending&&WT.pendingBlob&&it){const b=WT.pendingBlob,v=WT.pending;WT.pending=null;WT.pendingBlob=null;applyShot(it,b,v);return}
+ drawChip("a ler para "+esc(it?it.code:""),"busy");WT.last=null;WT.stable=9;setTimeout(()=>tick(true),250)};
 
 boot();

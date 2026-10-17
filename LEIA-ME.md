@@ -248,6 +248,20 @@ Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e o
 2. Onde aparece "ID" ou um código, a app recorta essa linha em alta resolução e lê-a várias vezes para confirmar.
 3. **Validação automática**: o código é comparado com o padrão dos IDs da obra (ex.: 6 caracteres hexadecimais) e o melhor fica gravado sozinho. As outras leituras ficam como botões para corrigir com um toque; só se nada for lido é que a app pede para escrever o ID (e põe o cursor no campo).
 
+## Apresentações interativas (versão 36)
+
+- **Esquemas interativos** (Técnico → Consultar → Esquemas): toca nos comutadores, no inversor, no interruptor ou nos disjuntores e vê a lâmpada acender/apagar e a corrente a circular nos condutores. Botões para simular avarias (defeito à terra → DR dispara; sobrecarga; curto-circuito), passar alguém à frente do sensor, dia/noite e **demonstração automática**.
+- **Simuladores de protocolos** (separador «▶ Simular» em cada protocolo): envia telegramas e vê o pacote a percorrer o bus e a resposta de cada equipamento, com um **monitor do bus** (no Modbus RTU com a trama real em hexadecimal e CRC). Em «Simular avarias» ativas os erros mais comuns (A/B trocados, sem terminação, polaridade, endereços duplicados, fonte DALI em falta, BBMD…) e vês o sintoma e a solução.
+
+## Protocolos em detalhe (versão 35)
+
+Em *Técnico → Consultar → Automação → Tabela de protocolos*, cada protocolo (KNX, DALI, Modbus RTU/TCP, BACnet, DMX512, M-Bus) tem separadores **Características**, **Exemplo** (caso real de obra), **Demonstração** (esquema animado + passos do funcionamento), **Vantagens / desvantagens** e **Erros frequentes** (problema → solução), e o botão **Ler mais** para o site oficial do protocolo (precisa de rede). O assistente também responde a «KNX erros frequentes», «DALI vantagens» ou «exemplo Modbus».
+
+## Versão 34
+
+- **Leitura do ecrã partilhado:** a barra de estado passou a ser uma pequena cápsula em baixo (toca nela para ver o texto; botões ↻ ler agora, ⛶ zona, ■ parar). Com a leitura ativa, **marcar um equipamento novo já não abre as opções de foto**: o ecrã é lido logo para esse equipamento. A escolha da zona só abre sozinha quando o ID não é encontrado no ecrã.
+- **Técnico com visual de bancada técnica:** cabeçalho tipo planta/oscilógrafo, cartões com símbolos e cores por área, mostradores analógicos nos resultados (ΔU, In/IZ, corrente) e o corte do tubo com os condutores desenhados à escala.
+
 ## Selecionar todos e leitura contínua do ecrã (versão 32)
 
 - **Selecionar vários:** aparece uma barra no topo da planta com **Selecionar todos**, *Só os filtrados*, *Sem ID*, *Limpar* e *Terminar* (também Ctrl+A).
