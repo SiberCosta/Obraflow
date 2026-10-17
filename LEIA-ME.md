@@ -248,7 +248,26 @@ Na ficha do equipamento: **Tirar foto** (ou **Carregar**). A app lê o texto e o
 2. Onde aparece "ID" ou um código, a app recorta essa linha em alta resolução e lê-a várias vezes para confirmar.
 3. **Validação automática**: o código é comparado com o padrão dos IDs da obra (ex.: 6 caracteres hexadecimais) e o melhor fica gravado sozinho. As outras leituras ficam como botões para corrigir com um toque; só se nada for lido é que a app pede para escrever o ID (e põe o cursor no campo).
 
-## Apresentações interativas (versão 36)
+## Pasta Segurança — protocolos SADI (versão 39)
+
+Em *Técnico → Consultar → Segurança (SADI)* (ou no cartão SEG-01):
+- **SADI — visão geral:** componentes (EN 54), configurações do RT-SCIE, zonamento (≤ 1 600 m², um piso), regra dos 32 dispositivos e isoladores, botoneiras (≤ 30 m, ≈ 1,2 m), sirenes (65/75/120 dB(A)), central (visor 1,4–1,8 m, 72 h + 30 min), cabos (30 min), colocação de detetores e manutenção — segundo a Nota Técnica 12 da ANEPC.
+- **Protocolos SADI:** convencional, endereçável em laço, Apollo XP95/Discovery e Soteria/CoreProtocol, Hochiki ESP, Siemens FDnet, Bosch LSN, Notifier/Honeywell e integração/transmissão de alerta — com características, exemplo, demonstração, vantagens/desvantagens, erros frequentes e «Ler mais».
+- **Ligação do laço (versão 40):** exemplo completo de um laço classe A — central (saída/retorno/blindagem), isoladores, detetores (com LED remoto num teto falso), botoneira, sirenes, módulo de entrada (fluxostato + fim de linha) e módulo de saída (retentor de porta corta-fogo com fonte auxiliar). Toca em cada elemento para ver os bornes em detalhe, como ligar e os erros frequentes; regras de ligação do laço e lista de troços de cabo para etiquetar em obra.
+- **Exemplo Siemens (versão 41):** laço C-NET/FDnet (Cerberus PRO / Sinteso) com detetores FD720 em bases DB720 (bornes 1b +IN/OUT, 6 −IN, 5 −OUT, 1a indicador externo), botoneira FDM221 (blindagem no borne auxiliar da caixa), módulo FDCIO221 (entrada vigiada do fluxostato + saída relé para o retentor da porta corta-fogo), sirenes com sinalizador FDS226, base sirene-sinalizador FDSB226 e separador de linha FDCL221 — com o detalhe de bornes, ligação e erros de cada um. Confirmar a numeração de bornes do FDM221/FDCIO221 no esquema da ficha de montagem.
+- **Imagens dos equipamentos (versão 42):** nos esquemas de ligação cada equipamento aparece com uma ilustração realista (central, detetor, botoneira, sirene-sinalizador, base com sirene, módulo, isolador). No detalhe de cada um, **«📷 Usar foto real»** permite tirar/carregar a foto do equipamento instalado na obra — passa a aparecer no esquema (guardada na obra e no aparelho; «Voltar à ilustração» repõe).
+- **Simulador de laço:** 12 dispositivos com isoladores e laço classe A: provoca curtos-circuitos e cortes (com/sem isoladores, classe A/B) e alarmes, e vê na central o que fica fora de serviço.
+- O assistente responde a perguntas como «SADI isoladores», «sirenes quantos dB», «autonomia da central».
+
+## Bancada de ligações — simulador quase real (versão 38)
+
+Em *Técnico → Consultar → Bancada de ligações* (ou no cartão LAB-06): aparelhos desenhados como os reais (quadro com disjuntor, interruptor, comutadores, inversor, tomada schuko, sensor, fonte/botão/atuador KNX e luminária) com os seus bornes.
+- **Ligar é simples:** toca num borne e depois noutro — o fio aparece com a **cor automática** pela função (castanho fase, azul neutro, verde/amarelo terra, preto/cinzento retornos, vermelho/preto bus KNX), ou escolhe a cor.
+- **Modo guiado:** os dois bornes do próximo fio piscam e a instrução aparece por baixo. «Mostrar solução» faz a montagem fio a fio.
+- **Ligar disjuntor e testar:** a corrente circula nos fios com tensão, a lâmpada acende e os interruptores funcionam no próprio aparelho. Erros reais são detetados: curto-circuito (o disjuntor dispara), defeito à terra (o DR dispara), interruptor no neutro, fase/neutro trocados, cores erradas, fios a mais, polaridade do bus KNX, fonte KNX sem alimentação.
+- 6 exercícios: interruptor simples, comutador de escada, inversor, tomada com terra, sensor de movimento e KNX botão → atuador.
+
+## Apresentações interativas (versões 36–37)
 
 - **Esquemas interativos** (Técnico → Consultar → Esquemas): toca nos comutadores, no inversor, no interruptor ou nos disjuntores e vê a lâmpada acender/apagar e a corrente a circular nos condutores. Botões para simular avarias (defeito à terra → DR dispara; sobrecarga; curto-circuito), passar alguém à frente do sensor, dia/noite e **demonstração automática**.
 - **Simuladores de protocolos** (separador «▶ Simular» em cada protocolo): envia telegramas e vê o pacote a percorrer o bus e a resposta de cada equipamento, com um **monitor do bus** (no Modbus RTU com a trama real em hexadecimal e CRC). Em «Simular avarias» ativas os erros mais comuns (A/B trocados, sem terminação, polaridade, endereços duplicados, fonte DALI em falta, BBMD…) e vês o sintoma e a solução.

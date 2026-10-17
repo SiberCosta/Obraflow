@@ -350,7 +350,7 @@ const hist=()=>{try{return JSON.parse(localStorage.getItem(HKEY)||"[]")}catch(e)
 const histAdd=h=>{try{localStorage.setItem(HKEY,JSON.stringify([h,...hist()].slice(0,30)))}catch(e){}};
 const TABS=[["inicio","Início"],["calc","Calcular"],["cons","Consultar"],["ia","Assistente"]];
 const CALCS=[["qt","Queda de tensão","ΔU %"],["tubo","Ocupação de tubos","VD"],["prot","Proteções / amperagem","IZ"],["pot","Potências E-REDES","kVA"]];
-const CONS=[["guia","Guia de bolso"],["esq","Esquemas"],["auto","Automação"],["tab","Tabelas e fontes"]];
+const CONS=[["guia","Guia de bolso"],["banc","Bancada de ligações"],["esq","Esquemas"],["auto","Automação"],["seg","Segurança (SADI)"],["tab","Tabelas e fontes"]];
 let root=null;
 function render(Wr,opts){root=Wr;try{D=S.meta&&S.meta.tecData&&typeof S.meta.tecData==="object"?deepMerge(BASE,S.meta.tecData):BASE}catch(e){D=BASE}if(opts){if(opts.tab)st.tab=opts.tab;if(opts.sub)st.sub[opts.tab==="cons"?"cons":"calc"]=opts.sub;if(opts.pre)st.pre=opts.pre;if(opts.ctx!==undefined)st.ctx=opts.ctx;if(opts.q){st.tab="ia";setTimeout(()=>ask(opts.q),50)}if(opts.esq){st.sub.esq=opts.esq}if(opts.auto)st.sub.auto=opts.auto}
  const ctx=st.ctx?`<div class="tecctx">A trabalhar para <b>${esc(st.ctx.label)}</b> — os resultados podem ser guardados aí. <button class="linkb" id="tcCtxX">Limpar</button></div>`:"";
@@ -372,7 +372,7 @@ const DEST=[["Queda de tensão","3% iluminação · 5% outros usos","cons","guia
 function pInicio(B){const h=hist();
  const card=(attr,k,code,t,sub,cls="")=>`<button class="teccard ${cls}" ${attr}><span class="tcode">${code}</span><span class="tci">${ic(k)}</span><b>${t}</b><small>${sub}</small><i class="tgo">→</i></button>`;
  B.innerHTML=`<h3 class="tsec-h"><span>Calcular</span><i></i></h3><div class="tecgrid">${CALCS.map((c,i)=>card(`data-c="${c[0]}"`,c[0],"CALC-0"+(i+1),c[1],{qt:"ΔU %, fator K, secção mínima",tubo:"VD embebido, à vista, colunas",prot:"IZ, disjuntor, fusível gG",pot:"kVA ↔ A, habitação"}[c[0]],"c-"+c[0])).join("")}</div>
-  <h3 class="tsec-h"><span>Consultar e perguntar</span><i></i></h3><div class="tecgrid">${card('data-cs="guia"',"guia","DOC-01","Guia de bolso","Regras rápidas e tabelas","c-guia")}${card('data-cs="esq"',"esq","ESQ-04","Esquemas","Escada, inversor, quadro, sensor","c-esq")}
+  <h3 class="tsec-h"><span>Consultar e perguntar</span><i></i></h3><div class="tecgrid">${card('data-cs="guia"',"guia","DOC-01","Guia de bolso","Regras rápidas e tabelas","c-guia")}${card('data-cs="banc"',"esq","LAB-06","Bancada de ligações","Liga os fios e testa (6 exercícios)","c-banc")}${card('data-cs="seg"',"prot","SEG-01","Segurança · SADI","Protocolos de deteção de incêndio","c-seg")}${card('data-cs="esq"',"esq","ESQ-04","Esquemas","Escada, inversor, quadro, sensor","c-esq")}
   ${card('data-cs="auto"',"auto","BUS-07","Automação","KNX · DALI · Modbus · BACnet","c-auto")}${card('data-ia="1"',"ia","IA-00","Assistente","Pergunta em português","c-ia")}</div>
   <section class="block"><h2>Destaques</h2><div class="tecdest">${DEST.map(d=>`<button data-dg="${d[4]}"><b>${d[0]}</b><span>${d[1]}</span></button>`).join("")}</div></section>
   <section class="block"><h2>Últimos cálculos <small class="muted">neste aparelho</small></h2>${h.length?`<div class="techist">${h.slice(0,8).map((x,i)=>`<div><b>${esc(x.t)}</b><span>${esc(x.r)}</span><small>${fmtDate(x.at)}${x.dest?" · guardado em "+esc(x.dest):""}</small><button class="btn sm" data-hr="${i}">Abrir</button></div>`).join("")}</div>`:`<p class="muted">Ainda sem cálculos. Os resultados que guardares aparecem aqui.</p>`}</section>`;
@@ -477,7 +477,7 @@ function saveResult(title,txt,c,pre){const tasks=S.issues.filter(x=>(x.kind==="t
 
 /* ---------- Consultar ---------- */
 function pCons(B){const c=st.sub.cons;B.innerHTML=`<div class="tecsub">${CONS.map(x=>`<button data-sc="${x[0]}" class="${c===x[0]?"on":""}">${x[1]}</button>`).join("")}</div><div id="tcK"></div>`;
- B.querySelectorAll("[data-sc]").forEach(b=>b.onclick=()=>{st.sub.cons=b.dataset.sc;pCons(B)});({guia:kGuia,esq:kEsq,auto:kAuto,tab:kTab})[c]($("tcK"))}
+ B.querySelectorAll("[data-sc]").forEach(b=>b.onclick=()=>{st.sub.cons=b.dataset.sc;pCons(B)});({guia:kGuia,banc:(E)=>kBanc(E),esq:kEsq,auto:kAuto,seg:(E)=>kSeg(E),tab:kTab})[c]($("tcK"))}
 function kGuia(E){const items=KB.filter(k=>k.h);
  E.innerHTML=`<input class="tecq" id="kgQ" placeholder="Procurar no guia (ex.: diferencial, tubo, 2,5 mm², cores)…"><div class="tecacc" id="kgL"></div>`;
  const draw=q=>{const n=normQ(q);const l=n?items.filter(k=>score(k,n)>0).sort((a,b)=>score(b,n)-score(a,n)):items;
@@ -569,10 +569,10 @@ function interpret(q){const n=normQ(q),v=nums(q),tri=/trifas|400 ?v|tri\b/.test(
   if(x.url)out.html+=`<p><a class="btn sm" href="${x.url}" target="_blank" rel="noopener">Ler mais — ${esc(x.site)} ↗</a></p>`;out.acts.push(["Tabela de protocolos","cons","auto",{auto:"tab"}]);out.src.push(pr.norma);return out}
  // procura no guia
  const hits=KB.map(k=>({k,s:score(k,n)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,3);
- if(hits.length){const k=hits[0].k;if(k.go){out.html=`<p>Encontrei: <b>${k.t}</b>.</p>`;out.acts.push(["Abrir",k.go[0],k.go[1],k.go[0]==="cons"&&k.go[1]==="esq"?{esq:k.go[2]}:{auto:k.go[2]}]);return out}
+ if(hits.length){const k=hits[0].k;if(k.go){out.html=`<p>Encontrei: <b>${k.t}</b>.</p>`;out.acts.push(["Abrir",k.go[0],k.go[1],k.go[0]==="cons"&&k.go[1]==="esq"?{esq:k.go[2]}:k.go[1]==="seg"?{segSub:k.go[2]}:{auto:k.go[2]}]);return out}
   out.html=`<p><b>${k.t}</b></p>${k.h()}`+(hits.length>1?`<p class="mut">Também relacionado: ${hits.slice(1).map(h=>`<button class="linkb" data-ask="${esc(h.k.t)}">${esc(h.k.t)}</button>`).join(" · ")}</p>`:"");if(k.calc)out.acts.push(["Abrir calculadora","calc",k.calc,{}]);out.src.push(F(k.f));return out}
  out.html=`<p>Ainda não sei responder a isso. Tenta com termos como <i>queda de tensão, disjuntor, tubo, diferencial, potência, cores, KNX, comutador de escada</i> — ou com números (ex.: <i>«que secção para 25 A a 40 m»</i>).</p><p class="mut">O assistente funciona só com o guia e as tabelas desta app, sem internet.</p>`;return out}
-const QUICK=["Erros frequentes no Modbus RTU","Queda de tensão 16 A 35 m 2,5 mm²","Que secção para 32 A a 20 m?","Tubo para 5 cabos de 2,5 mm²","6,9 kVA trifásico quantos amperes?","Resistência de terra máxima com 30 mA","Que DR para placa de indução?","Cores dos condutores","Como ligar comutador de escada","DALI quantos dispositivos por linha?","Potência mínima T3 4 compartimentos"];
+const QUICK=["SADI isoladores 32 dispositivos","Erros frequentes no Modbus RTU","Queda de tensão 16 A 35 m 2,5 mm²","Que secção para 32 A a 20 m?","Tubo para 5 cabos de 2,5 mm²","6,9 kVA trifásico quantos amperes?","Resistência de terra máxima com 30 mA","Que DR para placa de indução?","Cores dos condutores","Como ligar comutador de escada","DALI quantos dispositivos por linha?","Potência mínima T3 4 compartimentos"];
 function pIA(B){B.innerHTML=`<div class="tecchat"><div class="tcmsgs" id="tcMsgs">${st.chat.length?"":`<div class="tcm bot"><p>Olá! Sou o assistente técnico. Respondo com base no guia e nas tabelas RTIEBT desta app — <b>sem internet</b>. Faz uma pergunta ou escolhe um atalho.</p></div>`}</div>
   <div class="tcquick">${QUICK.map(q=>`<button data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
   <form class="tcin" id="tcF"><input id="tcQ" placeholder="Escreve a tua dúvida… (ex.: disjuntor para 20 A em 2,5 mm²)" autocomplete="off"><button class="btn primary">Perguntar</button></form>
@@ -582,7 +582,7 @@ function pIA(B){B.innerHTML=`<div class="tecchat"><div class="tcmsgs" id="tcMsgs
 function ask(q){if(st.tab!=="ia"||!$("tcMsgs")){st.tab="ia";render(root)}const r=interpret(q);const m={q,r,at:now()};st.chat.push(m);st.chat=st.chat.slice(-30);appendMsg(m,true)}
 function appendMsg(m,scroll){const box=$("tcMsgs");if(!box)return;const d=document.createElement("div");d.className="tcpair";
  d.innerHTML=`<div class="tcm me"><p>${esc(m.q)}</p></div><div class="tcm bot"><span class="tbav">${ic("ia")}</span>${m.r.html}${m.r.src.length?`<p class="tcsrc">Fonte: ${[...new Set(m.r.src)].map(esc).join(" · ")}</p>`:""}<div class="toolrow">${m.r.acts.map((a,i)=>`<button class="btn sm" data-act="${i}">${a[0]}</button>`).join("")}<button class="btn sm" data-sv="1">Guardar resposta</button></div></div>`;
- box.appendChild(d);d.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=m.r.acts[+b.dataset.act];if(a[1]==="calc"){st.pre=a[3]||{};goTec("calc",a[2])}else{const ex=a[3]||{};if(ex.esq)st.sub.esq=ex.esq;if(ex.auto)st.sub.auto=ex.auto;goTec("cons",a[2],ex.guia?{guia:ex.guia}:null)}});
+ box.appendChild(d);d.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=m.r.acts[+b.dataset.act];if(a[1]==="calc"){st.pre=a[3]||{};goTec("calc",a[2])}else{const ex=a[3]||{};if(ex.esq)st.sub.esq=ex.esq;if(ex.auto)st.sub.auto=ex.auto;if(ex.segSub)st.sub.seg=ex.segSub;goTec("cons",a[2],ex.guia?{guia:ex.guia}:null)}});
  d.querySelectorAll("[data-ask]").forEach(b=>b.onclick=()=>ask(b.dataset.ask));
  d.querySelector("[data-sv]").onclick=()=>{const t=document.createElement("div");t.innerHTML=m.r.html;saveResult("Assistente: "+m.q,t.textContent.replace(/\s+/g," ").trim().slice(0,600),null,null)};
  if(scroll)d.scrollIntoView({block:"end",behavior:"smooth"})}
@@ -659,29 +659,29 @@ const SIMS={
    if(a==="rd"){await ui.send("VS","*","GroupValueRead 1/0/101");await ui.send("AT","VS",`GroupValueResponse 1/0/101 = ${s.l1?"ON":"OFF"} · 1/0/102 = ${s.l2?"ON":"OFF"}`);return}
    const B=a==="b1"?"B1":"B2",g=a==="b1"?"1/0/1":"1/0/2",k=a==="b1"?"l1":"l2";
    if(a==="b1"&&F.pol){ui.log("✗ 1.1.3 sem bus (polaridade trocada): mede-se −29 V. Trocar vermelho/preto.","err");ui.flash("B1","bad");return}
-   s[k]=s[k]?0:1;await ui.send(B,"*",`${a==="b1"?"1.1.3":"1.1.4"} → ${g} GroupValueWrite ${s[k]?"ON":"OFF"}`);
+   s[k]=s[k]?0:1;await ui.send(B,"*",`${a==="b1"?"1.1.3":"1.1.4"} → ${g} GroupValueWrite ${s[k]?"ON":"OFF"}`,{short:`${g} ${s[k]?"ON":"OFF"}`,title:"Telegrama KNX",f:[["Origem (end. físico)",a==="b1"?"1.1.3":"1.1.4","#e8a317"],["Destino (grupo)",g,"#0891b2"],["Serviço","GroupValueWrite","#7c3aed"],["Tipo de dado","DPT 1.001 (on/off)","#64748b"],["Valor",s[k]?"1 = ON":"0 = OFF",s[k]?"#16a34a":"#dc2626"]]});
    if(a==="b2"&&F.dup){ui.log("⚠ Dois dispositivos responderam como 1.1.4 — colisão; ETS: «Verificar endereço físico».","warn");ui.flash("B2","bad")}
-   ui.flash("AT","ok");await ui.send("AT","*",`1.1.10 → 1/0/10${a==="b1"?1:2} estado ${s[k]?"ON":"OFF"}`);ui.out()}},
+   ui.flash("AT","ok");ui.out();await ui.send("AT","*",`1.1.10 → 1/0/10${a==="b1"?1:2} estado ${s[k]?"ON":"OFF"}`,{short:`estado ${s[k]?"ON":"OFF"}`})}},
  "DALI / DALI-2":{nodes:[["CT","Controlador + fonte DALI"],["L0","Luminária 0 · G1"],["L1","Luminária 1 · G1"],["L2","Luminária 2 · G2"],["L3","Luminária 3 · G2"],["L4","Luminária 4 · G2"]],
   st:()=>({lv:[0,0,0,0,0],g:"0"}),faults:[["nops","Sem fonte do bus DALI"],["vd","Queda de tensão > 2 V (linha longa)"],["drv","Driver da luminária 4 avariado"]],
   ctl:s=>`<label class="simf">Destino<select data-k="g"><option value="0">Todos (broadcast)</option><option value="1">Grupo 1</option><option value="2">Grupo 2</option></select></label><label class="simf">Nível <b data-v>60%</b><input type="range" min="0" max="100" step="5" value="60" data-k="lv"></label><button class="btn sm primary" data-a="go">Enviar</button><button class="btn sm" data-a="q">Perguntar avarias</button>`,
   out:s=>`<div class="simouts">${s.lv.map((v,i)=>`<div class="so lum ${v?"on":""}" style="--l:${v/100}"><i></i>L${i} · ${v}%</div>`).join("")}</div>`,
   act:async(a,s,F,ui,c)=>{if(F.nops){ui.log("✗ Bus DALI sem tensão (0 V): nenhuma luminária responde. Ligar uma fonte DALI (≈16 V, ≤250 mA).","err");ui.flash("CT","bad");return}
    if(a==="q"){await ui.send("CT","*","QUERY LAMP FAILURE (broadcast)");if(F.drv){await ui.send("L4","CT","Resposta: sim — avaria na luminária 4");ui.flash("L4","bad")}else ui.log("Sem respostas: nenhuma avaria.","ok");return}
-   const g=c.g||"0",lv=+c.lv;const tgt=[0,1,2,3,4].filter(i=>g==="0"||(g==="1"?i<2:i>=2));await ui.send("CT","*",`DAPC ${g==="0"?"broadcast":"grupo "+g} → ${lv}%`);
+   const g=c.g||"0",lv=+c.lv;const tgt=[0,1,2,3,4].filter(i=>g==="0"||(g==="1"?i<2:i>=2));await ui.send("CT","*",`DAPC ${g==="0"?"broadcast":"grupo "+g} → ${lv}%`,{short:`${g==="0"?"todos":"G"+g} ${lv}%`,title:"Comando DALI (forward frame 16 bits)",f:[["Endereço",g==="0"?"FE (broadcast)":`${(0x80|((+g-1)<<1)).toString(16).toUpperCase()} (grupo ${g})`,"#e8a317"],["Nível (arc power)",String(Math.round(lv/100*254))+" de 254","#0891b2"],["Percentagem",lv+"%","#16a34a"]]});
    for(const i of tgt){if(F.vd&&i>=3){ui.log(`✗ L${i} não recebeu (tensão < 9,5 V no fim da linha). Aumentar secção/encurtar.`,"err");ui.flash("L"+i,"bad");continue}if(F.drv&&i===4){ui.flash("L4","bad");continue}s.lv[i]=lv;ui.flash("L"+i,"ok")}ui.out()}},
  "Modbus RTU":{nodes:[["M","Mestre (GTC)"],["S1","Analisador 1"],["S2","Analisador 2"],["S3","Analisador 3"],["S4","Analisador 4"]],
   st:()=>({}),faults:[["ab","Fios A/B trocados"],["term","Sem terminação de 120 Ω"],["baud","Analisador 3 com outra velocidade"],["dup","Analisadores 2 e 4 com o mesmo endereço"]],
   ctl:s=>`<label class="simf">Escravo<select data-k="id"><option>1</option><option>2</option><option>3</option><option>4</option></select></label><label class="simf">Registo<select data-k="reg"><option value="3000">3000 Tensão (V)</option><option value="3002">3002 Corrente (A)</option><option value="3004">3004 Energia (kWh)</option></select></label><button class="btn sm primary" data-a="go">Ler (função 03)</button>`,
   out:s=>"",
   act:async(a,s,F,ui,c)=>{const id=+c.id||1,reg=+c.reg||3000;const req=[id,3,reg>>8,reg&255,0,2];const fr=[...req,...crc16(req)];
-   await ui.send("M","S"+id,`TX ${hx(fr)}  (escravo ${id}, função 03, registo ${reg}, 2 registos)`);
+   await ui.send("M","S"+id,`TX ${hx(fr)}  (escravo ${id}, função 03, registo ${reg}, 2 registos)`,{short:"→ escravo "+id,title:"Pedido Modbus RTU",f:[["Escravo",hx([id]),"#e8a317"],["Função","03 ler registos","#7c3aed"],["Registo",hx([reg>>8,reg&255])+" ("+reg+")","#0891b2"],["Quantidade","00 02","#64748b"],["CRC16",hx(crc16(req)),"#16a34a"]]});
    if(F.ab){ui.log("✗ Timeout: nenhum escravo entende a trama (A/B trocados). Trocar os dois fios.","err");ui.flash("S"+id,"bad");return}
    if(F.baud&&id===3){ui.log("✗ Timeout no escravo 3: velocidade/paridade diferentes. Igualar a todos (ex.: 9600 8N1).","err");ui.flash("S3","bad");return}
    if(F.dup&&(id===2||id===4)){await ui.send("S2","M","RX ?? ?? ?? (duas respostas ao mesmo tempo)");ui.log("✗ Erro de CRC: dois escravos responderam (endereço duplicado). Dar endereços únicos.","err");ui.flash("S4","bad");return}
    const val=reg===3000?230+id*0.7:reg===3002?5+id*1.3:1200+id*311;const f32=new DataView(new ArrayBuffer(4));f32.setFloat32(0,val);const by=[0,1,2,3].map(i=>f32.getUint8(i));
    let resp=[id,3,4,...by];resp=[...resp,...crc16(resp)];if(F.term&&Math.random()<.5){resp[5]^=0x20;await ui.send("S"+id,"M",`RX ${hx(resp)}`);ui.log("✗ CRC inválido (reflexões no cabo sem terminação). Pôr 120 Ω nas duas pontas.","err");return}
-   await ui.send("S"+id,"M",`RX ${hx(resp)}`);ui.log(`✓ Valor (float): ${val.toLocaleString("pt-PT",{maximumFractionDigits:1})} ${reg===3000?"V":reg===3002?"A":"kWh"}`,"ok");ui.flash("S"+id,"ok")}},
+   await ui.send("S"+id,"M",`RX ${hx(resp)}`,{short:"resposta",title:"Resposta Modbus RTU",f:[["Escravo",hx([id]),"#e8a317"],["Função","03","#7c3aed"],["Bytes","04","#64748b"],["Dados (float)",hx(by),"#0891b2"],["CRC16",hx(resp.slice(-2)),"#16a34a"],["Valor",val.toLocaleString("pt-PT",{maximumFractionDigits:1})+(reg===3000?" V":reg===3002?" A":" kWh"),"#dc2626"]]});ui.log(`✓ Valor (float): ${val.toLocaleString("pt-PT",{maximumFractionDigits:1})} ${reg===3000?"V":reg===3002?"A":"kWh"}`,"ok");ui.flash("S"+id,"ok")}},
  "Modbus TCP":{nodes:[["C","SCADA 192.168.1.10"],["SW","Switch"],["GW","Gateway 192.168.1.50 :502"],["S1","Analisador (Unit 1)"],["S2","Analisador (Unit 2)"]],
   st:()=>({}),faults:[["ip","IP da gateway errado no SCADA"],["fw","Firewall a bloquear a porta 502"],["uid","Unit ID errado"]],
   ctl:s=>`<label class="simf">Unit ID<select data-k="id"><option>1</option><option>2</option></select></label><button class="btn sm primary" data-a="go">Ler registo 3000</button>`,out:s=>"",
@@ -713,24 +713,33 @@ const SIMS={
     if(F.dup&&ad===2){await ui.send("A2","M","RSP ?? (colisão)");ui.log("✗ Colisão: dois contadores responderam ao end. 2 — usar endereço secundário (n.º de série).","err");ui.flash("T3","bad");continue}
     await ui.send(k,"M",`RSP_UD ${v}`);s.r[k]=v;ui.flash(k,"ok");ui.out()}}}
 };
-function simHtml(p){const S=SIMS[p.n];if(!S)return"";const n=S.nodes.length;const W=640,sp=(W-120)/(n-1);
- return`<div class="sim" data-sim="${esc(p.n)}"><div class="simwrap"><svg class="simbus" viewBox="0 0 ${W} 120" role="img"><line x1="30" y1="86" x2="${W-30}" y2="86" class="sb-l"/>
-  ${S.nodes.map((nd,i)=>{const x=60+i*sp;return`<g class="sb-n" data-n="${nd[0]}" transform="translate(${x},0)"><line x1="0" y1="62" x2="0" y2="86" class="sb-t"/><rect x="-46" y="10" width="92" height="52" rx="10" class="sb-b"/>${(nd[1].length>15?[nd[1].split(" · ")[0],nd[1].split(" · ")[1]||""]:[nd[1],""]).map((l,k)=>`<text x="0" y="${l&&k?48:32+(nd[1].length>15?0:6)}" class="sb-tx${k?" s":""}">${esc(l)}</text>`).join("")}<circle cx="38" cy="18" r="4" class="sb-led"/></g>`}).join("")}
-  <circle r="7" class="sb-pk" cx="-20" cy="86"/></svg></div>
-  <div class="simctl">${S.ctl({})}</div><div class="simout"></div>
-  <details class="simf2"><summary>Simular avarias</summary>${S.faults.map(f=>`<label><input type="checkbox" data-f="${f[0]}"> ${f[1]}</label>`).join("")}</details>
-  <div class="simlog" aria-live="polite"><div class="sl-h">monitor do bus</div></div></div>`}
-function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const S=SIMS[el.dataset.sim];const s=S.st();const F={};const n=S.nodes.length,W=640,sp=(W-120)/(n-1);
- const X=id=>{const i=S.nodes.findIndex(x=>x[0]===id);return 60+i*sp};const pk=el.querySelector(".sb-pk");const log=el.querySelector(".simlog");let busy=false;
- const ui={log:(t,k)=>{const d=document.createElement("div");d.className="sl "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${esc(t).replace(/^([✓✗⚠])/,"<b>$1</b>")}`;log.appendChild(d);while(log.children.length>40)log.children[1].remove();log.scrollTop=log.scrollHeight},
+const NICO={ps:'<path d="M13 2 5 13h6l-1 9 8-11h-6z"/>',btn:'<rect x="5" y="5" width="14" height="14" rx="3"/><circle cx="12" cy="12" r="3"/>',act:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 4v6M12 4v6M16 4v6M8 14h8"/>',
+ disp:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6M12 17v4"/>',ctl:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M8 9h3M8 12h8"/>',lum:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+ meter:'<circle cx="12" cy="13" r="8"/><path d="m12 13 3-4M8 5l1 2M16 5l-1 2"/>',net:'<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M7 12h0M11 12h0M15 12h0"/>',gw:'<path d="M4 12h16M14 6l6 6-6 6M10 6 4 12l6 6"/>',
+ proj:'<path d="M4 9h10l6-4v14l-6-4H4z"/>',hvac:'<circle cx="12" cy="12" r="8"/><path d="M12 4c2 3 2 5 0 8s-2 5 0 8M4 12c3-2 5-2 8 0s5 2 8 0"/>'};
+const ntype=l=>/fonte/i.test(l)?"ps":/bot[aã]o/i.test(l)?"btn":/atuador/i.test(l)?"act":/visor/i.test(l)?"disp":/lumin/i.test(l)?"lum":/analisador|contador|água|térmico|agua/i.test(l)?"meter":/switch|router/i.test(l)?"net":/gateway/i.test(l)?"gw":/projetor/i.test(l)?"proj":/uta|chiller|quadro/i.test(l)?"hvac":"ctl";
+function simHtml(p){const S=SIMS[p.n];if(!S)return"";const n=S.nodes.length;const W=640,sp=(W-130)/(n-1);
+ return`<div class="sim" data-sim="${esc(p.n)}"><div class="simwrap"><svg class="simbus" viewBox="0 0 ${W} 132" role="img"><line x1="22" y1="108" x2="${W-22}" y2="108" class="sb-l"/><line x1="22" y1="114" x2="${W-22}" y2="114" class="sb-l2"/>
+  ${S.nodes.map((nd,i)=>{const x=65+i*sp;const [a,b]=nd[1].split(" · ");return`<g class="sb-n" data-n="${nd[0]}" transform="translate(${x},0)"><line x1="0" y1="74" x2="0" y2="108" class="sb-t"/><circle cx="0" cy="108" r="3.5" class="sb-j"/><rect x="-52" y="8" width="104" height="66" rx="12" class="sb-b"/>
+   <g transform="translate(-11,14)"><svg width="22" height="22" viewBox="0 0 24 24" class="sb-ic">${NICO[ntype(nd[1])]}</svg></g><text x="0" y="${b?52:56}" class="sb-tx">${esc(a.length>16?a.slice(0,15)+"…":a)}</text>${b?`<text x="0" y="66" class="sb-tx s">${esc(b)}</text>`:""}<circle cx="42" cy="18" r="4" class="sb-led"/></g>`}).join("")}
+  <g class="sb-pk" transform="translate(-60,0)"><rect x="-34" y="80" width="68" height="16" rx="8" class="sb-pkb"/><text x="0" y="91.5" class="sb-pkl"></text><circle r="7" cx="0" cy="108" class="sb-pkd"/></g></svg></div>
+  <div class="simtg" hidden></div>
+  <div class="simpanel"><div class="simctl">${S.ctl({})}</div><div class="simout"></div></div>
+  <details class="simf2"><summary>⚠ Simular avarias <small>(ativa um erro e vê o sintoma)</small></summary><div class="simfl">${S.faults.map(f=>`<label class="fsw"><input type="checkbox" data-f="${f[0]}"><span class="tg"></span>${f[1]}</label>`).join("")}</div></details>
+  <div class="simlog" aria-live="polite"><div class="sl-h"><span>monitor do bus</span><button type="button" class="sl-clr" title="Limpar">limpar</button></div></div></div>`}
+function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const S=SIMS[el.dataset.sim];const s=S.st();const F={};const n=S.nodes.length,W=640,sp=(W-130)/(n-1);
+ const X=id=>{const i=S.nodes.findIndex(x=>x[0]===id);return 65+i*sp};const pk=el.querySelector(".sb-pk");const log=el.querySelector(".simlog");let busy=false;
+ const ui={log:(t,k)=>{const d=document.createElement("div");d.className="sl "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${esc(t).replace(/^([✓✗⚠])/,"<b>$1</b>")}`;log.appendChild(d);while(log.children.length>40)log.children[1].remove();log.scrollTop=log.scrollHeight;d.classList.add("new")},
   flash:(id,k)=>{const g=el.querySelector(`[data-n="${id}"]`);if(!g)return;g.classList.remove("ok","bad");void g.getBBox();g.classList.add(k);setTimeout(()=>g.classList.remove(k),1400)},
-  send:(a,b,t)=>new Promise(res=>{ui.log(t,"tx");const x0=X(a),x1=b==="*"?null:X(b);const cls=b==="*"?"bc":"";pk.setAttribute("class","sb-pk "+cls);
-   const pts=b==="*"?[x0,30,W-30,x0]:[x0,x1];const dur=b==="*"?900:Math.max(350,Math.abs(x1-x0)*1.6);
-   const kf=b==="*"?[{cx:x0},{cx:30},{cx:W-30},{cx:x0}]:[{cx:x0},{cx:x1}];
-   try{const an=pk.animate(kf.map(k=>({transform:`translateX(${k.cx+20}px)`})),{duration:dur,easing:"ease-in-out"});an.onfinish=()=>{pk.style.transform=`translateX(-40px)`;if(b!=="*")ui.flash(b,"rx");res()}}catch(e){res()}
-   el.querySelector(`[data-n="${a}"]`)?.classList.add("tx");setTimeout(()=>el.querySelector(`[data-n="${a}"]`)?.classList.remove("tx"),dur)}),
+  send:(a,b,t,fl)=>new Promise(res=>{ui.log(t,"tx");const x0=X(a),x1=b==="*"?null:X(b);pk.setAttribute("class","sb-pk "+(b==="*"?"bc":""));
+   const lab=(fl&&fl.short)||String(t).replace(/^(TX|RX)\s*/,"").split(/[ (]/).slice(0,2).join(" ");pk.querySelector(".sb-pkl").textContent=lab.slice(0,14);
+   if(fl&&fl.f){const tg=el.querySelector(".simtg");tg.hidden=false;tg.innerHTML=`<span class="tgk">${esc(fl.title||"Trama")}</span>${fl.f.map(x=>`<span class="tgf" style="--c:${x[2]||"#0891b2"}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join("")}`}
+   const kf=b==="*"?[x0,22,W-22,x0]:[x0,x1];const dur=b==="*"?1100:Math.max(450,Math.abs(x1-x0)*1.9);
+   const ga=el.querySelector(`[data-n="${a}"]`);ga&&ga.classList.add("tx");
+   try{const an=pk.animate(kf.map(c=>({transform:`translate(${c}px,0)`})),{duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"});an.onfinish=()=>{pk.setAttribute("transform","translate(-60,0)");pk.style.transform="";ga&&ga.classList.remove("tx");if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".sb-n").forEach(g=>{if(g!==ga){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()}}catch(e){ga&&ga.classList.remove("tx");res()}}),
   out:()=>{el.querySelector(".simout").innerHTML=S.out(s)}};
  ui.out();ui.log("Pronto. Usa os botões para enviar telegramas; em «Simular avarias» vês o que acontece com os erros mais comuns.","");
+ el.querySelector(".sl-clr").onclick=()=>{[...log.querySelectorAll(".sl")].forEach(x=>x.remove())};
  const ctl=()=>{const c={};el.querySelectorAll(".simctl [data-k]").forEach(i=>c[i.dataset.k]=i.value);return c};
  el.querySelectorAll(".simctl input[type=range]").forEach(r=>r.oninput=()=>{const v=r.parentElement.querySelector("[data-v]");if(v)v.textContent=r.value+"%"});
  el.querySelectorAll("[data-f]").forEach(c=>c.onchange=()=>{F[c.dataset.f]=c.checked;ui.log((c.checked?"Avaria ativada: ":"Avaria removida: ")+c.parentElement.textContent.trim(),c.checked?"warn":"ok")});
@@ -741,6 +750,423 @@ protoDetail=function(p){let h=protoDetailBase(p);if(!SIMS[p.n])return h;
  h=h.replace('<button type="button" data-pdt="car" class="on">Características</button>','<button type="button" data-pdt="sim" class="on sim">▶ Simular</button><button type="button" data-pdt="car">Características</button>');
  h=h.replace('<div class="pdp" data-pdp="car">','<div class="pdp" data-pdp="sim">'+simHtml(p)+'</div><div class="pdp" data-pdp="car" hidden>');return h};
 const wireProtoBase=wireProto;wireProto=function(root){wireProtoBase(root);wireSims(root)};
+
+/* ---------------------------------------------------------
+   9) BANCADA DE LIGAÇÕES — simulador quase real: liga os bornes com 2 toques,
+      liga o disjuntor e vê se funciona (com diagnóstico de erros reais)
+   --------------------------------------------------------- */
+const WCOL={L:["Castanho","#7a4a21"],K:["Preto","#1f2937"],G:["Cinzento","#8a8f94"],N:["Azul","#2f7fd0"],PE:["Verde/amarelo","#2e9d4b"],R:["Vermelho","#dc2626"]};
+/* aparelhos: cada borne tem id, posição e papel (para a cor automática) */
+const DEV={
+ sup:(x,y)=>({w:150,h:120,k:"sup",title:"Quadro · circuito 10 A",t:[["L",x+30,y+120,"L","L"],["N",x+75,y+120,"N","N"],["PE",x+120,y+120,"PE","PE"]]}),
+ sw:(x,y,id,lab)=>({w:96,h:110,k:"sw",title:lab||"Interruptor",t:[["L",x+28,y+110,"L","L"],["1",x+68,y+110,"1","K"]]}),
+ com:(x,y,id,lab)=>({w:110,h:110,k:"com",title:lab||"Comutador",t:[["C",x+22,y+110,"C","L"],["1",x+55,y+110,"1","K"],["2",x+88,y+110,"2","G"]]}),
+ inv:(x,y)=>({w:120,h:110,k:"inv",title:"Inversor",t:[["E1",x+18,y+110,"E1","K"],["E2",x+46,y+110,"E2","G"],["S1",x+74,y+110,"S1","K"],["S2",x+102,y+110,"S2","G"]]}),
+ lamp:(x,y)=>({w:120,h:120,k:"lamp",title:"Luminária",t:[["L",x+25,y+120,"L","L"],["N",x+60,y+120,"N","N"],["PE",x+95,y+120,"PE","PE"]]}),
+ sock:(x,y)=>({w:120,h:120,k:"sock",title:"Tomada schuko",t:[["L",x+25,y+120,"L","L"],["N",x+60,y+120,"N","N"],["PE",x+95,y+120,"PE","PE"]]}),
+ sens:(x,y)=>({w:120,h:110,k:"sens",title:"Sensor de movimento",t:[["L",x+25,y+110,"L","L"],["N",x+60,y+110,"N","N"],["Ls",x+95,y+110,"L'","K"]]}),
+ kps:(x,y)=>({w:120,h:110,k:"kps",title:"Fonte KNX",t:[["L",x+18,y+110,"L","L"],["N",x+44,y+110,"N","N"],["P",x+80,y+110,"+","R"],["M",x+104,y+110,"−","K"]]}),
+ kbt:(x,y)=>({w:96,h:110,k:"kbt",title:"Botão KNX",t:[["P",x+30,y+110,"+","R"],["M",x+66,y+110,"−","K"]]}),
+ kac:(x,y)=>({w:130,h:110,k:"kac",title:"Atuador KNX",t:[["P",x+18,y+110,"+","R"],["M",x+42,y+110,"−","K"],["C",x+80,y+110,"C","L"],["1",x+110,y+110,"1","K"]]})
+};
+const EXS=[
+ {id:"simples",n:"Interruptor simples",lv:1,d:"Uma lâmpada comandada de um ponto.",devs:[["Q","sup",30,50],["S","sw",330,60],["Lm","lamp",640,50]],
+  sol:[["Q.L","S.L"],["S.1","Lm.L"],["Q.N","Lm.N"],["Q.PE","Lm.PE"]],ctrl:[["S","Interruptor"]]},
+ {id:"escada",n:"Comutador de escada",lv:2,d:"Uma lâmpada comandada de dois pontos.",devs:[["Q","sup",20,50],["C1","com",250,60,"Comutador 1"],["C2","com",450,60,"Comutador 2"],["Lm","lamp",680,50]],
+  sol:[["Q.L","C1.C"],["C1.1","C2.1"],["C1.2","C2.2"],["C2.C","Lm.L"],["Q.N","Lm.N"],["Q.PE","Lm.PE"]],ctrl:[["C1","Comutador 1"],["C2","Comutador 2"]]},
+ {id:"inversor",n:"Inversor (3 pontos)",lv:3,d:"Comutador – inversor – comutador.",devs:[["Q","sup",10,50],["C1","com",190,60,"Comutador 1"],["I","inv",345,60],["C2","com",510,60,"Comutador 2"],["Lm","lamp",690,50]],
+  sol:[["Q.L","C1.C"],["C1.1","I.E1"],["C1.2","I.E2"],["I.S1","C2.1"],["I.S2","C2.2"],["C2.C","Lm.L"],["Q.N","Lm.N"],["Q.PE","Lm.PE"]],ctrl:[["C1","Comutador 1"],["I","Inversor"],["C2","Comutador 2"]]},
+ {id:"tomada",n:"Tomada com terra",lv:1,d:"Alimentar uma tomada schuko.",devs:[["Q","sup",60,50],["T","sock",520,50]],sol:[["Q.L","T.L"],["Q.N","T.N"],["Q.PE","T.PE"]],ctrl:[]},
+ {id:"sensor",n:"Sensor de movimento",lv:2,d:"A luz acende quando alguém passa.",devs:[["Q","sup",30,50],["Se","sens",330,60],["Lm","lamp",640,50]],
+  sol:[["Q.L","Se.L"],["Q.N","Se.N"],["Se.Ls","Lm.L"],["Q.N","Lm.N"],["Q.PE","Lm.PE"]],ctrl:[["Se","Passar alguém"]]},
+ {id:"knx",n:"KNX: botão → atuador",lv:3,d:"Fonte KNX, botão e atuador que liga a lâmpada.",devs:[["Q","sup",10,50],["F","kps",190,60],["B","kbt",345,60],["A","kac",470,60],["Lm","lamp",690,50]],
+  sol:[["Q.L","F.L"],["Q.N","F.N"],["F.P","B.P"],["F.M","B.M"],["B.P","A.P"],["B.M","A.M"],["Q.L","A.C"],["A.1","Lm.L"],["Q.N","Lm.N"],["Q.PE","Lm.PE"]],ctrl:[["B","Carregar no botão KNX"]]}
+];
+const BS={ex:"simples",w:[],sel:null,col:"auto",on:false,guided:true,st:{},msg:[],trip:null,anim:null};
+function bLayout(ex){const L={};for(const[id,k,x,y,lab]of ex.devs){const d=DEV[k](x,y,id,lab);L[id]={...d,x,y,id,lab:d.title};d.t.forEach(t=>{L[id+"."+t[0]]={id:id+"."+t[0],dev:id,x:t[1],y:t[2],lab:t[3],role:t[4]}})}return L}
+/* redes: une bornes ligados por fios e pelos contactos internos fechados */
+function bNets(ex,L,internal){const p={};const f=a=>{while(p[a]&&p[a]!==a)a=p[a];return a};const u=(a,b)=>{a=f(a);b=f(b);if(a!==b)p[a]=b};
+ Object.keys(L).filter(k=>k.includes(".")).forEach(k=>p[k]=k);BS.w.forEach(w=>u(w.a,w.b));if(internal)bInternal(ex,L).forEach(([a,b])=>u(a,b));return f}
+function bInternal(ex,L){const c=[];const s=BS.st;
+ for(const[id,k]of ex.devs){if(k==="sw"&&s[id])c.push([id+".L",id+".1"]);if(k==="com")c.push([id+".C",id+"."+(s[id]?"2":"1")]);
+  if(k==="inv"){if(s[id]){c.push([id+".E1",id+".S2"],[id+".E2",id+".S1"])}else c.push([id+".E1",id+".S1"],[id+".E2",id+".S2"])}
+  if(k==="sens"&&s[id]&&s[id+"pw"])c.push([id+".L",id+".Ls"]);if(k==="kac"&&s[id+"rl"])c.push([id+".C",id+".1"])}return c}
+function bEval(ex){const L=bLayout(ex);const out={lamp:false,live:new Set(),err:[],warn:[],bus:null};if(!BS.on)return out;
+ // alimentação do sensor e da fonte KNX (precisam de L e N)
+ let f=bNets(ex,L,true);const Lr=f("Q.L"),Nr=f("Q.N"),PEr=f("Q.PE");
+ for(const[id,k]of ex.devs){if(k==="sens")BS.st[id+"pw"]=f(id+".L")===Lr&&f(id+".N")===Nr;}
+ f=bNets(ex,L,true);const lr=f("Q.L"),nr=f("Q.N"),per=f("Q.PE");
+ if(lr===nr){out.err.push("Curto-circuito: a fase está ligada diretamente ao neutro. O disjuntor disparou.");BS.trip="cc";return out}
+ if(lr===per){out.err.push("Defeito à terra: a fase toca no condutor de proteção. O diferencial disparou.");BS.trip="dr";return out}
+ if(nr===per)out.warn.push("Neutro ligado à terra depois do diferencial — o DR vai disparar com qualquer carga.");
+ Object.keys(L).filter(k=>k.includes(".")).forEach(k=>{if(f(k)===lr)out.live.add(k)});
+ // cargas: lâmpada/tomada acendem se L e N certos
+ for(const[id,k]of ex.devs){if(k==="lamp"||k==="sock"){const okL=f(id+".L")===lr,okN=f(id+".N")===nr;const on=okL&&okN;if(k==="lamp")out.lamp=out.lamp||on;else out.sock=on;
+   if(f(id+".L")===nr&&f(id+".N")===lr)out.warn.push("Fase e neutro trocados na "+(k==="lamp"?"luminária":"tomada")+" (funciona, mas o casquilho fica com tensão).");}}
+ // interruptor/comutador a cortar o neutro
+ for(const[id,k]of ex.devs){if((k==="sw"||k==="com"||k==="inv")&&ex.devs.some(d=>d[1]==="lamp")){const ts=DEV[k](0,0).t.map(t=>id+"."+t[0]);if(ts.some(t=>f(t)===nr))out.warn.push(`O ${L[id].lab.toLowerCase()} está no neutro: deve cortar sempre a fase.`)}}
+ // KNX: bus
+ if(ex.devs.some(d=>d[1]==="kps")){const f0=bNets(ex,L,false);const pw=f0("F.L")===f0("Q.L")&&f0("F.N")===f0("Q.N");const P=f0("F.P"),M=f0("F.M");const bus={pw,short:P===M,B:null,A:null};
+  const chk=id=>f0(id+".P")===P&&f0(id+".M")===M?"ok":f0(id+".P")===M&&f0(id+".M")===P?"pol":"off";bus.B=chk("B");bus.A=chk("A");out.bus=bus;
+  if(!pw)out.warn.push("A fonte KNX não está alimentada (liga L e N à fonte).");else if(bus.short)out.err.push("Curto-circuito no bus KNX (+ ligado ao −).");
+  else{if(bus.B==="pol")out.warn.push("Botão KNX com a polaridade trocada (vermelho no +, preto no −).");if(bus.A==="pol")out.warn.push("Atuador KNX com a polaridade trocada.");if(bus.B==="off")out.warn.push("O botão KNX não está ligado ao bus.");if(bus.A==="off")out.warn.push("O atuador KNX não está ligado ao bus.")}}
+ return out}
+/* compara com a solução: o que falta e o que está a mais */
+function bCheck(ex){const L=bLayout(ex);const f=bNets(ex,L,false);const miss=[],extra=[];
+ const sp={};const g=a=>{while(sp[a]&&sp[a]!==a)a=sp[a];return a};Object.keys(L).filter(k=>k.includes(".")).forEach(k=>sp[k]=k);ex.sol.forEach(([a,b])=>{const x=g(a),y=g(b);if(x!==y)sp[x]=y});
+ ex.sol.forEach(([a,b])=>{if(f(a)!==f(b))miss.push([a,b])});BS.w.forEach(w=>{if(g(w.a)!==g(w.b))extra.push(w)});
+ const col=[];BS.w.forEach(w=>{const r=netRole(ex,g,w.a);if(r==="N"&&w.c!=="N")col.push(w);else if(r==="PE"&&w.c!=="PE")col.push(w);else if((r==="L"||r==="K")&&(w.c==="N"||w.c==="PE"))col.push(w);else if(r==="R"&&w.c!=="R")col.push(w)});
+ return{miss,extra,col,done:!miss.length&&!extra.length}}
+function netRole(ex,g,t){const r=g(t);if(r===g("Q.N"))return"N";if(r===g("Q.PE"))return"PE";if(ex.devs.some(d=>d[1]==="kps")){if(r===g("F.P"))return"R";if(r===g("F.M"))return"KB"}return"L"}
+/* cor automática do fio pela função dos bornes */
+function autoCol(L,a,b){const ra=L[a].role,rb=L[b].role,la=L[a].lab,lb=L[b].lab;if(ra==="PE"||rb==="PE")return"PE";if(ra==="N"||rb==="N")return"N";if(ra==="R"||rb==="R")return"R";
+ if((la==="−"||lb==="−"))return"K";if(ra==="L"&&rb==="L")return"L";if([la,lb].some(x=>x==="2"||x==="E2"||x==="S2"))return"G";return"K"}
+const tName=(L,t)=>`${L[L[t].dev].lab} · ${L[t].lab}`;
+function bDevSvg(d,s,ev){const{x,y,w,h,k}=d;const on=ev.lamp;let body="";
+ const face=`<rect x="${x}" y="${y}" width="${w}" height="${h-18}" rx="12" class="bd-f"/>`;
+ if(k==="sup")body=`<rect x="${x}" y="${y}" width="${w}" height="${h-18}" rx="10" class="bd-q"/><g class="bdbrk" data-brk="1" role="button" tabindex="0"><rect x="${x+48}" y="${y+14}" width="54" height="66" rx="6" class="bd-cb${BS.trip?" trip":BS.on?" on":""}"/><rect x="${x+65}" y="${BS.on&&!BS.trip?y+24:y+50}" width="20" height="22" rx="3" class="bd-tg"/><text x="${x+w-8}" y="${y+16}" class="bd-s r${BS.trip?" bad":BS.on?" okc":""}">${BS.trip?"DISPAROU":BS.on?"ON":"OFF"}</text></g><text x="${x+8}" y="${y+16}" class="bd-s l">C10</text>`;
+ else if(k==="sw")body=face+`<g data-act="${d.id}" class="bdact" role="button" tabindex="0"><rect x="${x+18}" y="${y+14}" width="${w-36}" height="62" rx="8" class="bd-rk"/><rect x="${x+24}" y="${s[d.id]?y+18:y+44}" width="${w-48}" height="28" rx="6" class="bd-rk2${s[d.id]?" dn":""}"/></g>`;
+ else if(k==="com")body=face+`<g data-act="${d.id}" class="bdact" role="button" tabindex="0"><rect x="${x+22}" y="${y+14}" width="${w-44}" height="62" rx="8" class="bd-rk"/><rect x="${x+28}" y="${s[d.id]?y+44:y+18}" width="${w-56}" height="28" rx="6" class="bd-rk2${s[d.id]?" dn":""}"/><text x="${x+w/2}" y="${y+86}" class="bd-s">pos. ${s[d.id]?2:1}</text></g>`;
+ else if(k==="inv")body=face+`<g data-act="${d.id}" class="bdact" role="button" tabindex="0"><rect x="${x+24}" y="${y+14}" width="${w-48}" height="62" rx="8" class="bd-rk"/><text x="${x+w/2}" y="${y+52}" class="bd-big">${s[d.id]?"✕":"="}</text><text x="${x+w/2}" y="${y+86}" class="bd-s">${s[d.id]?"cruzado":"direto"}</text></g>`;
+ else if(k==="lamp")body=`<line x1="${x+w/2}" y1="${y}" x2="${x+w/2}" y2="${y+18}" class="bd-wire"/><path d="M${x+20} ${y+44}Q${x+w/2} ${y+8} ${x+w-20} ${y+44}Z" class="bd-shade"/><circle cx="${x+w/2}" cy="${y+58}" r="18" class="bd-bulb${on?" on":""}"/>${on?`<circle cx="${x+w/2}" cy="${y+58}" r="40" class="bd-glow"/>`:""}<rect x="${x+8}" y="${y+86}" width="${w-16}" height="16" rx="4" class="bd-blk"/>`;
+ else if(k==="sock")body=face+`<circle cx="${x+w/2}" cy="${y+46}" r="30" class="bd-rk"/><circle cx="${x+w/2-11}" cy="${y+46}" r="4.5" class="bd-hole"/><circle cx="${x+w/2+11}" cy="${y+46}" r="4.5" class="bd-hole"/><rect x="${x+w/2-4}" y="${y+16}" width="8" height="6" class="bd-pe"/><rect x="${x+w/2-4}" y="${y+70}" width="8" height="6" class="bd-pe"/><text x="${x+w/2}" y="${y+96}" class="bd-s${ev.sock?" okc":""}">${ev.sock?"230 V ✓":"sem tensão"}</text>`;
+ else if(k==="sens")body=face+`<g data-act="${d.id}" class="bdact" role="button" tabindex="0"><circle cx="${x+w/2}" cy="${y+44}" r="26" class="bd-dome${s[d.id]?" on":""}"/><text x="${x+w/2}" y="${y+88}" class="bd-s">${s[d.id]?"movimento!":"toca = passar"}</text></g>`;
+ else if(k==="kps")body=face+`<rect x="${x+14}" y="${y+16}" width="${w-28}" height="30" rx="5" class="bd-lcd"/><text x="${x+w/2}" y="${y+36}" class="bd-lcdt">${ev.bus&&ev.bus.pw&&!ev.bus.short?"29 V DC":"0 V"}</text><circle cx="${x+w-22}" cy="${y+64}" r="5" class="bd-led${ev.bus&&ev.bus.pw&&!ev.bus.short?" on":""}"/><text x="${x+14}" y="${y+68}" class="bd-s l">640 mA</text>`;
+ else if(k==="kbt")body=face+`<g data-act="${d.id}" class="bdact" role="button" tabindex="0"><rect x="${x+14}" y="${y+14}" width="${w-28}" height="62" rx="8" class="bd-rk"/><circle cx="${x+w/2}" cy="${y+45}" r="14" class="bd-kb${s[d.id+"p"]?" dn":""}"/><circle cx="${x+w-22}" cy="${y+22}" r="3.5" class="bd-led${ev.bus&&ev.bus.B==="ok"&&ev.bus.pw?" on":""}"/></g>`;
+ else if(k==="kac")body=face+`<rect x="${x+12}" y="${y+14}" width="${w-24}" height="26" rx="5" class="bd-lcd"/><text x="${x+w/2}" y="${y+32}" class="bd-lcdt">1.1.10</text><rect x="${x+w/2-16}" y="${y+50}" width="32" height="20" rx="4" class="bd-rl${s[d.id+"rl"]?" on":""}"/><text x="${x+w/2}" y="${y+82}" class="bd-s">relé ${s[d.id+"rl"]?"fechado":"aberto"}</text>`;
+ return`<g class="bdev">${body}<text x="${x+w/2}" y="${y-8}" class="bd-t">${esc(d.lab)}</text></g>`}
+function bWirePath(a,b){const dx=Math.abs(b.x-a.x);const sag=Math.min(130,36+dx*.24);return`M${a.x} ${a.y}C${a.x} ${a.y+sag},${b.x} ${b.y+sag},${b.x} ${b.y}`}
+function bSvg(ex){const L=bLayout(ex);const ev=bEval(ex);const ck=bCheck(ex);const s=BS.st;const nextG=BS.guided&&ck.miss[0];
+ const tset=Object.values(L).filter(o=>o.dev);
+ const wires=BS.w.map((w,i)=>{const a=L[w.a],b=L[w.b];if(!a||!b)return"";const d=bWirePath(a,b);const live=ev.live.has(w.a)&&BS.on&&!BS.trip;const c=WCOL[w.c][1];
+  return`<g class="bw${live?" live":""}${ck.col.includes(w)||ck.extra.includes(w)?" badc":""}" data-w="${i}"><path d="${d}" class="bw-o"/><path d="${d}" stroke="${c}" class="bw-c"/>${w.c==="PE"?`<path d="${d}" class="bw-pe"/>`:""}${live?`<path d="${d}" class="bw-f"/>`:""}<path d="${d}" class="bw-hit"/></g>`}).join("");
+ return`<svg class="banc" viewBox="0 0 860 360" role="img" aria-label="Bancada de ligações">
+  <defs><pattern id="bgrid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" class="bgl"/></pattern></defs><rect width="860" height="360" fill="url(#bgrid)" class="bgr"/>
+  ${ex.devs.map(([id])=>bDevSvg(L[id],s,ev)).join("")}${wires}
+  ${tset.map(t=>{const r=WCOL[t.role]||WCOL.K;const sel=BS.sel===t.id;const hint=nextG&&(nextG[0]===t.id||nextG[1]===t.id)&&!BS.on;
+   return`<g class="bt${sel?" sel":""}${hint?" hint":""}" data-t="${t.id}" role="button" tabindex="0" aria-label="${esc(tName(L,t.id))}"><circle cx="${t.x}" cy="${t.y}" r="12" class="bt-o"/><circle cx="${t.x}" cy="${t.y}" r="7.5" class="bt-s"/><line x1="${t.x-4}" y1="${t.y}" x2="${t.x+4}" y2="${t.y}" class="bt-x"/><text x="${t.x}" y="${t.y-17}" class="bt-l" fill="${r[1]}">${esc(t.lab)}</text></g>`}).join("")}
+  ${BS.trip?`<g class="spark"><circle cx="${L.Q.x+75}" cy="${L.Q.y+46}" r="44"/><text x="${L.Q.x+75}" y="${L.Q.y+52}">⚡</text></g>`:""}</svg>`}
+function kBanc(E){const ex=EXS.find(x=>x.id===BS.ex)||EXS[0];
+ E.innerHTML=`<div class="bex">${EXS.map(x=>`<button class="bexc${x.id===ex.id?" on":""}" data-bx="${x.id}"><span class="lvl">${"●".repeat(x.lv)}${"○".repeat(3-x.lv)}</span><b>${x.n}</b><small>${x.d}</small></button>`).join("")}</div>
+ <section class="block bancw"><div class="btool"><div class="bcol" role="group" aria-label="Cor do fio"><span>Fio:</span><button data-c="auto" class="${BS.col==="auto"?"on":""}">Cor automática</button>${Object.entries(WCOL).map(([k,v])=>`<button data-c="${k}" class="sw${BS.col===k?" on":""}" title="${v[0]}" style="--c:${v[1]}"${k==="PE"?' data-pe="1"':""}><i></i></button>`).join("")}</div>
+  <label class="fsw"><input type="checkbox" id="bGuid"${BS.guided?" checked":""}><span class="tg"></span>Guiado</label>
+  <span style="flex:1"></span><button class="btn sm" id="bUndo">↶ Desfazer</button><button class="btn sm" id="bClr">Limpar</button><button class="btn sm" id="bSol">Mostrar solução</button>
+  <button class="btn sm ${BS.on?"dark":"primary"}" id="bPow">${BS.on?"⏻ Desligar disjuntor":"⏻ Ligar disjuntor e testar"}</button></div>
+  <div class="bstage" id="bSt"></div><div class="bctl" id="bCtl"></div><div class="bmsg" id="bMsg"></div></section>
+ <p class="mut">Como usar: toca num borne e depois noutro para ligar um fio (a cor sai automática pela função do borne, ou escolhe-a acima). Toca num fio para o retirar. Liga o disjuntor para testar e usa os interruptores no próprio aparelho.</p>`;
+ const draw=()=>{const ex2=EXS.find(x=>x.id===BS.ex);$("bSt").innerHTML=bSvg(ex2);const ev=bEval(ex2),ck=bCheck(ex2);const L=bLayout(ex2);const st2=$("bSt");
+  st2.querySelectorAll("[data-t]").forEach(g=>{g.onclick=()=>tap(g.dataset.t);g.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();tap(g.dataset.t)}}});
+  st2.querySelectorAll("[data-w]").forEach(g=>g.onclick=e=>{e.stopPropagation();if(BS.on){toast("Desliga o disjuntor antes de mexer nos fios.");return}BS.w.splice(+g.dataset.w,1);draw()});
+  st2.querySelectorAll("[data-act]").forEach(g=>g.onclick=()=>act(g.dataset.act));st2.querySelectorAll("[data-brk]").forEach(g=>g.onclick=()=>power());
+  $("bCtl").innerHTML=(ex2.ctrl||[]).map(([id,lab])=>`<button class="btn sm" data-ac="${id}">${lab}</button>`).join("")+(ev.lamp||ev.sock?`<span class="bok">💡 ${ev.lamp?"Lâmpada acesa":"Tomada com tensão"}</span>`:"");
+  $("bCtl").querySelectorAll("[data-ac]").forEach(b=>b.onclick=()=>act(b.dataset.ac));
+  const items=ex2.sol.map(([a,b])=>{const okk=!ck.miss.some(m=>m[0]===a&&m[1]===b);return`<li class="${okk?"y":""}">${okk?"✓":"○"} ${esc(tName(L,a))} → ${esc(tName(L,b))}</li>`}).join("");
+  const g=BS.guided&&ck.miss[0]&&!BS.on?`<div class="bnext">👉 <b>Próximo fio:</b> liga <b>${esc(tName(L,ck.miss[0][0]))}</b> a <b>${esc(tName(L,ck.miss[0][1]))}</b> (bornes a piscar).</div>`:"";
+  const st3=BS.on?(ev.err.length?ev.err.map(m=>`<div class="be">✗ ${m}</div>`).join(""):(ev.lamp||ev.sock?`<div class="bg">✓ Funciona! ${ck.done?"Montagem correta.":""}</div>`:`<div class="bw2">A instalação está ligada mas a carga não funciona${(ex2.ctrl||[]).length?" — experimenta os comandos":""}.</div>`))+ev.warn.map(m=>`<div class="bw2">⚠ ${m}</div>`).join(""):"";
+  const done=ck.done&&!BS.on?`<div class="bg">✓ Todas as ligações feitas. Liga o disjuntor para testar.</div>`:"";
+  $("bMsg").innerHTML=`${g}${st3}${done}${ck.extra.length?`<div class="bw2">⚠ ${ck.extra.length} fio${ck.extra.length>1?"s":""} a mais ou em sítio errado (contorno vermelho tracejado — toca no fio para o retirar).</div>`:""}${ck.col.length?`<div class="bw2">🎨 ${ck.col.length} fio${ck.col.length>1?"s":""} com a cor errada (azul = neutro, verde/amarelo = proteção${ex2.id==="knx"?", vermelho = + do bus":""}).</div>`:""}
+   <details class="blist"${BS.guided?"":" open"}><summary>Ligações (${ex2.sol.length-ck.miss.length}/${ex2.sol.length})</summary><ul>${items}</ul></details>`};
+ const tap=t=>{if(BS.on){toast("Desliga o disjuntor antes de ligar fios.");return}if(!BS.sel){BS.sel=t;draw();return}if(BS.sel===t){BS.sel=null;draw();return}
+  const a=BS.sel,b=t;BS.sel=null;if(BS.w.some(w=>(w.a===a&&w.b===b)||(w.a===b&&w.b===a))){draw();return}
+  const ex2=EXS.find(x=>x.id===BS.ex);const L=bLayout(ex2);const c=BS.col!=="auto"?BS.col:autoCol(L,a,b);
+  BS.w.push({a,b,c});draw()};
+ const act=id=>{const ex2=EXS.find(x=>x.id===BS.ex);const k=(ex2.devs.find(d=>d[0]===id)||[])[1];
+  if(k==="sens"){BS.st[id]=1;clearTimeout(BS.st._t);BS.st._t=setTimeout(()=>{BS.st[id]=0;draw()},4000)}
+  else if(k==="kbt"){const ev=bEval(ex2);BS.st[id+"p"]=1;setTimeout(()=>{BS.st[id+"p"]=0;draw()},250);
+   if(ev.bus&&ev.bus.pw&&!ev.bus.short&&ev.bus.B==="ok"&&ev.bus.A==="ok")BS.st.Arl=BS.st.Arl?0:1;else toast(!BS.on?"Liga o disjuntor primeiro.":"O telegrama não chega ao atuador — verifica o bus.")}
+  else BS.st[id]=BS.st[id]?0:1;draw()};
+ const power=()=>{if(BS.trip){BS.trip=null;BS.on=false;toast("Disjuntor rearmado (desligado). Corrige a ligação e volta a ligar.")}else BS.on=!BS.on;BS.sel=null;kBanc(E)};
+ E.querySelectorAll("[data-bx]").forEach(b=>b.onclick=()=>{clearInterval(BS.anim);BS.ex=b.dataset.bx;BS.w=[];BS.sel=null;BS.on=false;BS.trip=null;BS.st={};kBanc(E)});
+ E.querySelectorAll(".bcol [data-c]").forEach(b=>b.onclick=()=>{BS.col=b.dataset.c;E.querySelectorAll(".bcol [data-c]").forEach(x=>x.classList.toggle("on",x===b))});
+ $("bGuid").onchange=e=>{BS.guided=e.target.checked;draw()};$("bUndo").onclick=()=>{if(!BS.on){BS.w.pop();draw()}};$("bClr").onclick=()=>{if(!BS.on){BS.w=[];draw()}};$("bPow").onclick=power;
+ $("bSol").onclick=()=>{if(BS.on)return;clearInterval(BS.anim);BS.w=[];const L=bLayout(ex);const q=ex.sol.slice();BS.anim=setInterval(()=>{const s2=q.shift();if(!s2){clearInterval(BS.anim);return}const[a,b]=s2;BS.w.push({a,b,c:autoCol(L,a,b)});draw()},450)};
+ draw()}
+
+/* ---------------------------------------------------------
+   10) SEGURANÇA — pasta com os protocolos dos SADI (Sistemas Automáticos de Deteção de Incêndio)
+   Regras: ANEPC Nota Técnica 12 (2023) e RT-SCIE (Portaria 1532/2008, alterada pela 135/2020)
+   Capacidades por protocolo: fichas técnicas dos fabricantes — confirmar sempre na central usada.
+   --------------------------------------------------------- */
+const SADI_F={nt12:"ANEPC — Nota Técnica n.º 12 (SADI), 2023",rtscie:"RT-SCIE — Portaria n.º 1532/2008, alterada pela Portaria n.º 135/2020",fab:"Fichas técnicas dos fabricantes (valores típicos — confirmar na central e na versão do protocolo)",en54:"EN 54 — sistemas de deteção e alarme de incêndio"};
+const SPROTO=[
+ {n:"Convencional (zonas)",uso:"Pequenos edifícios: cada zona é um circuito; a central sabe a zona, não o detetor",meio:"2 fios por zona + resistência de fim de linha (valor do fabricante)",vel:"— (por corrente)",lim:"Uma zona por circuito; a falha de um circuito não pode deixar mais de 32 dispositivos inoperacionais (NT 12, 5.2)",top:"Radial (classe B) com fim de linha",term:"Resistência de fim de linha (EOL)",norma:"EN 54-2 · NT 12"},
+ {n:"Endereçável analógico (laço)",uso:"Médios e grandes edifícios: cada dispositivo tem endereço e envia o valor analógico",meio:"Par entrançado, normalmente blindado, resistente ao fogo quando exigido",vel:"Protocolo digital do fabricante",lim:"Isoladores para que um curto ou corte não tire mais de 32 dispositivos (NT 12, 5.2); corrente e comprimento do laço pela central",top:"Laço fechado (classe A) — também derivações (classe B)",term:"Não (o laço volta à central)",norma:"EN 54-2 · EN 54-17 (isoladores)"},
+ {n:"Apollo XP95 / Discovery",uso:"Protocolo aberto (licenciado) usado por muitas centrais",meio:"Laço de 2 fios",vel:"Digital Apollo",lim:"126 endereços de detetores/botoneiras por laço",top:"Laço com isoladores",term:"—",norma:"EN 54"},
+ {n:"Apollo Soteria / CoreProtocol",uso:"Nova geração Apollo, mais endereços e diagnóstico",meio:"Laço de 2 fios",vel:"Digital Apollo (CoreProtocol)",lim:"254 dispositivos por laço",top:"Laço; muitos dispositivos com isolador integrado",term:"—",norma:"EN 54"},
+ {n:"Hochiki ESP",uso:"Protocolo Hochiki usado em centrais de vários fabricantes",meio:"Laço de 2 fios",vel:"Digital Hochiki (ESP)",lim:"127 endereços por laço",top:"Laço com isoladores",term:"—",norma:"EN 54"},
+ {n:"Siemens FDnet",uso:"Centrais Sinteso / Cerberus PRO",meio:"Laço de 2 fios",vel:"Digital Siemens",lim:"Até 252 elementos por laço; até 3,3 km de cabo; até 40 derivações (T)",top:"Laço e derivações; separador de linha integrado nos elementos",term:"—",norma:"EN 54"},
+ {n:"Bosch LSN improved",uso:"Centrais Bosch (LSN = Local Security Network)",meio:"Laço de 2 fios",vel:"Digital Bosch",lim:"Até 254 elementos por laço; LSN 1500 até 3 000 m",top:"Laço e derivações",term:"—",norma:"EN 54"},
+ {n:"Notifier / Honeywell (CLIP · Opal · FlashScan)",uso:"Centrais Notifier e Honeywell",meio:"Laço de 2 fios",vel:"Digital do fabricante",lim:"Depende do protocolo e da central (ex.: dezenas a centenas de detetores + módulos por laço)",top:"Laço com isoladores",term:"—",norma:"EN 54"},
+ {n:"Rede, GTC e transmissão de alerta",uso:"Ligação entre centrais, repetidores, GTC e bombeiros",meio:"Rede de centrais do fabricante; gateways Modbus/BACnet; contactos; transmissor de alerta",vel:"—",lim:"A GTC só monitoriza: os comandos de segurança ficam na central de incêndio",top:"Anel de centrais (proprietário) · IP para GTC",term:"—",norma:"EN 54-21 (transmissão) · EN 54-25 (rádio) · NT 12 5.11"}
+];
+Object.assign(PX,{
+ "Convencional (zonas)":{url:"https://prociv.gov.pt",site:"ANEPC (prociv.gov.pt) — Notas Técnicas",
+  ex:"Loja com 3 zonas: zona 1 sala de vendas, zona 2 armazém, zona 3 escritórios. Com fumo no armazém a central mostra «Alarme zona 2» — o técnico tem de procurar qual dos detetores atuou (LED aceso no detetor).",
+  demo:{n:["Central (CDI)","Zona 2: + / −","Detetor 1","Detetor 2 (LED)","Resistência fim de linha"],p:["A central passa uma corrente pequena pela zona e mede-a.","Com a resistência de fim de linha a corrente é «normal» — a zona está vigiada.","Um detetor em alarme puxa mais corrente: a central dá «ALARME ZONA 2».","Sem corrente (fio cortado ou EOL retirada) a central dá «AVARIA ZONA 2»."]},
+  pro:["Simples e barato","Fácil de perceber e testar","Bom para edifícios pequenos com poucas zonas"],
+  con:["Não identifica o detetor — só a zona","Sem valores analógicos nem aviso de detetor sujo","Muitos circuitos/cabos em edifícios maiores","Mais falsos alarmes (sem compensação nem verificação)"],
+  err:[["«Avaria zona» permanente","Fim de linha em falta, no sítio errado ou com outro valor: confirmar a resistência do fabricante no último detetor."],["Zona em alarme sem fogo","Detetor sujo ou humidade: limpar/substituir e confirmar o tipo de detetor para o local."],["Uma zona mistura pisos","A zona deve ficar num só piso (NT 12, 5.5) — reorganizar."],["Detetores a jusante sem vigilância","Derivação (T) depois do último detetor: a zona deve ser contínua até à EOL."]]},
+ "Endereçável analógico (laço)":{url:"https://prociv.gov.pt",site:"ANEPC (prociv.gov.pt) — Notas Técnicas",
+  ex:"Hotel com 2 laços de 120 dispositivos: a central mostra «Alarme — Detetor 1.045 — Quarto 214» e ativa as sirenes do piso, fecha portas corta-fogo e chama o elevador ao piso de referência.",
+  demo:{n:["Central (CDI)","Isolador","Detetores 001–030","Isolador","Botoneiras / sirenes / módulos"],p:["A central pergunta a cada endereço, em ciclo, o valor medido (fumo, temperatura) e o estado.","Quando o valor passa o limiar: «Alarme» com o endereço e o texto do local.","Um curto-circuito no laço: os isoladores dos dois lados abrem e só o troço entre eles fica de fora.","Com o laço fechado (classe A), um corte não tira dispositivos: a central alimenta pelas duas pontas e dá «Avaria»."]},
+  pro:["Identifica o dispositivo e o local exato","Valores analógicos: aviso de detetor sujo e compensação","Laço classe A resistente a um corte ou curto","Menos cabo que muitas zonas convencionais"],
+  con:["Mais caro e com programação","Protocolos próprios: dispositivos e central do mesmo protocolo","Exige cálculo de corrente e comprimento do laço","Endereços têm de ser geridos com cuidado"],
+  err:[["«Dispositivo em falta» após obras","Endereço duplicado ou detetor retirado da base: confirmar endereços e encaixe."],["Curto deixa todo o laço sem comunicar","Faltam isoladores: no máx. 32 dispositivos entre isoladores (NT 12, 5.2)."],["Avarias intermitentes de comunicação","Blindagem mal ligada ou cabo junto a potência: ligar a blindagem como o fabricante indica e afastar de cabos de energia."],["Sirenes fracas no fim do laço","Queda de tensão: calcular a corrente do laço e a secção (ferramenta do fabricante)."],["Laço «classe A» que afinal não volta à central","Retorno não ligado ou as duas pernas no mesmo caminho: separar as pernas (NT 12, 6)."]]},
+ "Apollo XP95 / Discovery":{url:"https://www.apollo-fire.co.uk",site:"apollo-fire.co.uk",ex:"Central de outra marca com placa de laço Apollo: detetores ópticos XP95, botoneiras e módulos de entrada/saída no mesmo laço.",
+  demo:{n:["Central (placa Apollo)","Laço","Detetor end. 001","Botoneira end. 002","Isolador"],p:["Cada dispositivo tem o endereço definido (XP95: «XPERT card» na base; Discovery: igual).","A central lê o valor analógico de cada endereço.","Alarme quando o valor passa o limiar programado."]},
+  pro:["Protocolo licenciado usado por muitos fabricantes de centrais","Gama grande de detetores e módulos","Muito difundido — peças fáceis de encontrar"],con:["126 endereços por laço (menos que protocolos mais recentes)","Os dispositivos Apollo só funcionam em centrais com protocolo Apollo"],
+  err:[["Detetor não aparece","Cartão de endereço em falta/errado na base: conferir o endereço."],["Dois detetores no mesmo endereço","Colisão: corrigir o cartão de endereço."]]},
+ "Apollo Soteria / CoreProtocol":{url:"https://www.apollo-fire.co.uk",site:"apollo-fire.co.uk",ex:"Ampliação de um edifício com mais de 126 dispositivos num laço: com Soteria/CoreProtocol o laço aceita até 254.",
+  demo:{n:["Central CoreProtocol","Laço","Detetor Soteria","Sirene","Módulo E/S"],p:["Mais endereços por laço e mais diagnóstico.","Muitos dispositivos com isolador integrado."]},pro:["Até 254 dispositivos por laço","Diagnóstico mais detalhado"],con:["Exige central/placa compatível com CoreProtocol"],err:[["Mistura de gerações","Confirmar compatibilidade XP95/Discovery com a central CoreProtocol na ficha do fabricante."]]},
+ "Hochiki ESP":{url:"https://www.hochikieurope.com",site:"hochikieurope.com",ex:"Central com protocolo ESP: detetores, botoneiras e sirenes Hochiki num laço de até 127 endereços.",
+  demo:{n:["Central ESP","Laço","Detetor","Botoneira","Sirene"],p:["Endereçamento por programador ou na base.","Leitura cíclica dos valores pela central."]},pro:["Protocolo usado por várias marcas de centrais","Boa gama de dispositivos"],con:["127 endereços por laço","Só com centrais ESP"],err:[["Endereços duplicados","Reprogramar com o programador de endereços."]]},
+ "Siemens FDnet":{url:"https://www.siemens.com",site:"siemens.com — Fire Safety",ex:"Edifício de escritórios com Sinteso: laço FDnet com 200 elementos e derivações (T) para os pisos técnicos.",
+  demo:{n:["Central Sinteso","FDnet (laço)","Elemento com separador","Derivação (T)","Elementos"],p:["Elementos com separador de linha integrado: um curto só tira o troço afetado.","Derivações a partir do laço (até 40)."]},pro:["Até 252 elementos e 3,3 km por laço","Separador de linha integrado","Laço e derivações combinados"],con:["Só com centrais Siemens compatíveis"],err:[["Muitas derivações em paralelo sem separador","Usar o separador de linha próprio onde saem várias derivações."]]},
+ "Bosch LSN improved":{url:"https://www.boschsecurity.com",site:"boschsecurity.com",ex:"Centro comercial com centrais Bosch: laços LSN improved com até 254 elementos e derivações.",
+  demo:{n:["Central Bosch","LSN (laço)","Detetor","Módulo","Derivação"],p:["Endereçamento automático ou manual conforme o modo.","Laço e derivações no mesmo circuito."]},pro:["Até 254 elementos por laço","LSN 1500 até 3 000 m"],con:["Só com centrais Bosch"],err:[["Mistura de modo clássico e improved","Confirmar o modo do laço na central e nos elementos."]]},
+ "Notifier / Honeywell (CLIP · Opal · FlashScan)":{url:"https://buildings.honeywell.com",site:"buildings.honeywell.com",ex:"Hospital com rede de centrais Notifier: cada laço com detetores e módulos endereçados, ligados em rede.",
+  demo:{n:["Central","Laço","Detetores","Módulos","Rede de centrais"],p:["O número de detetores e módulos por laço depende do protocolo (CLIP, Opal, FlashScan) e da central.","Rede de centrais própria para edifícios grandes."]},pro:["Gama muito larga e redes de centrais grandes"],con:["Capacidade varia muito entre protocolos — confirmar sempre"],err:[["Dispositivo de protocolo diferente","Verificar se a central suporta o protocolo do dispositivo."]]},
+ "Rede, GTC e transmissão de alerta":{url:"https://prociv.gov.pt",site:"ANEPC (prociv.gov.pt)",ex:"A central de incêndio envia o estado para a GTC por gateway Modbus/BACnet (só leitura) e, em alarme, o transmissor envia o alerta para os bombeiros ou uma central recetora.",
+  demo:{n:["Central de incêndio","Gateway (só leitura)","GTC","Transmissor de alerta","Bombeiros / central recetora"],p:["A GTC vê alarmes e avarias, mas não substitui a central.","O alerta automático é feito de preferência diretamente aos bombeiros ou por central de receção, com ligação vigiada (NT 12, 5.11).","Repetidores junto ao acesso dos bombeiros quando a central está longe (NT 12, 5.9)."]},
+  pro:["Visão única na GTC","Alerta rápido aos meios de socorro"],con:["Integração mal feita pode atrasar ou esconder alarmes","Ligações de transmissão têm de ser vigiadas"],
+  err:[["Comandos de segurança a partir da GTC","Os comandos (portas corta-fogo, desenfumagem, extinção) devem ser da central de incêndio."],["Transmissão de alerta sem vigilância","Usar ligação com supervisão (avaria se cair)."]]}
+});
+/* simulador de laço (classe A, isoladores, curto, corte, alarme) */
+function loopSim(){const N=12;return`<div class="lsim" id="lSim"><div class="simwrap"><svg class="lsvg" viewBox="0 0 680 300" id="lSvg"></svg></div>
+ <div class="simpanel"><div class="simctl"><label class="simf">Dispositivo<select id="lDev">${[...Array(N)].map((_,i)=>`<option value="${i}">${String(i+1).padStart(3,"0")}</option>`).join("")}</select></label>
+  <button class="btn sm primary" data-l="alarm">🔥 Fumo no detetor</button><button class="btn sm" data-l="mcp">Atuar botoneira 012</button><button class="btn sm" data-l="short">⚡ Curto antes do dispositivo</button><button class="btn sm" data-l="open">✂ Cortar o cabo</button><button class="btn sm" data-l="reset">Rearmar / reparar</button></div>
+  <div class="simctl"><label class="fsw"><input type="checkbox" id="lIso" checked><span class="tg"></span>Com isoladores (a cada 4 dispositivos)</label><label class="fsw"><input type="checkbox" id="lA" checked><span class="tg"></span>Laço fechado (classe A)</label></div></div>
+ <div class="cdi" id="lCdi"></div><div class="simlog" id="lLog"><div class="sl-h"><span>registo da central</span></div></div></div>`}
+function wireLoop(root){const el=root.querySelector("#lSim");if(!el||el._w)return;el._w=1;const N=12;const S={alarm:null,short:null,open:null};
+ const log=(t,k)=>{const L=$("lLog");const d=document.createElement("div");d.className="sl new "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${esc(t)}`;L.appendChild(d);L.scrollTop=L.scrollHeight};
+ const iso=i=>$("lIso").checked&&i%4===0;// isolador antes do dispositivo i (0,4,8)
+ const pos=i=>{const a=Math.PI*(1-(i+.5)/N);return[340+270*Math.cos(a),250-190*Math.sin(a)]};
+ const state=()=>{const A=$("lA").checked;const ok=[...Array(N)].map(()=>true);let fault=null;
+  if(S.short!=null){if(!$("lIso").checked){ok.fill(false);fault="Curto-circuito no laço — todos os dispositivos sem comunicação!"}
+   else{let lo=S.short;while(lo>0&&!iso(lo))lo--;let hi=S.short+1;while(hi<N&&!iso(hi))hi++;for(let i=lo;i<hi;i++)ok[i]=false;fault=`Curto-circuito: isoladores abriram — dispositivos ${String(lo+1).padStart(3,"0")} a ${String(hi).padStart(3,"0")} fora de serviço (${hi-lo}).`;if(!A)for(let i=hi;i<N;i++)ok[i]=false}}
+  if(S.open!=null){if(A)fault=(fault?fault+" ":"")+"Corte no laço: a central alimenta pelas duas pontas — sem perda de dispositivos (avaria assinalada).";else{for(let i=S.open;i<N;i++)ok[i]=false;fault=(fault?fault+" ":"")+`Corte no laço (classe B): ${N-S.open} dispositivos a jusante perdidos.`}}
+  return{ok,fault}};
+ const draw=()=>{const{ok,fault}=state();const A=$("lA").checked;const pts=[...Array(N)].map((_,i)=>pos(i));
+  const seg=(i)=>{const[a,b]=i===0?[340-300,250]:pos(i-1);const[c,d]=pos(i);return`M${a} ${b}L${c} ${d}`};
+  let svg=`<rect x="290" y="232" width="100" height="56" rx="10" class="cdi-b${S.alarm!=null&&ok[S.alarm]?" al":fault?" ft":""}"/><text x="340" y="256" class="cdi-t">CDI</text><text x="340" y="274" class="cdi-s">${S.alarm!=null&&ok[S.alarm]?"ALARME":fault?"AVARIA":"NORMAL"}</text>
+   <path d="M290 260H40V250" class="lp-l"/><path d="M390 260H${A?640:390}V250" class="lp-l${A?"":" off"}"/>`;
+  for(let i=1;i<N;i++){const[a,b]=pos(i-1),[c,d]=pos(i);const cut=S.open===i;const sh=S.short===i;svg+=`<path d="M${a} ${b}L${c} ${d}" class="lp-l${cut?" cut":""}${sh?" sh":""}"/>`}
+  {const[a,b]=pos(0);svg+=`<path d="M40 250L${a} ${b}" class="lp-l${S.short===0?" sh":""}${S.open===0?" cut":""}"/>`;const[c,d]=pos(N-1);svg+=`<path d="M${c} ${d}L640 250" class="lp-l${A?"":" off"}"/>`}
+  pts.forEach(([x,y],i)=>{const al=S.alarm===i&&ok[i];const mcp=i===N-1;if(iso(i)){const[a,b]=i===0?[40,250]:pos(i-1);const mx=(a+x)/2,my=(b+y)/2;const op=S.short!=null&&!ok[i]&&ok[i-1]!==undefined;svg+=`<g class="iso${S.short!=null&&(i===S.short||(i>S.short&&!ok[i-1]))?" open":""}"><rect x="${mx-9}" y="${my-9}" width="18" height="18" rx="4"/><text x="${mx}" y="${my+4}">I</text></g>`}
+   svg+=`<g class="ldev${ok[i]?"":" lost"}${al?" al":""}" data-ld="${i}"><circle cx="${x}" cy="${y}" r="17"/>${mcp?`<rect x="${x-8}" y="${y-8}" width="16" height="16" rx="2" class="mcp"/>`:`<circle cx="${x}" cy="${y}" r="7" class="det"/>`}<text x="${x}" y="${y-24}">${String(i+1).padStart(3,"0")}</text>${al?`<circle cx="${x}" cy="${y}" r="26" class="alr"/>`:""}</g>`});
+  svg+=`<text x="60" y="282" class="lp-e">saída</text><text x="620" y="282" class="lp-e">${A?"retorno":"(sem retorno)"}</text>`;$("lSvg").innerHTML=svg;
+  const al=S.alarm!=null&&ok[S.alarm];$("lCdi").innerHTML=`<div class="cdil ${al?"al":fault?"ft":"ok"}"><b>${al?`🔥 ALARME — ${S.alarm===N-1?"Botoneira":"Detetor"} ${String(S.alarm+1).padStart(3,"0")} · Piso 1 · Zona ${Math.floor(S.alarm/4)+1}`:fault?"⚠ AVARIA":"✓ Sistema normal"}</b><span>${al?"Sirenes ativas · portas corta-fogo libertadas · transmissão de alerta enviada":fault||"Todos os 12 dispositivos a comunicar."}</span></div>`;
+  el.querySelectorAll("[data-ld]").forEach(g=>g.onclick=()=>{$("lDev").value=g.dataset.ld})};
+ el.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{const i=+$("lDev").value;const a=b.dataset.l;const{ok}=state();
+  if(a==="alarm"){S.alarm=i;if(!ok[i])log(`Fumo no ${String(i+1).padStart(3,"0")}, mas o dispositivo está fora de serviço — o alarme NÃO chega à central!`,"err");else log(`ALARME: detetor ${String(i+1).padStart(3,"0")} (valor acima do limiar).`,"err")}
+  else if(a==="mcp"){S.alarm=N-1;log(ok[N-1]?"ALARME: botoneira 012 atuada.":"Botoneira 012 atuada, mas está fora de serviço!","err")}
+  else if(a==="short"){S.short=i;log(`Curto-circuito antes do ${String(i+1).padStart(3,"0")}.`,"warn")}else if(a==="open"){S.open=Math.max(1,i);log(`Cabo cortado antes do ${String(Math.max(1,i)+1).padStart(3,"0")}.`,"warn")}
+  else{S.alarm=null;S.short=null;S.open=null;log("Central rearmada e laço reparado.","ok")}draw()});
+ ["lIso","lA"].forEach(id=>$(id).onchange=()=>{log(`${id==="lIso"?"Isoladores":"Classe A"}: ${$(id).checked?"sim":"não"}`,"");draw()});log("Laço com 12 dispositivos (011 detetores + botoneira 012). Experimenta um curto-circuito com e sem isoladores.","");draw()}
+/* página Segurança */
+/* ---------- exemplo de ligação de um laço de incêndio e dos seus elementos ---------- */
+const LEL={
+ cdi:{n:"Central (CDI) — placa de laço",ic:"CDI",col:"#1f2937",t:["SAÍDA +","SAÍDA −","RETORNO +","RETORNO −","⏚ blindagem"],
+  how:["O laço sai pelos bornes SAÍDA (+/−) e volta pelos bornes RETORNO (+/−) — classe A: a central alimenta pelas duas pontas.","A blindagem do cabo liga-se à terra <b>só na central</b> (um único ponto) e segue contínua por todo o laço.","Antes de ligar à central: medir isolamento entre condutores e à terra e a continuidade do laço (com os elementos que o fabricante permitir)."],
+  err:["Trocar SAÍDA com RETORNO em polaridade (+ com −) — a central dá avaria de laço.","Blindagem ligada à terra em vários pontos (laços de terra, avarias de comunicação)."]},
+ iso:{n:"Isolador de curto-circuito",ic:"ISO",col:"#b45309",t:["IN +","IN −","OUT +","OUT −"],
+  how:["Entra pelo lado IN e sai pelo lado OUT, respeitando a polaridade.","Colocar de forma que um curto não tire mais de 32 dispositivos (NT 12, 5.2) — e em cada mudança de zona/piso.","Muitos detetores e bases já têm isolador integrado: confirmar na ficha e no cálculo do laço."],
+  err:["Instalar o isolador ao contrário (IN/OUT trocados) em modelos com sentido.","Pôr isoladores a mais do que a central permite por laço (conta como carga)."]},
+ det:{n:"Detetor ótico de fumo (na base)",ic:"DET",col:"#475569",t:["L + (entra/sai)","L − (entra/sai)","R (indicador remoto)"],
+  how:["Os dois fios + (o que chega e o que segue) apertam no mesmo borne L+; o mesmo para L−.","O endereço define-se no detetor ou na base (programador, cartão ou rodas), conforme o protocolo.","O borne R liga um indicador de ação (LED) à porta quando o detetor fica escondido (teto falso, quarto fechado)."],
+  err:["Retirar o detetor numa base que interrompe o laço — confirmar na ficha se a base mantém a continuidade sem detetor.","Endereço repetido: dois elementos «brigam» no mesmo endereço.","Detetor montado antes das obras acabarem: pó → falsos alarmes (usar tampas de proteção)."]},
+ mcp:{n:"Botoneira endereçável",ic:"BOT",col:"#dc2626",t:["L + (entra/sai)","L − (entra/sai)"],
+  how:["Liga em série no laço como um detetor (entra e sai nos mesmos bornes).","Montar a ≈ 1,2 m, nos caminhos de evacuação e junto às saídas; máximo 30 m até uma botoneira (NT 12, 5.7)."],
+  err:["Botoneira sem endereço programado — não aparece na central.","Usar uma botoneira convencional num laço endereçável sem módulo de entrada."]},
+ snd:{n:"Sirene de laço (alimentada pelo laço)",ic:"SIR",col:"#7c3aed",t:["L + (entra/sai)","L − (entra/sai)"],
+  how:["Liga no laço como os outros elementos; o volume/tom escolhe-se no aparelho ou por programação.","Conta muito no consumo do laço em alarme: confirmar no cálculo de corrente da central.","Níveis: ≥ 65 dB(A) e 10 dB acima do ruído; 75 dB(A) em quartos (NT 12, 5.8)."],
+  err:["Sirenes demais no laço → tensão baixa no fim e falhas em alarme.","Sirene a menos de 1 m de pessoas a trabalhar (nível perigoso) — afastar ou baixar volume."]},
+ min:{n:"Módulo de entrada (ex.: fluxostato do sprinkler)",ic:"M-IN",col:"#0891b2",t:["L + / L − (laço)","IN + / IN − (contacto)","Resistência fim de linha"],
+  how:["O lado do laço liga como um elemento normal.","No lado de entrada liga-se o contacto do equipamento (fluxostato, alarme técnico, porta) com a resistência de fim de linha do fabricante no fim da linha — assim o módulo vigia o fio.","Programar a função: alarme, avaria ou técnico."],
+  err:["Fim de linha montado no módulo e não no fim do fio (o fio não fica vigiado).","Contacto NF/NA trocado na programação → alarme permanente."]},
+ mout:{n:"Módulo de saída / relé (ex.: retentor de porta corta-fogo)",ic:"M-OUT",col:"#16a34a",t:["L + / L − (laço)","C · NA · NF (relé)","24 V da fonte auxiliar"],
+  how:["O lado do laço liga como um elemento normal.","O relé corta a alimentação de 24 V do retentor eletromagnético → a porta corta-fogo fecha em alarme (segurança positiva: sem energia, a porta fecha).","Usar fonte de alimentação auxiliar EN 54-4 para cargas como retentores, sirenes externas ou registos."],
+  err:["Alimentar retentores ou sirenes grandes a partir do laço — sobrecarga.","Usar o contacto NA quando a função pede NF (a porta não fecha se o fio cair)."]},
+ rli:{n:"Indicador de ação (LED remoto)",ic:"LED",col:"#f59e0b",t:["+ / − a partir do borne R do detetor"],
+  how:["Liga ao borne R da base do detetor (não ao laço).","Coloca-se à porta de compartimentos fechados, tetos falsos ou pavimentos técnicos."],err:["Ligar o indicador diretamente ao laço."]}
+};
+/* sequência do exemplo: ida (cima) e volta (baixo) */
+const LSEQ=[["iso","ISO 1"],["det","001 Detetor · Sala 1"],["det","002 Detetor · Sala 1"],["mcp","003 Botoneira · Saída"],["iso","ISO 2"],["snd","004 Sirene · Corredor"],["min","005 Módulo entrada · Fluxostato"],["mout","006 Módulo saída · Porta CF"],["iso","ISO 3"]];
+const LRET=[["det","007 Detetor · Arrumos"],["det","008 Detetor · Teto falso"],["snd","009 Sirene · Escada"],["iso","ISO 4"]];
+/* ---------- ilustrações realistas dos equipamentos (desenhadas aqui) + fotos reais da obra ---------- */
+const ART_DEFS=`<defs><linearGradient id="agW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#eef0f2"/><stop offset="1" stop-color="#c9ced4"/></linearGradient>
+ <radialGradient id="agDome" cx=".4" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#e9ecef"/><stop offset="1" stop-color="#b8bec6"/></radialGradient>
+ <linearGradient id="agR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f05252"/><stop offset="1" stop-color="#a51d1d"/></linearGradient>
+ <linearGradient id="agG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3f4f6"/><stop offset="1" stop-color="#b9bfc7"/></linearGradient>
+ <linearGradient id="agD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b5563"/><stop offset="1" stop-color="#1f2937"/></linearGradient>
+ <radialGradient id="agLens" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#ffd6d6"/><stop offset=".6" stop-color="#ef4444" stop-opacity=".85"/><stop offset="1" stop-color="#991b1b"/></radialGradient>
+ <radialGradient id="agLensW" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#e5e7eb" stop-opacity=".9"/><stop offset="1" stop-color="#9ca3af"/></radialGradient></defs>`;
+const ART={
+ det:`<ellipse cx="50" cy="78" rx="40" ry="9" fill="#000" opacity=".12"/><path d="M12 56h76v8a6 6 0 0 1-6 6H18a6 6 0 0 1-6-6z" fill="url(#agG)" stroke="#9aa1aa"/><path d="M14 56a36 30 0 0 1 72 0z" fill="url(#agDome)" stroke="#a7aeb6"/>
+  ${[22,30,38,46,54,62,70,78].map(x=>`<rect x="${x-1.5}" y="44" width="3" height="10" rx="1.5" fill="#c4c9cf"/>`).join("")}<circle cx="50" cy="31" r="8" fill="#f8f9fa" stroke="#c4c9cf"/><circle cx="67" cy="60" r="2.6" fill="#ef4444"/><circle cx="66.3" cy="59.2" r=".9" fill="#fff" opacity=".8"/>`,
+ mcp:`<rect x="18" y="10" width="64" height="72" rx="6" fill="url(#agR)" stroke="#7f1d1d"/><rect x="28" y="20" width="44" height="40" rx="3" fill="#fafafa" stroke="#d1d5db"/><path d="M38 46l10-14 4 6 8-6-6 12" fill="none" stroke="#111" stroke-width="2.2" stroke-linejoin="round"/><path d="M35 54h30" stroke="#111" stroke-width="2"/>
+  <rect x="44" y="66" width="12" height="8" rx="2" fill="#7f1d1d"/><circle cx="72" cy="72" r="2.4" fill="#fde047"/><path d="M28 20l44 40M72 20L28 60" stroke="#e5e7eb" stroke-width=".8" opacity=".6"/>`,
+ snd:`<ellipse cx="50" cy="84" rx="30" ry="6" fill="#000" opacity=".12"/><path d="M24 50h52v24a6 6 0 0 1-6 6H30a6 6 0 0 1-6-6z" fill="url(#agR)" stroke="#7f1d1d"/>${[30,38,46,54,62,70].map(x=>`<rect x="${x-1}" y="58" width="2" height="16" rx="1" fill="#7f1d1d" opacity=".55"/>`).join("")}
+  <path d="M28 50a22 28 0 0 1 44 0z" fill="url(#agLens)" stroke="#991b1b"/><path d="M34 46a16 18 0 0 1 14-16" fill="none" stroke="#fff" stroke-width="2" opacity=".7"/>`,
+ sndbase:`<ellipse cx="50" cy="84" rx="40" ry="7" fill="#000" opacity=".12"/><path d="M8 62h84v10a6 6 0 0 1-6 6H14a6 6 0 0 1-6-6z" fill="url(#agW)" stroke="#9aa1aa"/><path d="M8 66h84" stroke="#ef4444" stroke-width="4" opacity=".85"/>${[18,26,74,82].map(x=>`<circle cx="${x}" cy="72" r="1.6" fill="#6b7280"/>`).join("")}
+  <path d="M20 62a30 24 0 0 1 60 0z" fill="url(#agDome)" stroke="#a7aeb6"/>${[30,38,46,54,62,70].map(x=>`<rect x="${x-1.4}" y="50" width="2.8" height="10" rx="1.4" fill="#c4c9cf"/>`).join("")}<circle cx="64" cy="64" r="2.4" fill="#ef4444"/>`,
+ mod:`<rect x="12" y="16" width="76" height="64" rx="6" fill="url(#agW)" stroke="#9aa1aa"/><rect x="18" y="22" width="64" height="16" rx="3" fill="#e5e7eb"/>${[24,34,44,54,64,74].map(x=>`<rect x="${x-4}" y="25" width="8" height="10" rx="1" fill="#16a34a"/><circle cx="${x}" cy="30" r="2" fill="#d1d5db"/>`).join("")}
+  <rect x="18" y="58" width="64" height="16" rx="3" fill="#e5e7eb"/>${[24,34,44,54,64,74].map(x=>`<rect x="${x-4}" y="61" width="8" height="10" rx="1" fill="#0891b2"/><circle cx="${x}" cy="66" r="2" fill="#d1d5db"/>`).join("")}<circle cx="78" cy="47" r="2.6" fill="#22c55e"/><circle cx="70" cy="47" r="2.6" fill="#f59e0b"/><text x="22" y="51" font-size="8" font-family="monospace" fill="#475569">I/O</text>`,
+ iso:`<rect x="20" y="26" width="60" height="48" rx="6" fill="url(#agW)" stroke="#9aa1aa"/><rect x="26" y="34" width="20" height="10" rx="1" fill="#b45309"/><rect x="54" y="34" width="20" height="10" rx="1" fill="#b45309"/><circle cx="50" cy="60" r="3" fill="#f59e0b"/><path d="M34 60h8M58 60h8" stroke="#475569" stroke-width="2"/>`,
+ cdi:`<rect x="10" y="6" width="80" height="84" rx="6" fill="url(#agG)" stroke="#6b7280"/><rect x="18" y="14" width="64" height="28" rx="3" fill="#0e2433"/><text x="22" y="26" font-size="7" font-family="monospace" fill="#86efac">NORMAL</text><text x="22" y="36" font-size="6" font-family="monospace" fill="#5eead4">Laço 1 · 10 el.</text>
+  ${[0,1,2,3].map(i=>`<circle cx="${24+i*9}" cy="50" r="2.6" fill="${["#22c55e","#f59e0b","#ef4444","#f59e0b"][i]}"/>`).join("")}${[0,1,2].map(r=>[0,1,2,3].map(c=>`<rect x="${52+c*7.5}" y="${46+r*8}" width="6" height="6" rx="1" fill="#d1d5db" stroke="#9ca3af" stroke-width=".5"/>`).join("")).join("")}<rect x="18" y="72" width="30" height="10" rx="2" fill="#ef4444"/><text x="20.5" y="79.5" font-size="5.5" fill="#fff" font-family="sans-serif">SILENCIAR</text>`,
+ led:`<rect x="30" y="22" width="40" height="56" rx="6" fill="url(#agW)" stroke="#9aa1aa"/><circle cx="50" cy="44" r="10" fill="#ef4444"/><circle cx="47" cy="41" r="3" fill="#fff" opacity=".6"/><path d="M38 64h24" stroke="#9ca3af" stroke-width="2"/>`
+};
+const ART_OF={cdi:"cdi",iso:"iso",det:"det",mcp:"mcp",snd:"snd",min:"mod",mout:"mod",rli:"led",db:"det",fdm:"mcp",fdcio:"mod",fds:"snd",fdsb:"sndbase",fdcl:"iso"};
+const EQP_KEY="of-eq-photos";
+function eqPhotos(){let m={};try{m=JSON.parse(localStorage.getItem(EQP_KEY)||"{}")}catch(e){}return{...m,...((S.meta&&S.meta.eqPhotos)||{})}}
+function eqPhotoKey(k){return(LG===LG_GEN?"gen:":"sie:")+k}
+function artFor(k,x,y,w,h){const ph=eqPhotos()[eqPhotoKey(k)];if(ph)return`<image href="${ph}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet" class="eqph"/>`;
+ const a=ART[ART_OF[k]||"mod"];return`<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="0 0 100 92" preserveAspectRatio="xMidYMid meet">${a}</svg>`}
+async function setEqPhoto(k,file){const im=await createImageBitmap(file);const L=360,s=Math.min(1,L/Math.max(im.width,im.height));const cv=document.createElement("canvas");cv.width=Math.round(im.width*s);cv.height=Math.round(im.height*s);
+ cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);const url=cv.toDataURL("image/jpeg",.82);const key=eqPhotoKey(k);
+ try{const m=JSON.parse(localStorage.getItem(EQP_KEY)||"{}");m[key]=url;localStorage.setItem(EQP_KEY,JSON.stringify(m))}catch(e){}
+ if(S.projectId&&S.canWrite&&!S.demo){S.meta={...S.meta,eqPhotos:{...((S.meta&&S.meta.eqPhotos)||{}),[key]:url}};api.set("meta","project",{...S.meta})}}
+function delEqPhoto(k){const key=eqPhotoKey(k);try{const m=JSON.parse(localStorage.getItem(EQP_KEY)||"{}");delete m[key];localStorage.setItem(EQP_KEY,JSON.stringify(m))}catch(e){}
+ if(S.meta&&S.meta.eqPhotos&&S.meta.eqPhotos[key]&&S.canWrite){const e2={...S.meta.eqPhotos};delete e2[key];S.meta={...S.meta,eqPhotos:e2};api.set("meta","project",{...S.meta})}}
+
+const LG_GEN={h:"Exemplo de ligação do laço",intro:"Laço endereçável classe A com isoladores, detetores, botoneira, sirenes, módulo de entrada e módulo de saída. Toca num elemento para ver como se liga. Bornes e valores são genéricos — seguir sempre a ficha do fabricante da central.",title:"Laço classe A · cabo 2 condutores + blindagem · + vermelho · − preto",seq:LSEQ,ret:LRET,lel:LEL};
+let LG=LG_GEN;
+function ligSvg(sel,shield){const W=1180,X0=150,step=(W-X0-40)/LG.seq.length,yT=96,yB=316;let s=`<svg class="lig" viewBox="0 0 ${W} 440" role="img" aria-label="Exemplo de ligação de um laço">${ART_DEFS}`;
+ // central
+ s+=`<g class="lgel${sel==="cdi"?" sel":""}" data-le="cdi" role="button" tabindex="0"><rect x="14" y="120" width="104" height="170" rx="12" class="lg-cdi"/>${artFor("cdi",26,128,80,80)}<text x="66" y="226" class="lg-t w">${esc(LG.cdi1||"CDI")}</text><text x="66" y="244" class="lg-s w">${esc(LG.cdi2||"Laço 1")}</text>
+  <text x="122" y="${yT-14}" class="lg-s l">SAÍDA</text><text x="122" y="${yB+30}" class="lg-s l">RETORNO</text></g>`;
+ const bus=(y,x1,x2,cls="")=>`<line x1="${x1}" y1="${y-5}" x2="${x2}" y2="${y-5}" class="lg-p ${cls}"/><line x1="${x1}" y1="${y+5}" x2="${x2}" y2="${y+5}" class="lg-m ${cls}"/>${shield?`<line x1="${x1}" y1="${y+13}" x2="${x2}" y2="${y+13}" class="lg-sh ${cls}"/>`:""}`;
+ s+=`<path d="M118 150H130V${yT-5}" class="lg-p"/><path d="M118 160H138V${yT+5}" class="lg-m"/><path d="M118 230H130V${yB-5}" class="lg-p"/><path d="M118 240H138V${yB+5}" class="lg-m"/>`;
+ s+=bus(yT,130,W-30)+`<path d="M${W-30} ${yT-5}V${yB-5}" class="lg-p"/><path d="M${W-22} ${yT+5}V${yB+5}" class="lg-m"/>`+bus(yB,130,W-22);
+ if(shield)s+=`<path d="M${W-14} ${yT+13}V${yB+13}" class="lg-sh"/><path d="M14 ${yB+60}h40" class="lg-sh"/><text x="60" y="${yB+64}" class="lg-s l">blindagem: terra só na CDI</text><path d="M66 270V${yB+13}H130" class="lg-sh"/><circle cx="66" cy="285" r="5" class="lg-gnd"/>`;
+ const el=(k,lab,x,y,i)=>{const L=LG.lel[k];const isI=!!L.small;const w=isI?Math.max(50,L.ic.length*8+14):96,h=isI?52:92;const yy=y-h/2;
+  return`<g class="lgel${sel===k+":"+i?" sel":""}${isI?" iso":""}" data-le="${k}:${i}" role="button" tabindex="0"><rect x="${x-w/2}" y="${yy}" width="${w}" height="${h}" rx="${isI?6:10}" class="lg-b" style="--c:${L.col}"/>${artFor(k,x-(isI?16:26),yy+3,isI?32:52,isI?28:50)}<text x="${x}" y="${yy+(isI?44:66)}" class="lg-t">${esc(L.ic)}</text>${isI?"":`<text x="${x}" y="${yy+82}" class="lg-s">${esc(lab.split(" · ")[0].replace(/\s*\+\s*(DB720|FDSB226)/,"").slice(0,16))}</text>`}
+   <circle cx="${x-w/2}" cy="${y-5}" r="3.2" class="lg-tp"/><circle cx="${x+w/2}" cy="${y-5}" r="3.2" class="lg-tp"/><circle cx="${x-w/2}" cy="${y+5}" r="3.2" class="lg-tm"/><circle cx="${x+w/2}" cy="${y+5}" r="3.2" class="lg-tm"/>
+   ${isI?"":`<text x="${x}" y="${y<200?yy-8:yy+h+16}" class="lg-s n">${esc(lab.split(" · ")[1]||"")}</text>`}
+   ${L.acc==="in"||L.acc==="io"?`<path d="M${x-(L.acc==="io"?30:0)} ${yy+h}V${y+62}" class="lg-aux"/><rect x="${x-(L.acc==="io"?30:0)-22}" y="${y+62}" width="44" height="22" rx="4" class="lg-acc"/><text x="${x-(L.acc==="io"?30:0)}" y="${y+77}" class="lg-s">contacto</text><text x="${x-(L.acc==="io"?30:0)}" y="${y+98}" class="lg-s">+ resist.</text>`:""}
+   ${L.acc==="out"||L.acc==="io"?`<path d="M${x+(L.acc==="io"?30:0)} ${yy+h}V${y+62}" class="lg-aux"/><rect x="${x+(L.acc==="io"?30:0)-26}" y="${y+62}" width="52" height="22" rx="4" class="lg-acc"/><text x="${x+(L.acc==="io"?30:0)}" y="${y+77}" class="lg-s">retentor</text><text x="${x+(L.acc==="io"?30:0)}" y="${y+98}" class="lg-s">24 V aux.</text>`:""}
+   ${/Teto|LED/.test(lab)&&!isI?`<path d="M${x+38} ${yy}V${yy-26}" class="lg-aux"/><circle cx="${x+38}" cy="${yy-32}" r="7" class="lg-led"/><text x="${x+52}" y="${yy-28}" class="lg-s l">LED à porta</text>`:""}</g>`};
+ LG.seq.forEach(([k,l],i)=>{s+=el(k,l,X0+step*(i+.5),yT,i)});
+ const stepB=(W-X0-40)/LG.ret.length;LG.ret.forEach(([k,l],i)=>{s+=el(k,l,W-60-stepB*(i+.5),yB,"r"+i)});
+ s+=`<g class="lg-flow"><circle r="6" class="lg-dot"><animateMotion dur="7s" repeatCount="indefinite" path="M130 ${yT-5}H${W-30}V${yB-5}H130"/></circle></g>`;
+ s+=`<text x="${W/2}" y="16" class="lg-h">${esc(LG.title)}</text>`;
+ return s+`</svg>`}
+function ligZoom(k0,lab){const L=LG.lel[k0];const k=L.zk||k0;const W=560;let s=`<svg class="lgz" viewBox="0 0 ${W} 230" role="img">`;
+ const tb=(x,y,t,c)=>`<rect x="${x-17}" y="${y-11}" width="34" height="22" rx="4" class="lgz-tb"/><text x="${x}" y="${y+4}" class="lgz-tt" fill="${c}">${t}</text>`;
+ const box=(x,w)=>`<rect x="${x}" y="30" width="${w}" height="120" rx="14" class="lgz-b" style="--c:${L.col}"/><text x="${x+w/2}" y="62" class="lg-t">${esc(L.ic)}</text><text x="${x+w/2}" y="82" class="lg-s">${esc((lab||L.n).slice(0,34))}</text>`;
+ if(k==="cdi"){s+=box(150,260)+tb(190,138,"S+","#dc2626")+tb(235,138,"S−","#111")+tb(325,138,"R+","#dc2626")+tb(370,138,"R−","#111")+tb(280,110,"⏚","#16a34a");
+  s+=`<path d="M190 149V215" class="lgz-p"/><path d="M235 149V215" class="lgz-m"/><path d="M325 149V215" class="lgz-p"/><path d="M370 149V215" class="lgz-m"/><path d="M280 121V160H430V215" class="lgz-sh"/><text x="212" y="226" class="lg-s">saída do laço</text><text x="348" y="226" class="lg-s">retorno</text><text x="470" y="200" class="lg-s l">blindagem</text>`}
+ else if(k==="iso"){s+=box(160,240)+tb(200,138,"IN+","#dc2626")+tb(245,138,"IN−","#111")+tb(315,138,"OUT+","#dc2626")+tb(360,138,"OUT−","#111");
+  s+=`<path d="M10 180H200V149" class="lgz-p"/><path d="M10 200H245V149" class="lgz-m"/><path d="M550 180H315V149" class="lgz-p"/><path d="M550 200H360V149" class="lgz-m"/><text x="20" y="172" class="lg-s l">vem da central / anterior</text><text x="540" y="172" class="lg-s r">segue para os próximos</text>`}
+ else{s+=box(150,200)+tb(205,138,"L+","#dc2626")+tb(295,138,"L−","#111");
+  s+=`<path d="M10 180H190Q205 180 205 149" class="lgz-p"/><path d="M550 180H220Q205 180 205 149" class="lgz-p"/><path d="M10 200H280Q295 200 295 149" class="lgz-m"/><path d="M550 200H310Q295 200 295 149" class="lgz-m"/>
+   <text x="20" y="172" class="lg-s l">vem do anterior</text><text x="540" y="172" class="lg-s r">segue para o próximo</text><text x="250" y="222" class="lg-s">os dois fios + no mesmo borne · os dois fios − no mesmo borne</text>`;
+  if(k==="det")s+=tb(330,105,"R","#f59e0b")+`<path d="M347 105H420" class="lgz-a"/><circle cx="430" cy="105" r="9" class="lg-led"/><text x="446" y="109" class="lg-s l">LED à porta</text>`;
+  if(k==="min")s+=tb(330,95,"IN+","#0891b2")+tb(330,122,"IN−","#0891b2")+`<path d="M347 95H450" class="lgz-a"/><path d="M347 122H450" class="lgz-a"/><rect x="450" y="80" width="70" height="56" rx="6" class="lg-acc"/><text x="485" y="100" class="lg-s">contacto</text><path d="M462 112h22" class="lgz-a"/><rect x="470" y="116" width="34" height="11" rx="2" class="lgz-r"/><text x="487" y="150" class="lg-s">EOL no fim do fio</text>`;
+  if(k==="mout")s+=tb(330,80,"C","#16a34a")+tb(330,104,"NF","#16a34a")+tb(330,128,"NA","#94a3b8")+`<path d="M347 80H440" class="lgz-a"/><path d="M347 104H440" class="lgz-a"/><rect x="440" y="66" width="100" height="54" rx="6" class="lg-acc"/><text x="490" y="88" class="lg-s">retentor da porta</text><text x="490" y="104" class="lg-s">24 V (fonte aux.)</text>`;
+  if(k==="snd")s+=`<text x="250" y="110" class="lg-s">volume / tom: no aparelho ou por programação</text>`}
+ return s+`</svg>`}
+function ligTab(B,cfg){LG=cfg||LG_GEN;let sel=null,shield=true;
+ B.innerHTML=`<section class="block"><h2>${esc(LG.h)} <span class="livetag">● interativo</span></h2><p class="mut" style="margin-top:0">${LG.intro}</p>
+  <div class="toolrow"><label class="fsw"><input type="checkbox" id="lgSh" checked><span class="tg"></span>Mostrar blindagem</label><button class="btn sm" id="lgList">Lista de troços de cabo</button></div>
+  <div class="simwrap ligw" id="lgW"></div><div class="lgdet" id="lgD"></div>
+  ${LG.extra||""}<div class="lgrules"><h5>Regras de ligação do laço</h5><ul>
+   <li>Respeitar a polaridade em todos os elementos (+ vermelho, − preto) — entra e sai nos mesmos bornes.</li>
+   <li>Classe A: o laço volta à central; separar a ida e a volta por caminhos diferentes (NT 12, 6).</li>
+   <li>Isoladores de forma que um curto ou corte não tire mais de 32 dispositivos (NT 12, 5.2) e a cada mudança de zona/piso.</li>
+   <li>Blindagem contínua, ligada à terra só na central; isolar nas caixas de derivação.</li>
+   <li>Cabo resistente ao fogo (30 min) nos circuitos que têm de funcionar após a deteção; secção pelo cálculo de corrente e comprimento do fabricante.</li>
+   <li>Cargas grandes (retentores, sirenes externas, registos) com fonte auxiliar EN 54-4 comandada por módulo de saída.</li>
+   <li>Antes de ligar à central: continuidade, isolamento e confirmação de endereços; depois, ensaio de cada elemento.</li></ul></div></section>`;
+ const draw=()=>{$("lgW").innerHTML=ligSvg(sel,shield);$("lgW").querySelectorAll("[data-le]").forEach(g=>{g.onclick=()=>{sel=g.dataset.le;draw();show()};g.onkeydown=e=>{if(e.key==="Enter"){sel=g.dataset.le;draw();show()}}})};
+ const show=()=>{if(!sel){$("lgD").innerHTML=`<div class="lgd0">👆 Toca na central, num isolador, num detetor ou num módulo para ver a ligação em detalhe.</div>`;return}
+  const[k,ix]=sel.split(":");const L=LG.lel[k];if(!L)return;let lab=L.n;if(ix!=null){const src=String(ix).startsWith("r")?LG.ret[+String(ix).slice(1)]:LG.seq[+ix];if(src)lab=src[1]}
+  const hasPh=!!eqPhotos()[eqPhotoKey(k)];$("lgD").innerHTML=`<div class="lgdc" style="--c:${L.col}"><div class="lgdh"><span class="pbadge" style="background:${L.col}">${esc(L.ic)}</span><b>${esc(lab)}</b><small>${esc(L.n)}</small></div><div class="lgpic"><div class="lgpimg"><svg viewBox="0 0 120 110">${ART_DEFS}${artFor(k,0,0,120,110)}</svg></div><div class="lgpact"><b>${hasPh?"Foto real da obra":"Ilustração do equipamento"}</b><small>${hasPh?"Esta foto aparece no esquema em vez da ilustração.":"Podes trocar por uma foto real do equipamento instalado (tirada na obra)."}</small><div class="toolrow"><label class="btn sm primary">📷 ${hasPh?"Trocar foto":"Usar foto real"}<input type="file" accept="image/*" capture="environment" hidden data-eqph="${k}"></label>${hasPh?`<button class="btn sm" data-eqdel="${k}">Voltar à ilustração</button>`:""}</div></div></div>${ligZoom(k,lab)}
+   <div class="tec2"><div><h5>Bornes</h5><ul>${L.t.map(t=>`<li><code>${esc(t)}</code></li>`).join("")}</ul><h5>Como ligar</h5><ol>${L.how.map(h=>`<li>${h}</li>`).join("")}</ol></div><div><h5>Erros frequentes</h5><ul class="terr">${L.err.map(h=>`<li>${h}</li>`).join("")}</ul>
+   ${/Teto|LED/.test(lab)?`<p class="mut">Este detetor está num teto falso: tem indicador de ação (LED) à porta.</p>`:""}</div></div></div>`};
+ B.addEventListener("change",async e=>{const i=e.target.closest&&e.target.closest("[data-eqph]");if(!i||!i.files[0])return;try{await setEqPhoto(i.dataset.eqph,i.files[0]);toast("Foto guardada"+(S.projectId?" para esta obra.":" neste aparelho."));draw();show()}catch(err){toast("Não foi possível usar a foto.")}});
+ B.addEventListener("click",e=>{const d=e.target.closest("[data-eqdel]");if(!d)return;delEqPhoto(d.dataset.eqdel);draw();show()});
+ $("lgSh").onchange=e=>{shield=e.target.checked;draw()};
+ $("lgList").onclick=()=>{const all=[["cdi","CDI saída"],...LG.seq,...LG.ret,["cdi","CDI retorno"]];let rows="";for(let i=0;i<all.length-1;i++)rows+=`<tr><td>C${String(i+1).padStart(2,"0")}</td><td>${esc(all[i][1])}</td><td>${esc(all[i+1][1])}</td><td>2×1,5 mm² + blind. (ex.)</td></tr>`;
+  $("lgD").innerHTML=`<div class="lgdc"><div class="lgdh"><b>Lista de troços de cabo (exemplo)</b><small>serve de base para a etiquetagem dos cabos em obra</small></div><div class="tscroll"><table class="tt2"><tr><th>Troço</th><th>De</th><th>Para</th><th>Cabo</th></tr>${rows}</table></div><p class="mut">Cabo e secção: confirmar no cálculo do fabricante e no projeto (resistência ao fogo quando exigida).</p></div>`};
+ draw();show()}
+
+LEL.iso.small=true;LEL.min.acc="in";LEL.mout.acc="out";
+/* exemplo Siemens (Cerberus PRO / Sinteso — laço C-NET / FDnet) */
+const LEL_S={
+ cdi:{...LEL.cdi,n:"Central Cerberus PRO / Sinteso — laço C-NET / FDnet",ic:"FC/FS",col:"#0f766e",
+  how:["O laço sai e volta à central (classe A); todos os elementos FDnet/C-NET têm separador de linha integrado.","Até 252 elementos por laço e 3,3 km de cabo (FDnet) — confirmar o cálculo de laço da central.","Blindagem contínua, ligada à terra só na central."],err:LEL.cdi.err},
+ db:{n:"Detetor FD720 na base DB720",ic:"DB720",col:"#475569",zk:"db720",t:["1b  +C-NET IN/OUT (os dois fios +)","6  −C-NET IN (− que chega)","5  −C-NET OUT (− que segue)","1a  + indicador externo (AI)"],
+  how:["Os dois fios <b>+</b> (chega e segue) apertam no borne <b>1b</b>.","O <b>−</b> que chega vai ao borne <b>6</b> e o <b>−</b> que segue sai do borne <b>5</b> — entre eles fica o separador de linha do detetor.","Indicador de ação (AI) opcional: + no borne <b>1a</b> e − no borne 5/6, conforme a ficha.","Detetores FD720 (ex.: OP720 ótico, OOH740 multicritério) encaixam na base; endereço automático pela central."],
+  err:["Trocar os bornes 5 e 6 (− IN / − OUT): o separador de linha fica do lado errado.","Ligar os dois − no mesmo borne: perde-se a função de separador nesse ponto.","Ligar o indicador externo diretamente ao laço."]},
+ fdm:{n:"Botoneira FDM221",ic:"FDM221",col:"#dc2626",zk:"fdm",t:["LINE + (entra / sai)","LINE − (entra / sai)","Blindagem → borne auxiliar na caixa"],
+  how:["Ligar o laço à régua de ligação da unidade de comutação, conforme o esquema da ficha.","A blindagem liga-se a um borne auxiliar na caixa de fundo (não à botoneira).","Separador de linha integrado; LED de dois cores (alarme / teste). Bornes 0,28–1,5 mm²."],
+  err:["Blindagem cortada na botoneira (deixa de ser contínua).","Fios presos fora da régua com o vidro/elemento de rearme montado."]},
+ fdcio:{n:"Módulo de entrada/saída FDCIO221",ic:"FDCIO221",col:"#0891b2",zk:"fdcio",acc:"io",t:["C-NET + / − (entra / sai)","Entrada vigiada (contacto livre de potencial + 2 resistências fornecidas)","Saída relé: livre de potencial 30 V DC / 22 V AC 2 A — ou vigiada 30 V DC 2 A"],
+  how:["Liga ao laço como os outros elementos (separador de linha integrado; consumo em repouso ≤ 0,4 mA).","Entrada: contacto livre de potencial (ex.: fluxostato do sprinkler) com as resistências de terminação fornecidas — vigia corte e curto (resistência da linha ≤ 20 Ω).","Saída: escolher por ponte (jumper) relé livre de potencial ou saída vigiada; a saída vigiada precisa de alimentação auxiliar.","Exemplo: o relé corta os 24 V do retentor eletromagnético → a porta corta-fogo fecha em alarme."],
+  err:["Resistências de terminação no módulo em vez de no fim da linha (o fio não fica vigiado).","Saída configurada como vigiada sem alimentação auxiliar.","Comandar cargas acima de 2 A diretamente pelo relé."]},
+ fds:{n:"Sirene com sinalizador FDS226",ic:"FDS226",col:"#7c3aed",zk:"fds",t:["C-NET + / − (entra / sai)"],
+  how:["Sirene com sinalizador ótico no laço (acústico EN 54-3 e ótico EN 54-23).","3 níveis sonoros e 16 tons selecionáveis; versões de corpo e LED vermelho ou branco (-RR, -RW, -WR, -WW).","Contar o consumo em alarme no cálculo do laço."],
+  err:["Sinalizador escondido ou fora do campo de visão (deve ver-se de todo o espaço).","Demasiadas sirenes/sinalizadores no mesmo laço sem cálculo de corrente."]},
+ fdsb:{n:"Base sirene-sinalizador FDSB226",ic:"FDSB226",col:"#9333ea",zk:"fds",t:["C-NET + / − (entra / sai)","Detetor compatível encaixa por cima"],how:["Base com sirene e sinalizador onde encaixa um detetor compatível — junta deteção e alarme no mesmo ponto do teto.","LED vermelho ou branco (-WR / -WW)."],err:["Usar com detetor não compatível (ver lista do fabricante)."]},
+ fdcl:{n:"Separador de linha FDCL221",ic:"FDCL221",col:"#b45309",small:true,zk:"iso",t:["IN + / IN −","OUT (derivação) + / −"],how:["Usa-se onde saem várias derivações (T) em paralelo do laço: um curto numa derivação não afeta as outras.","Os elementos FDnet já têm separador integrado — o FDCL221 é para as derivações."],err:["Fazer derivações sem separador."]}
+};
+const LG_SIE={h:"Exemplo Siemens — laço C-NET / FDnet",cdi1:"FC/FS",cdi2:"C-NET / FDnet",
+ intro:"Laço Siemens (Cerberus PRO / Sinteso) com detetores FD720 em bases <b>DB720</b>, botoneira <b>FDM221</b>, módulo <b>FDCIO221</b> (entrada do fluxostato e saída para a porta corta-fogo) e sinalizadores <b>FDS226</b> / base <b>FDSB226</b>. Toca em cada elemento para ver os bornes. Os bornes da DB720 (1a, 1b, 5, 6) vêm da ficha da Siemens; nos outros elementos confirmar a numeração no esquema da ficha de montagem.",
+ title:"Laço FDnet / C-NET classe A · elementos com separador de linha integrado · + vermelho · − preto",
+ seq:[["db","001 OP720 + DB720 · Receção"],["db","002 OOH740 + DB720 · Sala reuniões"],["fdm","003 FDM221 · Saída"],["fds","004 FDS226 · Corredor"],["fdcio","005 FDCIO221 · Sprinkler / porta CF"],["fdsb","006 Detetor + FDSB226 · Open space"],["fdcl","FDCL221"]],
+ ret:[["db","007 OP720 + DB720 · Teto falso (LED)"],["fds","008 FDS226 · Escada"],["db","009 OP720 + DB720 · Arquivo"],["fdm","010 FDM221 · Saída 2"]],lel:LEL_S,
+ extra:`<div class="lgrules sie"><h5>Notas Siemens</h5><ul><li>FDnet: até 252 elementos e 3,3 km por laço; até 40 derivações (T) com separador de linha.</li><li>Todos os elementos S-LINE e C-LINE (e FD720) têm separador de linha integrado.</li><li>FDCIO221: 1 entrada vigiada + 1 saída relé (ponte para livre de potencial ou vigiada); repouso ≤ 0,4 mA.</li><li>FDS226 / FDSB226: sirene com sinalizador (EN 54-3 / EN 54-23), 3 níveis e 16 tons.</li></ul></div>`};
+const ligZoomBase=ligZoom;
+ligZoom=function(k0,lab){const L=LG.lel[k0];if(!L)return"";const zk=L.zk;const W=560;
+ const tb=(x,y,t,c)=>`<rect x="${x-19}" y="${y-11}" width="38" height="22" rx="4" class="lgz-tb"/><text x="${x}" y="${y+4}" class="lgz-tt" fill="${c}">${t}</text>`;
+ const box=(x,w,t2)=>`<rect x="${x}" y="30" width="${w}" height="120" rx="14" class="lgz-b" style="--c:${L.col}"/><text x="${x+w/2}" y="58" class="lg-t">${esc(L.ic)}</text><text x="${x+w/2}" y="78" class="lg-s">${esc((t2||lab||L.n).slice(0,40))}</text>`;
+ if(zk==="db720"){let s=`<svg class="lgz" viewBox="0 0 ${W} 240" role="img"><circle cx="280" cy="92" r="70" class="lgz-b" style="--c:${L.col}"/><text x="280" y="78" class="lg-t">DB720</text><text x="280" y="96" class="lg-s">base (vista de baixo)</text>`;
+  s+=tb(210,130,"1b","#dc2626")+tb(350,130,"5","#111")+tb(310,160,"6","#111")+tb(250,160,"1a","#f59e0b");
+  s+=`<path d="M10 186H180Q210 186 210 141" class="lgz-p"/><path d="M550 186H240Q210 186 210 141" class="lgz-p"/><path d="M10 210H290Q310 210 310 171" class="lgz-m"/><path d="M550 206H370Q350 206 350 141" class="lgz-m"/>
+   <path d="M250 171V226H170" class="lgz-a"/><circle cx="160" cy="226" r="8" class="lg-led"/><text x="146" y="230" class="lg-s r">AI (opcional)</text>
+   <text x="20" y="178" class="lg-s l">vem do anterior: + → 1b · − → 6</text><text x="540" y="178" class="lg-s r">segue: + de 1b · − de 5</text><text x="330" y="118" class="lg-s">separador entre 6 e 5</text></svg>`;return s}
+ if(zk==="fdm"){let s=`<svg class="lgz" viewBox="0 0 ${W} 230" role="img">${box(160,240,"Unidade de comutação · régua LINE")}`+tb(230,128,"LINE +","#dc2626")+tb(330,128,"LINE −","#111");
+  s+=`<path d="M10 180H215Q230 180 230 139" class="lgz-p"/><path d="M550 180H245Q230 180 230 139" class="lgz-p"/><path d="M10 200H315Q330 200 330 139" class="lgz-m"/><path d="M550 200H345Q330 200 330 139" class="lgz-m"/>
+   <rect x="430" y="96" width="70" height="24" rx="4" class="lg-acc"/><text x="465" y="112" class="lg-s">borne aux.</text><path d="M10 215H465V120" class="lgz-sh"/><text x="300" y="226" class="lg-s">blindagem no borne auxiliar da caixa de fundo</text></svg>`;return s}
+ if(zk==="fdcio"){let s=`<svg class="lgz" viewBox="0 0 ${W} 240" role="img">${box(130,230,"FDCIO221")}`+tb(170,132,"C+","#dc2626")+tb(230,132,"C−","#111")+tb(330,70,"IN","#0891b2")+tb(330,100,"IN","#0891b2")+tb(330,130,"OUT","#16a34a");
+  s+=`<path d="M10 182H155Q170 182 170 143" class="lgz-p"/><path d="M550 182H185Q170 182 170 143" class="lgz-p"/><path d="M10 202H215Q230 202 230 143" class="lgz-m"/><path d="M550 202H245Q230 202 230 143" class="lgz-m"/>
+   <path d="M349 70H430" class="lgz-a"/><path d="M349 100H430" class="lgz-a"/><rect x="430" y="56" width="110" height="56" rx="6" class="lg-acc"/><text x="485" y="74" class="lg-s">fluxostato</text><text x="485" y="88" class="lg-s">(contacto livre)</text><rect x="466" y="94" width="38" height="10" rx="2" class="lgz-r"/><text x="485" y="122" class="lg-s">resistências no fim</text>
+   <path d="M349 130H400V150H430" class="lgz-a"/><rect x="430" y="140" width="110" height="34" rx="6" class="lg-acc"/><text x="485" y="155" class="lg-s">retentor porta CF</text><text x="485" y="168" class="lg-s">24 V aux. (relé corta)</text></svg>`;return s}
+ if(zk==="fds"){let s=`<svg class="lgz" viewBox="0 0 ${W} 230" role="img">${box(170,220)}<circle cx="280" cy="110" r="16" class="lg-led"/><path d="M262 92l-10-10M298 92l10-10M280 86V74" class="lgz-a"/>`+tb(230,132,"+","#dc2626")+tb(330,132,"−","#111");
+  s+=`<path d="M10 182H215Q230 182 230 143" class="lgz-p"/><path d="M550 182H245Q230 182 230 143" class="lgz-p"/><path d="M10 202H315Q330 202 330 143" class="lgz-m"/><path d="M550 202H345Q330 202 330 143" class="lgz-m"/><text x="280" y="222" class="lg-s">nível sonoro (3) e tom (16) no aparelho/programação</text></svg>`;return s}
+ if(L===LEL_S.cdi||k0==="fdcl"){LG.lel[k0]={...L,zk:k0==="fdcl"?"iso":"cdi"}}const out=ligZoomBase(k0,lab);LG.lel[k0]=L;return out};
+
+const SEGF=[["sadi","SADI — visão geral","🔥"],["proto","Protocolos SADI","🧩"],["lig","Ligação do laço","🔌"],["sie","Exemplo Siemens","🔧"],["sim","Simulador de laço","⟳"]];
+function kSeg(E){const k=st.sub.seg||"sadi";
+ E.innerHTML=`<div class="segh"><span class="segfold">📁</span><div><b>Segurança</b><small>Sistemas Automáticos de Deteção de Incêndio (SADI)</small></div></div>
+ <div class="segtabs">${SEGF.map(f=>`<button data-sg="${f[0]}" class="${k===f[0]?"on":""}"><span>${f[2]}</span>${f[1]}</button>`).join("")}</div><div id="segB"></div>`;
+ E.querySelectorAll("[data-sg]").forEach(b=>b.onclick=()=>{st.sub.seg=b.dataset.sg;kSeg(E)});const B=$("segB");
+ if(k==="sadi")B.innerHTML=`<div class="tecacc">${[
+  ["Componentes",`<ul><li><b>CDI</b> — central de deteção de incêndio (EN 54-2) com fonte de alimentação (EN 54-4).</li><li><b>Detetores automáticos</b>: ótico de fumo (EN 54-7), térmico (EN 54-5), chama (EN 54-10), linear/feixe (EN 54-12), aspiração (EN 54-20), multicritério.</li><li><b>Botoneiras</b> (EN 54-11), <b>sirenes</b> (EN 54-3), <b>sinalizadores óticos</b> (EN 54-23).</li><li><b>Módulos de entrada/saída</b> (EN 54-18) e <b>isoladores</b> (EN 54-17).</li><li><b>Repetidores</b>, <b>transmissão de alerta</b> (EN 54-21) e sistemas via rádio (EN 54-25).</li></ul>`],
+  ["Configurações (RT-SCIE)",`<p>O RT-SCIE define três configurações (Quadro I, art.º 125.º): a <b>1</b> com botoneiras, detetores e difusão do alarme; a <b>2</b> e a <b>3</b> acrescentam alerta automático e comandos, com a 3 em proteção total. A configuração exigida depende da utilização-tipo e da categoria de risco (Quadro II). Confirmar no projeto de SCIE.</p>`],
+  ["Zonamento",`<ul><li>Área máxima por zona: <b>1 600 m²</b>.</li><li>Uma zona fica num só piso (exceto caixas de escada, ductos, elevadores no mesmo compartimento, ou edifícios com menos de 300 m²).</li><li>Zonas com mais de 5 compartimentos: indicação de qual detetor atuou (na CDI ou com indicadores de ação junto às portas).</li></ul>`],
+  ["Avarias e isoladores",`<ul><li>Um único curto-circuito ou corte <b>não pode deixar mais de 32 dispositivos</b> inoperacionais (e esses devem ser da mesma zona e função).</li><li>Duas avarias no mesmo circuito não podem afetar mais de 10 000 m² ou mais de 5 compartimentos.</li><li>Em laços (classe A), separar as duas pernas para que um mesmo incidente não as danifique.</li></ul>`],
+  ["Botoneiras e sirenes",`<ul><li>Botoneiras nos caminhos de evacuação, junto às portas das escadas e saídas; ninguém deve percorrer mais de <b>30 m</b> até uma; altura <b>≈ 1,2 m</b>.</li><li>Sirenes: mínimo <b>65 dB(A)</b> e 10 dB(A) acima do ruído; quartos: <b>75 dB(A)</b> à cabeceira; máximo 120 dB(A); pelo menos 2 por edifício e 1 por compartimento.</li></ul>`],
+  ["Central, alimentação e cabos",`<ul><li>Visor da CDI a <b>1,4 – 1,8 m</b>, local limpo, seco e de preferência vigiado.</li><li>Autonomia: <b>72 h</b> em vigilância + <b>30 min</b> em alarme (30 h com contrato de manutenção com reparação &lt; 24 h; casos especiais 4 h); baterias com +25 % de capacidade.</li><li>Circuitos que têm de funcionar mais de 1 min após a deteção: resistência ao fogo de <b>30 min</b> (ou proteção equivalente).</li></ul>`],
+  ["Detetores — colocação",`<ul><li>Elemento sensível nos <b>10 % superiores</b> da altura do compartimento; não embutir no teto.</li><li>A <b>0,5 m</b> das paredes e com 0,5 m livres à volta.</li><li>Áreas de cobertura conforme EN 54-14 / CEN/TS 54-14.</li></ul>`],
+  ["Manutenção",`<ul><li><b>Diária</b>: estado da CDI, registos de alarmes e reposição após inibições.</li><li><b>Trimestral</b>: autonomia das baterias, pelo menos um dispositivo por zona, afastamentos e acesso às botoneiras.</li><li><b>Anual</b>: todos os detetores (até 25 % em cada visita trimestral); baterias conforme o fabricante.</li></ul>`]
+ ].map((s,i)=>`<details${i<2?" open":""}><summary>${s[0]}</summary><div class="tecart">${s[1]}<p class="mut">Fonte: ${esc(SADI_F.nt12)} · ${esc(SADI_F.rtscie)}</p></div></details>`).join("")}</div>`;
+ else if(k==="proto"){B.innerHTML=`<p class="mut">Cada fabricante usa o seu protocolo de laço: dispositivos e central têm de ser do mesmo protocolo. Capacidades: ${esc(SADI_F.fab)}.</p><div class="tprotos">${SPROTO.map((p,i)=>`<details class="tproto"${i===1?" open":""}><summary><span class="pbadge sadi">${esc(p.n.split(/[ /(]/)[0])}</span><span class="pst"><b>${p.n}</b><span>${p.uso}</span></span></summary>${protoDetail(p)}</details>`).join("")}</div>`;wireProto(B)}
+ else if(k==="lig")ligTab(B);
+ else if(k==="sie")ligTab(B,LG_SIE);
+ else{B.innerHTML=`<section class="block"><h2>Simulador de laço endereçável <span class="livetag">● interativo</span></h2><p class="mut" style="margin-top:0">Vê o efeito dos isoladores e do laço fechado (classe A) quando há um curto-circuito ou um corte — e o que acontece a um alarme num troço fora de serviço.</p>${loopSim()}</section>`;wireLoop(B)}}
+
+BASE.fontes.nt12=SADI_F.nt12;BASE.fontes.rtscie=SADI_F.rtscie;
+KB.push(
+ {id:"sadi_iso",t:"SADI — isoladores e regra dos 32 dispositivos",k:"sadi incendio isolador isoladores 32 dispositivos laco curto circuito corte classe a classe b",h:()=>`<p>Um único curto-circuito ou corte não pode deixar mais de <b>32 dispositivos</b> inoperacionais (da mesma zona e função) — por isso usam-se <b>isoladores</b> no laço. Em classe A (laço fechado) separar as duas pernas.</p>`,f:"nt12",go2:"sim"},
+ {id:"sadi_sir",t:"SADI — sirenes (níveis sonoros)",k:"sadi incendio sirene sirenes db decibeis 65 75 120 som alarme quarto",h:()=>`<p>Mínimo <b>65 dB(A)</b> e 10 dB(A) acima do ruído; quartos <b>75 dB(A)</b> à cabeceira; máximo 120 dB(A); pelo menos 2 sirenes por edifício e 1 por compartimento.</p>`,f:"nt12"},
+ {id:"sadi_bot",t:"SADI — botoneiras",k:"sadi incendio botoneira botoneiras altura 1,2 30 m distancia manual call point",h:()=>`<p>Nos caminhos de evacuação, junto às portas das escadas e saídas; distância máxima a percorrer <b>30 m</b>; altura <b>≈ 1,2 m</b>.</p>`,f:"nt12"},
+ {id:"sadi_bat",t:"SADI — autonomia da central (baterias)",k:"sadi incendio central cdi bateria baterias autonomia 72 h 30 min alimentacao",h:()=>`<p><b>72 h</b> em vigilância + <b>30 min</b> em alarme (30 h com contrato de manutenção com reparação em menos de 24 h); dimensionar com +25 % de capacidade.</p>`,f:"nt12"},
+ {id:"sadi_zona",t:"SADI — zonamento",k:"sadi incendio zona zonas 1600 m2 area piso zonamento",h:()=>`<p>Até <b>1 600 m²</b> por zona e uma zona num só piso (exceções: caixas de escada, ductos, elevadores, edifícios &lt; 300 m²).</p>`,f:"nt12"},
+ {id:"sadi_proto",t:"SADI — protocolos de laço (Apollo, Hochiki, FDnet, LSN…)",k:"sadi incendio protocolo protocolos apollo xp95 discovery soteria hochiki esp fdnet siemens bosch lsn notifier enderecavel convencional laco",go:["cons","seg","proto"]}
+);
 
 window.TEC={render,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
 })();

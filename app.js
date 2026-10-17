@@ -2501,7 +2501,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="36";
+const APP_VER="42";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -3732,7 +3732,7 @@ renderPage=function(v){renderPageN(v);if(v!=="settings")return;const W=$("pageWr
    ========================================================= */
 PAGE_VIEWS.push("tecnico");
 let tecP=null;
-function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=36";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
+function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=42";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
 let tecOpts=null;
 function openTec(o){tecOpts=o||null;go("tecnico")}
 const renderPageTec=renderPage;
