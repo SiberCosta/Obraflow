@@ -2501,7 +2501,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="43";
+const APP_VER="44";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -2604,7 +2604,7 @@ async function openProject(id,view){if(!S.projects.some(p=>p.id===id))return;
 
 /* sem projeto escolhido só se pode estar na lista de projetos */
 const goBase=go;
-go=function(v){if(!S.projectId&&v!=="projects"&&v!=="more"&&v!=="tecnico")v="projects";goBase(v)};
+go=function(v){if(!S.projectId&&v!=="projects"&&v!=="more")v="projects";goBase(v)};
 
 /* ---------- moldura: estado da vista de projetos ---------- */
 const renderShellBase=renderShell;
@@ -3727,46 +3727,6 @@ const renderPageN=renderPage;
 renderPage=function(v){renderPageN(v);if(v!=="settings")return;const W=$("pageWrap");if(!W||$("pushCard"))return;const nc=[...W.querySelectorAll("section.block")].find(s=>/Notificações por email/i.test(s.querySelector("h2")?.textContent||""));
  const h=document.createElement("div");h.innerHTML=pushCard();const el=h.firstElementChild;if(nc)nc.before(el);else W.appendChild(el);
  const on=$("pcOn");if(on)on.onclick=async()=>{await nAskPush();renderPage("settings")};const ts=$("pcTest");if(ts)ts.onclick=()=>nShow({id:"t"+Date.now(),t:"Teste do ObraFlow",d:"As notificações estão a funcionar."})};
-
-/* =========================================================
-   ObraFlow · ligação ao módulo "Técnico" (tecnico.js, carregado só quando é aberto
-   e guardado no aparelho para funcionar sem rede)
-   ========================================================= */
-PAGE_VIEWS.push("tecnico");
-let tecP=null;
-function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=43";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
-let tecOpts=null;
-function openTec(o){tecOpts=o||null;go("tecnico")}
-const renderPageTec=renderPage;
-renderPage=function(v){if(v!=="tecnico")return renderPageTec(v);const W=$("pageWrap");
- if(!window.TEC)W.innerHTML=`<div class="empty" style="padding:40px;text-align:center">A abrir o módulo Técnico…</div>`;
- loadTec().then(()=>{if(S.view!=="tecnico")return;const o=tecOpts;tecOpts=null;TEC.render(W,o||undefined)}).catch(e=>{W.innerHTML=`<div class="empty" style="padding:40px;text-align:center">${esc(e.message)}. Liga-te à rede uma vez para o guardar neste aparelho.</div>`})};
-/* entrada no menu lateral (depois de Documentos) */
-(()=>{const ref=document.querySelector('.side [data-nav="docs"]');if(!ref)return;const b=document.createElement("button");b.type="button";b.className="nv";b.dataset.nav="tecnico";
- b.innerHTML=`<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span>Técnico (RTIEBT)</span><span class="cnt" hidden></span>`;ref.after(b);
- b.onclick=e=>{e.stopPropagation();openTec()}})();
-/* a partir de uma tarefa/dúvida: abrir o Técnico com contexto (os resultados guardam-se nela) */
-const drawTaskTec=drawTask;
-drawTask=function(){drawTaskTec();const t=S.issues.find(x=>x.id===S.taskSel);const row=document.querySelector("#tkBody .toolrow:last-child");if(!t||!row||$("tkTec"))return;
- const b=document.createElement("button");b.type="button";b.className="btn sm";b.id="tkTec";b.textContent="Técnico / calcular";b.title="Abrir calculadoras e assistente técnico para esta "+(t.kind==="duvida"?"dúvida":"tarefa");
- b.onclick=()=>{$("dlgTask").close();openTec({ctx:{kind:"task",id:t.id,label:tRef(t)+" «"+String(t.title||"").slice(0,40)+"»"},...(t.kind==="duvida"?{q:t.title}:{})})};row.insertBefore(b,row.children[1]||null)};
-/* preparar o módulo em segundo plano (para ficar disponível sem rede) */
-setTimeout(()=>{if(navigator.onLine)("requestIdleCallback" in window?requestIdleCallback:setTimeout)(()=>loadTec().catch(()=>{}),{timeout:15000})},12000);
-/* acesso logo no início: na página de projetos e na visão geral da obra */
-let tecFrom=null;
-const tecCard=()=>`<section class="teclaunch"><div class="tlx"><span class="tli">⚡</span><div><b>Técnico (RTIEBT)</b><span>Calculadoras, guia de bolso, esquemas, automação e assistente — funciona sem rede, sem escolher obra.</span></div></div>
- <div class="tlb"><button type="button" class="btn" data-tl="calc">Calcular</button><button type="button" class="btn" data-tl="cons">Consultar</button><button type="button" class="btn" data-tl="ia">Assistente</button><button type="button" class="btn primary" data-tl="inicio">Abrir →</button></div></section>`;
-function wireTecCard(root,from){root.querySelectorAll("[data-tl]").forEach(b=>b.onclick=()=>{tecFrom=from;openTec({tab:b.dataset.tl})})}
-const renderProjectsTec=renderProjects;
-renderProjects=function(){renderProjectsTec();const W=$("pageWrap");if(!W||W.querySelector(".teclaunch"))return;const ft=W.querySelector(".ftool");const d=document.createElement("div");d.innerHTML=tecCard();const el=d.firstElementChild;
- if(ft)ft.before(el);else W.appendChild(el);wireTecCard(el,"projects")};
-const renderHomeTec=renderHome;
-renderHome=function(){renderHomeTec();const W=$("homeWrap");if(!W||W.querySelector(".teclaunch"))return;const k=W.querySelector(".kpis");const d=document.createElement("div");d.innerHTML=tecCard();const el=d.firstElementChild;
- if(k)k.after(el);else W.appendChild(el);wireTecCard(el,"home")};
-/* voltar ao sítio de onde se veio */
-const renderPageTec2=renderPage;
-renderPage=function(v){renderPageTec2(v);if(v!=="tecnico")return;let n=0;const fix=()=>{const c=document.querySelector("#pageWrap .crumb button[data-go]");if(!c){if(++n<60&&S.view==="tecnico")setTimeout(fix,120);return}
- if(tecFrom==="projects"){c.textContent="Projetos";c.onclick=()=>{tecFrom=null;go("projects")}}else c.onclick=()=>{tecFrom=null;go("home")}};fix()};
 
 /* =========================================================
    ObraFlow · (1) Seleção múltipla: "todos" de uma vez

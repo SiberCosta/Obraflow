@@ -65,31 +65,20 @@ function themeSeen(id){const h=LS.get("tf-themes",[]).filter(x=>x.id!==id);h.uns
 function qzStats(){return LS.get("tf-qz",{t:{},q:{}})}
 function weak(){const s=qzStats().t;return Object.entries(s).filter(([k,v])=>v.n>=2&&v.ok/v.n<0.7).sort((a,b)=>a[1].ok/a[1].n-b[1].ok/b[1].n).map(([k])=>k)}
 function pathProg(p){const d=LS.get("tf-path",{});const done=p.steps.filter((s,i)=>d[p.id+":"+i]).length;return[done,p.steps.length]}
-function home(w){const t=dayTheme();const hist=LS.get("tf-themes",[]).slice(0,6);const lv=LS.get("tf-lv","ini");const wk=weak();
- w.innerHTML=`<section class="tfhero"><div><span class="tfk">Bancada técnica para o terreno</span><h2>Automação, SADI e diagnóstico — <em>no bolso</em>.</h2><p>Grátis, sem conta e a funcionar sem rede. Pesquisa por protocolo, equipamento, código de avaria ou fabricante.</p>
-  <form class="tfbig" id="hmQf"><span>${ic("search")}</span><input id="hmQ" placeholder="Ex.: E08, exceção 02, FDCIO221, 47808, terminação…" autocomplete="off"><button class="tfbtn2 pri">Pesquisar</button></form>
-  <div class="tfquick">${["E01 Short","Exceção 02","60 Ω","DB720","BBMD","NT 12 trimestral"].map(x=>`<button data-qq="${esc(x)}">${esc(x)}</button>`).join("")}</div></div></section>
- <section class="tfgrid2">
-  <article class="tfcard tftema"><header><span class="tfk">☀ Tema do dia</span>${badge(t.s)}</header><h3>${esc(t.t)}</h3><p>${esc(t.x)}</p>
-   <div class="tfrow"><button class="tfbtn2 pri" data-tm="${t.id}">Aprofundar →</button><button class="tfbtn2" id="tmOther">Outro tema</button></div>
-   ${hist.length?`<details class="tfhist"><summary>Temas consultados (${LS.get("tf-themes",[]).length})</summary><ul>${hist.map(h=>{const x=TF_THEMES.find(y=>y.id===h.id);return x?`<li><a href="#/tema/${x.id}">${esc(x.t)}</a><small>${fmtDate(h.at)}</small></li>`:""}).join("")}</ul></details>`:""}</article>
-  <article class="tfcard"><header><span class="tfk">🎯 Treino adaptativo</span></header><h3>${wk.length?"Pontos a melhorar":"Testa o que sabes"}</h3>
-   <p>${wk.length?wk.map(k=>`<span class="tfchip warn">${esc(TF_TOPICS[k])}</span>`).join(" "):"Perguntas rápidas; o TecFlow dá-te mais exercícios nos temas onde erras mais."}</p>
-   <div class="tfrow"><a class="tfbtn2 pri" href="#/treino?go=1">Treinar (5 perguntas)</a><a class="tfbtn2" href="#/treino">Ver progresso</a></div></article>
+function home(w){const t=dayTheme();const nh=LS.get("tf-themes",[]).length;const lv=LS.get("tf-lv","");const wk=weak();
+ const p=TF_PATHS.find(x=>x.id===lv);let cont="";
+ if(p){const d=LS.get("tf-path",{});const k=p.steps.findIndex((s2,i)=>!d[p.id+":"+i]);const [dn,n]=pathProg(p);cont=k>=0?`<a class="tfcont" href="${p.steps[k].to}"><span>${p.ic}</span><div><small>Continuar · ${esc(p.t)} · ${dn}/${n}</small><b>${esc(p.steps[k].t)}</b></div><i>→</i></a>`:""}
+ w.innerHTML=`<section class="tfhero slim"><div><h2>O que precisas <em>agora</em>?</h2>
+  <form class="tfbig" id="hmQf"><span>${ic("search")}</span><input id="hmQ" placeholder="Código, equipamento, protocolo ou fabricante" autocomplete="off" enterkeyhint="search"><button class="tfbtn2 pri">Pesquisar</button></form>
+  <div class="tfquick">${["E08","Exceção 02","DPT 9.001","Detetor cozinha"].map(x=>`<button data-qq="${esc(x)}">${esc(x)}</button>`).join("")}</div></div></section>
+ <section class="tfhoje">
+  <a class="tfcard tftema" href="#/tema/${t.id}"><header><span class="tfk">☀ Tema do dia</span>${badge(t.s)}</header><h3>${esc(t.t)}</h3><p class="tfclamp">${esc(t.x)}</p><small class="mut">Ler mais →${nh?` · ${nh} tema${nh===1?"":"s"} consultado${nh===1?"":"s"}`:""}</small></a>
+  <div class="tfhoje2">${cont||`<a class="tfcont" href="#/percurso/ini"><span>🧭</span><div><small>Começar um percurso</small><b>Escolhe o teu nível</b></div><i>→</i></a>`}
+   <a class="tfcont" href="#/treino?go=1"><span>🎯</span><div><small>Treino adaptativo</small><b>${wk.length?"Reforçar: "+wk.slice(0,2).map(k=>TF_TOPICS[k]).join(", "):"5 perguntas rápidas"}</b></div><i>→</i></a></div>
  </section>
- <h2 class="tfh">Áreas</h2>
- <section class="tfareas">${TF_AREAS.map(a=>`<a class="tfarea-c" href="#/${a.id}" style="--ac:${a.c}"><span class="tfai">${ic(a.ic)}</span><b>${esc(a.t)}</b><small>${esc(a.d)}</small><span class="tfsubs">${a.subs.slice(0,5).map(s=>`<i>${esc(s[1])}</i>`).join("")}</span></a>`).join("")}</section>
- <h2 class="tfh">Percursos por nível</h2>
- <section class="tfpaths">${TF_PATHS.map(p=>{const [d,n]=pathProg(p);return`<a class="tfpath${lv===p.id?" on":""}" href="#/percurso/${p.id}"><span class="tfpi">${p.ic}</span><b>${esc(p.t)}</b><small>${esc(p.d)}</small><span class="tfbar2"><i style="width:${Math.round(d/n*100)}%"></i></span><em>${d}/${n} passos</em></a>`}).join("")}</section>
- <section class="tfgrid2">
-  <article class="tfcard"><header><span class="tfk">🦺 Modo de terreno</span></header><h3>Botões grandes, só o essencial</h3><p>Para usar no telemóvel durante uma intervenção: avarias, códigos, LEDs, medições e fichas, a um toque.</p><div class="tfrow"><button class="tfbtn2 pri" id="hmField">Ativar modo de terreno</button></div></article>
-  <article class="tfcard"><header><span class="tfk">📄 Fichas de bolso</span></header><h3>Resumos para levar em PDF</h3><p>${TF_FICHAS.slice(0,5).map(f=>`<a class="tfchip" href="#/bib/fichas?f=${f.id}">${esc(f.t)}</a>`).join(" ")}</p><div class="tfrow"><a class="tfbtn2" href="#/bib/fichas">Todas as fichas</a></div></article>
- </section>
- <p class="tflegend">Classes de informação: ${Object.keys(TF_SRC).map(badge).join(" ")} · 🎓 aprendizagem · 🛡 intervenção real</p>`;
- wireHomeCommon(w);
- w.querySelector("[data-tm]").onclick=e=>nav("#/tema/"+e.target.dataset.tm);
- $("tmOther").onclick=()=>{const l=TF_THEMES.filter(x=>x.id!==t.id);nav("#/tema/"+l[Math.floor(Math.random()*l.length)].id)};
- $("hmField").onclick=()=>setField(true)}
+ <section class="tfareas sm">${TF_AREAS.map(a=>`<a class="tfarea-c" href="#/${a.id}" style="--ac:${a.c}"><span class="tfai">${ic(a.ic)}</span><b>${esc(a.t)}</b><small>${a.subs.length} secções</small></a>`).join("")}</section>
+ <nav class="tfmore">${[["#/bib/fichas","pdf","Fichas de bolso"],["#/sadi/fdul","fire","FDUL221"],["#/percurso/"+(lv||"ini"),"path","Percursos"],["#/bib/docs","doc","Os meus PDF"],["#/bib/glos","book","Glossário"]].map(x=>`<a href="${x[0]}">${ic(x[1])}<span>${x[2]}</span></a>`).join("")}<button type="button" id="hmField">${ic("field")}<span>Modo de terreno</span></button></nav>`;
+ wireHomeCommon(w);$("hmField").onclick=()=>setField(true)}
 function wireHomeCommon(w){const f=w.querySelector("#hmQf");if(f)f.onsubmit=e=>{e.preventDefault();nav("#/pesq?q="+encodeURIComponent($("hmQ").value))};
  w.querySelectorAll("[data-qq]").forEach(b=>b.onclick=()=>nav("#/pesq?q="+encodeURIComponent(b.dataset.qq)))}
 function fieldHome(w){const T=[["#/diag/falhas","probe","Análise de falhas","Sintoma → verificações"],["#/sadi/fdul?m=3","fire","Códigos FDUL221","E01 a E17"],["#/diag/led","led","LEDs","O que significa cada luz"],["#/diag/med","meter","Medições","Valores esperados"],["#/diag/calc?sub=qt","probe","Queda de tensão","Calcular já"],["#/bib/fichas","pdf","Fichas de bolso","Resumos"],["#/bib/docs","doc","Os meus PDF","Manuais no aparelho"],["#/diag/rel","doc","Relatório","Registar a intervenção"],["#/ia","ask","Perguntar","Assistente técnico"]];
@@ -117,10 +106,35 @@ function areaPage(w,aid,sub,q){const a=area(aid);if(!a.subs.find(s=>s[0]===sub))
  const E=$("tfP");if(aid==="sadi")E.insertAdjacentHTML("beforebegin",kindBanner(TF_KIND[sub]));
  const P=(n,o)=>{const d=document.createElement("div");d.dataset.p=n;E.appendChild(d);if(!window.TEC||!TEC.panel(n,d,o))d.innerHTML=`<p class="muted">Conteúdo indisponível.</p>`};
  const sel=document.querySelector(".tfsubn .on");if(sel&&sel.scrollIntoView)try{sel.scrollIntoView({block:"nearest",inline:"center"})}catch(e){}
- ({auto:{prot:()=>P("auto",{sub:"tab"}),sel:()=>P("auto",{sub:"sel"}),topo:()=>P("auto",{sub:"topo"}),ip:()=>ipPage(E),gw:()=>gwPage(E),banc:()=>P("banc")},
-  sadi:{geral:()=>P("seg",{sub:"sadi"}),proto:()=>P("seg",{sub:"proto"}),lig:()=>P("seg",{sub:"lig"}),sie:()=>P("seg",{sub:"sie"}),sim:()=>P("seg",{sub:"sim"}),fdul:()=>fdulPage(E,+q.m||1),av:()=>faultList(E,["sadi","fdul"]),real:()=>realPage(E),reg:()=>regPage(E)},
-  diag:{falhas:()=>falhas(E,q.sys),led:()=>ledPage(E),med:()=>medPage(E),calc:()=>P("calc",{sub:q.sub||"qt"}),esq:()=>{P("esq",q.e?{sub:q.e}:{});simbolos(E)},rel:()=>relPage(E)},
-  bib:{docs:()=>docsPage(E),fichas:()=>fichasPage(E,q.f),ref:()=>refPage(E),guia:()=>P("guia",q.g?{guia:q.g}:{}),fab:()=>fabPage(E),tab:()=>P("tab")}})[aid][sub]()}
+ ({auto:{dados:()=>tabsPage(E),com:()=>comPage(E),prot:()=>P("auto",{sub:"tab"}),sel:()=>P("auto",{sub:"sel"}),topo:()=>P("auto",{sub:"topo"}),ip:()=>ipPage(E),gw:()=>gwPage(E),banc:()=>P("banc")},
+  sadi:{det:()=>detPage(E),fa:()=>faPage(E),geral:()=>P("seg",{sub:"sadi"}),proto:()=>P("seg",{sub:"proto"}),lig:()=>P("seg",{sub:"lig"}),sie:()=>P("seg",{sub:"sie"}),sim:()=>P("seg",{sub:"sim"}),fdul:()=>fdulPage(E,+q.m||1),av:()=>faultList(E,["sadi","fdul"]),real:()=>realPage(E),reg:()=>regPage(E)},
+  diag:{ferr:()=>toolsPage(E),falhas:()=>falhas(E,q.sys),led:()=>ledPage(E),med:()=>medPage(E),calc:()=>P("calc",{sub:q.sub||"qt"}),esq:()=>{P("esq",q.e?{sub:q.e}:{});simbolos(E)},rel:()=>relPage(E)},
+  bib:{glos:()=>glosPage(E,q.t),docs:()=>docsPage(E),fichas:()=>fichasPage(E,q.f),ref:()=>refPage(E),guia:()=>P("guia",q.g?{guia:q.g}:{}),fab:()=>fabPage(E),tab:()=>P("tab")}})[aid][sub]()}
+
+
+/* ---------- v44: tabelas rápidas, comissionamento, detetores, alarmes falsos, ferramentas, glossário ---------- */
+const tabHtml=k=>{const x=TF_TAB[k];return`<section class="tfcard" id="tb_${k}"><h3>${esc(x.t)} ${badge(x.s)}</h3><div class="tscroll"><table class="tt2"><tr>${x.h.map(h=>`<th>${esc(h)}</th>`).join("")}</tr>${x.r.map(r=>`<tr>${r.map((c,i)=>`<td>${i?esc(c):`<b>${esc(c)}</b>`}</td>`).join("")}</tr>`).join("")}</table></div>${x.n?`<p class="mut">${esc(x.n)}</p>`:""}${x.ref?`<p class="mut">Fonte: ${refL(x.ref)}</p>`:""}</section>`};
+function tabsPage(E){const K=Object.keys(TF_TAB);E.innerHTML=`<div class="tfkind ref"><b>📋 Tabelas rápidas</b><span>Os valores que se procuram a meio de uma configuração: funções Modbus, DPT KNX, objetos BACnet, endereçamento DALI e M-Bus.</span></div>
+ <div class="tfpick">${K.map(k=>`<button data-tj="${k}">${esc(TF_TAB[k].t.replace(" — "," · "))}</button>`).join("")}</div>${K.map(tabHtml).join("")}`;
+ E.querySelectorAll("[data-tj]").forEach(b=>b.onclick=()=>{const t=$("tb_"+b.dataset.tj);if(t)t.scrollIntoView({block:"start",behavior:"smooth"})})}
+function comPage(E){const st=LS.get("tf-com",{});E.innerHTML=`<div class="tfkind ref"><b>✅ Comissionamento</b><span>Listas de verificação para pôr cada sistema a funcionar e entregar. As marcas ficam guardadas neste aparelho.</span></div>
+ ${TF_COM.map((c,ci)=>{const n=c.p.filter((_,i)=>st[ci+":"+i]).length;return`<details class="tfficha"${ci===0?" open":""}><summary><b>${esc(c.t)}</b>${badge(c.s)}<span class="tfchip">${n}/${c.p.length}</span></summary><div class="tffb"><ol class="tfsteps chk">${c.p.map((p,i)=>`<li class="${st[ci+":"+i]?"ok":""}"><label><input type="checkbox" data-cm="${ci}:${i}"${st[ci+":"+i]?" checked":""}><span>${esc(p)}</span></label></li>`).join("")}</ol><div class="tfrow"><button class="tfbtn2 sm" data-cmr="${ci}">Limpar marcas</button></div></div></details>`}).join("")}
+ <div class="tfrow"><a class="tfbtn2" href="#/bib/fichas?f=f-com">${ic("pdf")} Listas em PDF</a></div>`;
+ E.querySelectorAll("[data-cm]").forEach(c=>c.onchange=()=>{const s2=LS.get("tf-com",{});if(c.checked)s2[c.dataset.cm]=1;else delete s2[c.dataset.cm];LS.set("tf-com",s2);c.closest("li").classList.toggle("ok",c.checked);const ci=c.dataset.cm.split(":")[0];const chip=c.closest("details").querySelector("summary .tfchip");chip.textContent=TF_COM[ci].p.filter((_,i)=>s2[ci+":"+i]).length+"/"+TF_COM[ci].p.length});
+ E.querySelectorAll("[data-cmr]").forEach(b=>b.onclick=()=>{const s2=LS.get("tf-com",{});Object.keys(s2).filter(k=>k.startsWith(b.dataset.cmr+":")).forEach(k=>delete s2[k]);LS.set("tf-com",s2);comPage(E)})}
+function detPage(E){E.innerHTML=`<section class="tfcard"><h3>Que equipamento usar onde ${badge("nr")}</h3><p class="mut">A escolha final é sempre do projeto (NT 12) — esta tabela ajuda a perceber porquê.</p></section>
+ <div class="tfleds">${TF_DET.map(d=>`<article><header><b>${esc(d.t)}</b><span class="tfchip">${esc(d.n)}</span></header><p><b>Onde:</b> ${esc(d.uso)}</p>${d.ev&&d.ev!=="—"?`<p><b>Evitar:</b> ${esc(d.ev)}</p>`:""}</article>`).join("")}</div>
+ <p class="mut">Fonte: ${refL("en54b")} · ${refL("nt12")}</p>`}
+function faPage(E){E.innerHTML=`<section class="tfcard"><h3>Alarmes falsos — causas e prevenção</h3><p>Um alarme falso tira confiança ao sistema e pode levar a desligar o que não se deve. Antes de agir, lê o histórico da central (hora, dispositivo, repetição).</p></section>
+ ${TF_FA.map(f=>`<section class="tfcard"><h3>${esc(f.c)} ${badge(f.s)}</h3><ul>${f.p.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>${f.ref?`<p class="mut">Fonte: ${refL(f.ref)}</p>`:""}</section>`).join("")}
+ ${faultCard(TF_FAULTS.find(f=>f.id==="S8"))}`;wireAddRel(E)}
+function toolsPage(E){E.innerHTML=`<div class="tfkind ref"><b>🧰 Ferramentas</b><span>O que levar na mala e para que serve cada ferramenta. Prioridade a ferramentas gratuitas sempre que existem.</span></div>
+ <div class="tfleds">${TF_TOOLS.map(t=>`<article><header><b>${esc(t.t)}</b>${badge(t.s)}</header><p>${esc(t.p)}</p>${t.ref?`<p class="mut">${refL(t.ref)}</p>`:""}${t.to?`<p><a href="${t.to}">Aprender a usar →</a></p>`:""}</article>`).join("")}</div>`}
+function glosPage(E,t){const L=TF_GLOS.slice().sort((a,b)=>a[0].localeCompare(b[0],"pt"));const letters=[...new Set(L.map(g=>g[0][0].toUpperCase()))];
+ E.innerHTML=`<div class="tfkind ref"><b>🔤 Glossário</b><span>Termos técnicos explicados em poucas palavras.</span></div><input class="tecq" id="glQ" placeholder="Procurar termo…" value="${esc(t||"")}"><div class="tfpick sm">${letters.map(l=>`<button data-gl="${l}">${l}</button>`).join("")}</div>
+ <div class="tfglos">${L.map(g=>`<div data-l="${g[0][0].toUpperCase()}" id="gl_${norm(g[0]).replace(/[^a-z0-9]+/g,"-")}"><b>${esc(g[0])}</b><span>${esc(g[1])}</span></div>`).join("")}</div>`;
+ const q=$("glQ");const f=()=>{const n=norm(q.value);E.querySelectorAll(".tfglos>div").forEach(d=>d.hidden=n&&!norm(d.textContent).includes(n))};q.oninput=f;f();
+ E.querySelectorAll("[data-gl]").forEach(b=>b.onclick=()=>{q.value="";f();const d=E.querySelector(`.tfglos [data-l="${b.dataset.gl}"]`);if(d)d.scrollIntoView({block:"center",behavior:"smooth"})})}
 
 /* ---------- automação: IP e gateways ---------- */
 function ipPage(E){E.innerHTML=`<div class="tfkind ref"><b>📘 Comunicação IP</b><span>O essencial para pôr controladores, gateways e GTC a falar na mesma rede.</span></div>
@@ -328,6 +342,7 @@ const SCEN=[
  {id:"s6",t:"Díodo na linha",code:"E14",lcd:["Loop A->B: 12 dev","E14 Diode (+) [T006]","",""],story:"Foi montado um indicador de ação externo no T006.",steps:[
   {q:"Causa típica de E14?",o:[["Fio da linha ligado ao borne do indicador externo (AI) em vez do borne da linha",1,"Certo — na base DB72x o 1a é +AI e o 1b é +C-NET."],["Bateria do testador fraca",0,"Não provoca E14."]]},
   {q:"Como confirmas antes de mexer?",o:[["«Measure Device» no T006 e verificar a cablagem na base",1,"Certo."],["Trocar o detetor T006",0,"O problema é a ligação, não o detetor."]]}],end:"Os valores medidos incluem díodos como os dos indicadores externos."}];
+if(typeof TF_SCEN2!=="undefined")SCEN.push(...TF_SCEN2);
 function fd4(B){let sc=null,st=0,score=0,log=[];
  const pick=id=>{sc=SCEN.find(s=>s.id===id)||SCEN[Math.floor(Math.random()*SCEN.length)];st=0;score=0;log=[];draw()};
  const draw=()=>{if(!sc){B.innerHTML=`<div class="tfkind learn"><b>🎓 Módulo 4 — simulador</b><span>Recebes uma avaria simulada, escolhes os passos de diagnóstico e vês a explicação de cada resposta. Os resultados contam para o treino adaptativo.</span></div>
@@ -439,6 +454,9 @@ function buildIdx(){const L=[];const add=(type,t,k,to,s)=>L.push({type,t,k:norm(
  TF_MANUF.forEach(m=>{add("Fabricante",m.n,m.p+" "+m.sys.join(" ")+" "+(m.eq||[]).join(" "),"#/bib/fab");(m.eq||[]).forEach(e=>add("Equipamento",e+" ("+m.n+")",m.p,e==="FDUL221"?"#/sadi/fdul":"#/sadi/sie","of"))});
  TF_THEMES.forEach(t=>add("Tema",t.t,t.x,"#/tema/"+t.id,t.s));
  TF_PORTS.forEach(p=>add("Protocolo",p[0]+" — "+p[1],"porta","#/auto/ip","nr"));
+ if(typeof TF_TAB!=="undefined"){Object.entries(TF_TAB).forEach(([k,x])=>{add("Tabela",x.t,x.r.map(r=>r.join(" ")).join(" ")+" "+(x.n||""),"#/auto/dados",x.s);x.r.forEach(r=>add("Tabela",x.t.split(" — ")[0]+": "+r[0]+" — "+r[1],r.slice(2).join(" "),"#/auto/dados",x.s))});
+  TF_GLOS.forEach(g=>add("Glossário",g[0],g[1],"#/bib/glos?t="+encodeURIComponent(g[0]),"dd"));TF_DET.forEach(d=>add("Equipamento",d.t+" ("+d.n+")",d.uso+" "+d.ev,"#/sadi/det",d.s));
+  TF_TOOLS.forEach(t=>add("Ferramenta",t.t,t.p,"#/diag/ferr",t.s));TF_COM.forEach(c=>add("Comissionamento",c.t,c.p.join(" "),"#/auto/com",c.s));TF_FA.forEach(f=>add("Alarme falso",f.c,f.p.join(" "),"#/sadi/fa",f.s))}
  add("Equipamento","FDUL221 — testador de linha FDnet","line tester siemens topologia","#/sadi/fdul","of");
  if(window.TEC&&TEC.index){const X=TEC.index();X.kb.forEach(k=>add("Guia",k.t,k.k,"#/bib/guia?g="+k.id,"nr"));X.proto.forEach(p=>add("Protocolo",p.n,p.uso+" "+p.norma+" "+p.lim,"#/auto/prot","nr"));X.sproto.forEach(p=>add("Protocolo",p.n+" (SADI)",p.uso,"#/sadi/proto","nr"));
   X.lel.forEach(e=>add("Equipamento",e.n,"laço ligação","#/sadi/lig","dd"));X.lels.forEach(e=>add("Equipamento",e.n,"siemens fdnet ligação","#/sadi/sie","of"));X.esq.forEach(e=>add("Esquema",e.t,"esquema ligação","#/diag/esq?e="+e.id,"dd"));X.ex.forEach(e=>add("Exercício",e.t,"bancada","#/auto/banc","dd"));X.calcs.forEach(c=>add("Calculadora",c.t,"calcular","#/diag/calc?sub="+c.id,"nr"))}

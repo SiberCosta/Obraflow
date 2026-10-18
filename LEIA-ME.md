@@ -358,7 +358,7 @@ Ao tocar numa gota abre a ficha completa:
 
 SQL: volta a correr `supabase/atualizacao-5-tarefas-duvidas.sql` (nova versão: emails também aos seguidores e quando a tarefa é verificada).
 
-## Técnico — Manual, calculadoras e assistente RTIEBT (versão 29)
+## Técnico — Manual, calculadoras e assistente RTIEBT (versão 29 — desde a versão 43 está só no TecFlow)
 
 No menu lateral há **Técnico (RTIEBT)**. Funciona **sem rede e sem depender de outros sites**: as tabelas, os esquemas e o assistente estão todos no ficheiro `tecnico.js`, que fica guardado no aparelho (é preparado em segundo plano na primeira vez que a app abre com rede).
 
@@ -388,7 +388,7 @@ Foi feito um teste à plataforma toda, do registo ao Técnico, em computador, ta
 
 ## TecFlow — plataforma técnica separada, aberta a todos (versão 43)
 
-O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **sem conta** e sem servidor. Está na pasta `tecflow/`; depois de carregares o zip para o GitHub o endereço é **`https://siberdeny19-source.github.io/planta-obra/tecflow/`**. Não há ligação ao TecFlow no ecrã inicial do ObraFlow.
+O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **sem conta** e sem servidor. Está na pasta `tecflow/`; depois de carregares o zip para o GitHub o endereço é **`https://siberdeny19-source.github.io/planta-obra/tecflow/`**. O **Técnico saiu do ObraFlow** (cartão, menu lateral e botão nas tarefas): calculadoras, guia, esquemas, automação e SADI estão agora só no TecFlow. O ficheiro `tecnico.js` da raiz deixou de existir — pode ser apagado do GitHub.
 
 **Quatro áreas**
 - **Automação predial** — KNX, BACnet, Modbus RTU/TCP, DALI, M-Bus (protocolos e simuladores), escolher a rede, tipologias, **comunicação IP** (calculadora de sub-rede, portas), **gateways e BMS** (lista de pontos, modelo CSV) e bancada de ligações.
@@ -406,6 +406,15 @@ O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **s
 - **SADI**: 🎓 = aprendizagem (exercícios, simulações); 🛡 = intervenção real (procedimentos autorizados, entidade registada na ANEPC).
 
 **FDUL221** (SADI → Testador FDUL221), com base no manual técnico Siemens: módulo 1 (conhecer o equipamento, toque nas partes), módulo 2 (preparar e executar, com simulador do ecrã e das teclas), módulo 3 (linha aberta, curto, terra, resistência elevada, comunicação; códigos E01–E17; divisão ao meio e «Measure Device»), módulo 4 (avarias simuladas com escolha de passos e explicação).
+
+
+**Versão 44 — mais conteúdos e início mais simples**
+- Início reduzido ao essencial: pesquisa, tema do dia, continuar percurso/treino, as quatro áreas e atalhos.
+- Automação: **Tabelas rápidas** (funções Modbus, linha série RTU, DPT e endereços KNX, objetos BACnet e MS/TP, DALI, M-Bus) e **Comissionamento** (listas KNX, Modbus, BACnet, DALI, M-Bus e BMS, com marcas guardadas).
+- SADI: **Tipos de detetores** (onde usar cada um, parte da EN 54) e **Alarmes falsos** (causas e prevenção).
+- Diagnóstico: **Ferramentas** (o que levar e para quê, com opções gratuitas).
+- Biblioteca: **Glossário** com 40 termos.
+- Mais 13 temas do dia, 9 avarias, 16 perguntas de treino, 7 fichas de bolso e 3 cenários novos no simulador do FDUL221 (E04, E10, E16).
 
 **Notas**
 - Os dados (histórico, treino, relatórios, PDF) ficam **só no aparelho** de cada pessoa.

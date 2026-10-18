@@ -1590,4 +1590,4 @@ body[data-view=projects] .top .bell{margin-left:auto}
 .tecchat,.tcmsgs,.tcpair{grid-template-columns:minmax(0,1fr)}.tecchat>*,.tcmsgs>*,.tcpair>*{min-width:0}.tcm{overflow-wrap:anywhere}
 .tcm .btn,.tecres .btn{white-space:normal;max-width:100%;height:auto;min-height:30px;text-align:left;line-height:1.3;padding-block:5px}
 
-:root{--cp-ver:"43"}
+:root{--cp-ver:"44"}

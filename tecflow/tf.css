@@ -232,3 +232,20 @@ body.tfapp #pageWrap>*{min-width:0;max-width:100%}
 .tecchat,.tcmsgs,.tcpair{grid-template-columns:minmax(0,1fr)}.tecchat>*,.tcmsgs>*,.tcpair>*{min-width:0}.tcm{overflow-wrap:anywhere}
 @media (min-width:900px){.tfsubn{flex-wrap:wrap;overflow:visible}}
 @media (max-width:520px){.tfahead p{display:none}.tfahead{padding:12px 14px;gap:10px}.tfahead h2{font-size:17px}.tfahead.sm p{display:block;font-size:12.5px}.tfmods a{padding:9px 10px}.tfmods a span{display:none}.tfmods a i{font-size:16px}.tfkind{font-size:13px;padding:9px 12px}}
+
+/* v44 · início mais simples */
+.tfhero.slim{padding:22px 24px}.tfhero.slim h2{font-size:clamp(20px,3vw,28px)}
+.tfhoje{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px}
+.tfhoje .tftema{text-decoration:none;color:var(--ink)}.tfhoje .tftema:hover{border-color:#0e7490}
+.tfclamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tfhoje2{display:grid;gap:14px;align-content:stretch}
+.tfcont{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--tfpanel);border:1px solid var(--tfline);color:var(--ink);text-decoration:none}
+.tfcont:hover{border-color:#0e7490}.tfcont>span{font-size:24px}.tfcont>div{flex:1;min-width:0;display:grid;gap:2px}.tfcont small{color:var(--tfmut);font-size:12px}.tfcont i{font-style:normal;color:#0e7490;font-weight:800}
+.tfareas.sm{grid-template-columns:repeat(4,minmax(0,1fr))}.tfareas.sm .tfarea-c{padding:16px;gap:8px}.tfareas.sm .tfarea-c b{font-size:15px;line-height:1.25}
+.tfmore{display:flex;flex-wrap:wrap;gap:8px}
+.tfmore a,.tfmore button{display:inline-flex;align-items:center;gap:7px;padding:9px 13px;border-radius:10px;border:1px solid var(--tfline);background:var(--tfpanel);color:var(--ink);font:600 13.5px var(--f-body);text-decoration:none;cursor:pointer}
+.tfmore .tfi{width:17px;height:17px;color:#0e7490}
+.tfglos{display:grid;gap:6px}.tfglos>div{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:4px 14px;padding:10px 14px;border-radius:10px;background:var(--tfpanel);border:1px solid var(--tfline)}.tfglos span{color:var(--tfmut)}
+@media (max-width:900px){.tfhoje{grid-template-columns:1fr}.tfareas.sm{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.tfglos>div{grid-template-columns:1fr}.tfareas.sm .tfai{width:36px;height:36px}}
+.tffb table,.tfcard>table{display:block;overflow-x:auto;max-width:100%}

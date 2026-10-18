@@ -1,7 +1,7 @@
 // TecFlow — guarda a plataforma no aparelho para funcionar sem rede
-const VERSION = "tf43";
+const VERSION = "tf44";
 const SHELL = "tecflow-" + VERSION, LIBS = "tecflow-libs";
-const CORE = ["./", "index.html", "styles.css", "tecnico.js", "tecflow.js", "tfdata.js", "tfapp.js", "tf.css", "manifest.webmanifest", "logo.svg",
+const CORE = ["./", "index.html", "styles.css", "tecnico.js", "tecflow.js", "tfdata.js", "tfdata2.js", "tfapp.js", "tf.css", "manifest.webmanifest", "logo.svg",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 const LIB_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
