@@ -306,6 +306,20 @@ Em **Lista de IDs** → **Carregar lista de IDs**: escolhe o PDF (ou Excel/CSV) 
 - A leitura passa a usar a lista: confirma IDs, corrige erros de 1 carácter e resolve sozinha os inconclusivos quando só uma leitura bate certo.
 - **Exportar comparação** gera um CSV para Excel. PDF digitalizado (só imagem) também funciona, mas é mais lento; se possível usa o PDF original ou Excel.
 
+## Pasta de relatórios externos — comparar ID e texto (versão 49)
+
+Em **Lista de IDs**, por baixo da lista de IDs do projeto, está a **Pasta de relatórios externos**. Serve para verificar relatórios feitos fora da obra (fabricante, comissionamento, outra equipa).
+
+- **Carregar relatórios**: escolhe um ou vários ficheiros de uma vez (PDF, Excel, CSV ou texto). Cada linha com um ID fica guardada com o texto que a acompanha. Os ficheiros ficam na pasta para toda a equipa.
+- Cada relatório é comparado com a obra **pelo ID e pelo texto**. O texto é comparado com a referência, o tipo, a planta, as notas, a marca e o modelo do equipamento:
+  - **Certos**: o ID existe na obra e o texto bate certo.
+  - **Texto diferente**: o ID existe, mas o texto não corresponde. Mostra os dois lado a lado e permite **Copiar texto para a ficha** (junta-o às notas).
+  - **ID trocado**: o texto refere outro equipamento (por exemplo, "DO-1.05") com um ID diferente. Tem o botão **Pôr ID em…**, que corrige e fica registado no histórico.
+  - **Não encontrados**: o ID do relatório não existe na obra. Se houver um ID parecido (1 carácter de diferença), sugere a correção.
+  - **Só na obra**: os IDs registados na obra que o relatório não tem.
+- Os IDs que aparecem em várias linhas do relatório ficam marcados como **repetido ×N**.
+- **Exportar comparação**: gera um CSV com o estado de cada linha. **Remover da pasta**: disponível para o coordenador ou para quem carregou o relatório.
+
 ## Pesquisar IDs nas plantas e PDF pesquisável (versão 20)
 
 - **Na app:** a pesquisa do topo procura também no **texto das plantas em PDF** (ex.: IDs ou referências escritos no desenho do projeto). O resultado aparece em "Texto nas plantas (PDF)"; ao tocar, a planta abre com o texto destacado a laranja. Funciona com PDF de texto (vetorial, exportado do CAD); uma planta digitalizada ou carregada como imagem não tem texto para procurar.

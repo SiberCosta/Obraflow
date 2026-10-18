@@ -348,13 +348,13 @@ body.tfapp #pageWrap>*{min-width:0;max-width:100%}
 /* barramento */
 .sim3 .s3-wire{position:relative;height:10px}
 .sim3 .s3-bar{height:8px;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--bc) 70%,#000),var(--bc),color-mix(in srgb,var(--bc) 70%,#000));box-shadow:0 4px 14px color-mix(in srgb,var(--bc) 30%,transparent);transition:all .3s}
-.sim3 .s3-wire.busy .s3-bar{filter:brightness(1.25)}
+.sim3 .s3-wire.s3-run .s3-bar{filter:brightness(1.25)}
 .sim3 .s3-wire.sc .s3-bar{background:#dc2626;box-shadow:0 0 16px rgba(239,68,68,.5);animation:s3p .8s infinite}
 .sim3 .s3-wire.off .s3-bar{background:var(--s7);box-shadow:none}
 .sim3 .s3-dot{position:absolute;left:-7px;top:-3px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 12px #fff,0 0 22px var(--cy);opacity:0;pointer-events:none}
-.sim3 .s3-wire.busy .s3-dot{opacity:1}
+.sim3 .s3-wire.s3-run .s3-dot{opacity:1}
 .sim3 .s3-pkl{position:absolute;left:0;top:-30px;font:800 10px var(--f-mono,monospace);font-style:normal;white-space:nowrap;color:#0f172a;background:#fde047;padding:2px 8px;border-radius:999px;opacity:0;margin-left:-30px;pointer-events:none}
-.sim3 .s3-wire.busy .s3-pkl{opacity:1}
+.sim3 .s3-wire.s3-run .s3-pkl{opacity:1}
 .sim3 .s3-lab{margin:12px 0 0;text-align:center}.sim3 .s3-lab span{display:inline-block;font:700 10px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:#fbbf24;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);padding:4px 12px;border-radius:999px}
 /* painel + monitor */
 .sim3 .s3-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px}
@@ -374,7 +374,7 @@ body.tfapp #pageWrap>*{min-width:0;max-width:100%}
 .sim3 .simctl .btn{width:100%;min-height:44px;border-radius:12px;font:700 14px var(--f-body);cursor:pointer;border:1px solid var(--s7);background:var(--s8);color:var(--s3);box-shadow:none}
 .sim3 .simctl .btn.primary{background:var(--cy);border-color:var(--cy);color:#0f172a;box-shadow:0 8px 20px rgba(34,211,238,.2)}
 .sim3 .simctl .btn.primary:hover{background:#67e8f9}.sim3 .simctl .btn:not(.primary):hover{background:var(--s7)}
-.sim3.busy .simctl .btn{opacity:.55;pointer-events:none}
+.sim3.s3-busy .simctl .btn{opacity:.55;pointer-events:none}
 .sim3 .s3-mon header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--s9)}
 .sim3 .s3-mon header>span:first-child{display:flex;align-items:center;gap:8px;font:700 11.5px var(--f-mono,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--s4)}
 .sim3 .s3-live{width:10px;height:10px;border-radius:50%;background:#10b981;animation:s3p 1.4s infinite}
@@ -462,3 +462,67 @@ body.tfapp #pageWrap>*{min-width:0;max-width:100%}
 .tfarea-c{position:relative}.tfnum{position:absolute;top:12px;right:14px;font:800 22px var(--f-body);font-style:normal;color:color-mix(in srgb,var(--ac) 55%,transparent)}.tfnum.ref{font-size:16px}
 .tfarea-c .tfbar2{margin-top:2px}
 @media (max-width:520px){.tfnext{grid-template-columns:1fr}.tfnext .nx{order:-1}}
+.sim3 .s3-wire.s3-run .s3-dot2{opacity:1}
+.sim3 .s3-pkl{transform-origin:center bottom}
+/* ===== v47 · simulador compacto: cabe num ecrã e não empurra a página ===== */
+.sim3{gap:10px;padding:10px;font-size:13px}
+.sim3 .s3-scene{padding:12px 14px}
+.sim3 .s3-views{margin-bottom:6px}.sim3 .s3-views button{padding:5px 10px;font-size:12px}
+.sim3 .s3-fs{float:right;padding:5px 10px;border-radius:9px;border:1px solid var(--s7);background:var(--s9);color:var(--s3);font:600 12px var(--f-body);cursor:pointer}
+.sim3 .s3-fs:hover{background:var(--s8)}
+.sim3 .s3-scen{gap:6px;margin:0 0 8px}.sim3 .s3-sc button{padding:4px 10px;font-size:12px}
+.sim3 .s3-story{padding:7px 12px;font-size:12.5px}.sim3 .s3-td summary{cursor:pointer;color:#fbbf24;font-weight:600;margin-top:3px}
+.sim3 .s3-planw{margin:0 auto 10px;max-width:700px}
+.sim3 .s3-plan{max-height:330px}
+.sim3 .s3-grid{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:6px 0 20px}
+.sim3 .s3-card{padding:9px 8px;gap:3px}.sim3 .s3-ico{width:38px;height:38px;margin:2px 0}.sim3 .s3-ico svg{width:19px;height:19px}
+.sim3 .s3-card h4{font-size:12.5px}.sim3 .s3-st{font-size:11px;min-height:14px}
+.sim3 .s3-lab{margin-top:8px}.sim3 .s3-lab span{font-size:9.5px;padding:3px 10px}
+/* telegrama: espaço sempre reservado (nada salta) */
+.sim3 .simtg{min-height:50px;align-items:center;padding:6px 10px}
+.sim3 .simtg .tgph{color:var(--s5);font-size:12px}
+.sim3 .simtg.has .tgph{display:none}
+.sim3 .simtg .tgf{padding:3px 8px}.sim3 .simtg .tgf small{font-size:9.5px}.sim3 .simtg .tgf b{font-size:11.5px}
+/* painel e monitor mais baixos */
+.sim3 .s3-panel,.sim3 .s3-mon{padding:12px 14px}
+.sim3 .s3-panel h3{margin-bottom:8px;font-size:14px}
+.sim3 .simctl{gap:8px}.sim3 .simctl .btn{min-height:38px;font-size:13px}
+.sim3 .simf select{padding:7px 10px;font-size:13px}
+.sim3 .simlog{height:150px;padding:8px;font-size:11.5px;line-height:1.5}
+.sim3 .s3-mon header{padding-bottom:6px;margin-bottom:6px}
+.sim3 .s3-faults{padding:10px 14px;gap:10px}.sim3 .s3-fi{width:32px;height:32px;font-size:15px}.sim3 .s3-fh small{display:none}
+.sim3 .s3-fbtn{padding:6px 10px;font-size:12px}
+/* computador: cena à esquerda, painel e monitor à direita */
+@media (min-width:1100px){
+ .sim3{grid-template-columns:minmax(0,1.55fr) minmax(330px,1fr);grid-template-areas:"scene panel" "tg panel" "faults mon";align-items:start}
+ .sim3 .s3-cols{display:contents}
+ .sim3 .s3-scene{grid-area:scene}.sim3 .simtg{grid-area:tg}.sim3 .s3-panel{grid-area:panel}.sim3 .s3-mon{grid-area:mon}.sim3 .s3-faults{grid-area:faults;align-self:stretch}
+ .sim3 .s3-faults{flex-direction:column;align-items:flex-start}
+}
+/* ecrã inteiro: tudo dentro da altura do ecrã */
+.sim3:fullscreen{overflow:auto;border-radius:0;padding:14px;align-content:start}
+.sim3:fullscreen .s3-plan{max-height:52vh}
+.sim3:fullscreen .simlog{height:28vh}
+@media (min-width:1100px){
+ .sim3{grid-template-areas:"scene side" "tg side" "faults side";grid-template-rows:auto auto 1fr}
+ .sim3 .s3-cols{display:flex;flex-direction:column;gap:10px;grid-area:side;align-self:stretch}
+ .sim3 .s3-panel{grid-area:auto}.sim3 .s3-mon{grid-area:auto;flex:1;display:flex;flex-direction:column;min-height:0}
+ .sim3 .s3-mon .simlog{flex:1;height:auto;min-height:150px;max-height:none}
+ .sim3 .s3-faults{flex-direction:row;align-items:center;align-self:start}
+ .sim3 .s3-plan{max-height:300px}
+}
+.sim3 .s3-story p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* telegrama numa só linha (desliza) para nunca mudar de altura */
+.sim3 .simtg{flex-wrap:nowrap;overflow-x:auto;height:54px;min-height:54px;scrollbar-width:thin}
+.sim3 .simtg>*{flex:none}
+.sim3 .s3-st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sim3 .s3-fs{float:none;margin-left:6px;vertical-align:top}
+.sim3 .s3-scen{clear:both}
+.sim3 .s3-bus2{top:5px}
+@media (max-width:700px){
+ .sim3 .s3-planw{overflow:visible}.sim3 .s3-plan{min-width:0;width:100%}.sim3 .s3-planw::after{content:"Toca em «Ecrã inteiro» e roda o telemóvel para ver maior";}
+ .sim3 .s3-sc{flex-wrap:nowrap;overflow-x:auto}.sim3 .s3-sc button{flex:none}
+ .sim3 .s3-views{display:flex;width:100%}.sim3 .s3-views button{flex:1}
+ .sim3 .s3-bus2{display:inline-block;margin:6px 0 0;top:0}.sim3 .s3-fs{margin:6px 0 0 6px}
+ .sim3 .s3-grid{margin-bottom:14px}
+}

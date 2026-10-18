@@ -2,7 +2,7 @@
    TecFlow — conteúdos adicionais (v44)
    ========================================================= */
 "use strict";
-window.TF_DATA2_VER="46";
+window.TF_DATA2_VER="49";
 TF_REF.yabe={t:"YABE — Yet Another BACnet Explorer (gratuito, código aberto)",u:"https://sourceforge.net/projects/yetanotherbacnetexplorer/",s:"rt"};
 TF_REF.wireshark={t:"Wireshark — analisador de rede (gratuito)",u:"https://www.wireshark.org",s:"rt"};
 TF_REF.en54b={t:"EN 54 — partes por equipamento (2 CDI, 3 sirenes, 4 alimentação, 5 calor, 7 fumo, 10 chama, 11 botoneiras, 12 feixe, 17 isoladores, 18 entradas/saídas, 20 aspiração, 23 sinalizadores visuais)",s:"nr"};

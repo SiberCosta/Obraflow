@@ -2501,7 +2501,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="46";
+const APP_VER="49";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -3004,6 +3004,118 @@ const inFilterBase=inFilter;
 inFilter=function(it,f){f=f||S.filter;if(f==="inc")return["inconclusivo","a_ler","pendente","fora"].includes(readStateOf(it));return inFilterBase(it,f)};
 (()=>{const all=document.querySelector('.filters .chip[data-f="all"]');if(!all)return;const b=document.createElement("button");b.className="chip";b.dataset.f="inc";b.setAttribute("aria-pressed","false");b.innerHTML="Inconclusivos <b></b>";
  b.title="Fotos sem ID certo, IDs fora da lista e leituras em curso";all.before(b);b.onclick=()=>{S.filter="inc";render()}})();
+
+/* =========================================================
+   ObraFlow · Pasta de relatórios externos
+   - carrega um ou vários relatórios (PDF, Excel, CSV ou texto) com ID + texto;
+   - cada linha é comparada com a obra: pelo ID e pelo texto (ref., tipo, planta, notas, marca, modelo);
+   - estados: certo, texto diferente, ID trocado, não encontrado e só na obra.
+   ========================================================= */
+let XRV={key:"",tab:"",q:""};
+const XR_N={ok:"Certos",txt:"Texto diferente",swap:"ID trocado",nf:"Não encontrados",only:"Só na obra"};
+const XR_C={ok:"var(--ok)",txt:"#d97706",swap:"#7c3aed",nf:"var(--bad)",only:"#2563eb"};
+function xrList(){return Object.entries(L.meta||{}).filter(([k,v])=>k.startsWith("xr_")&&v&&Array.isArray(v.rows)).map(([k,v])=>({key:k,...v})).sort((a,b)=>String(b.at).localeCompare(String(a.at)))}
+const xrNorm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const XR_STOP=new Set("de do da dos das o a os as e em no na nos nas com para por um uma id ref n nº no. tipo".split(" "));
+function xrToks(s){return xrNorm(s).split(/[^0-9a-z]+/).filter(w=>w&&(w.length>1||/\d/.test(w))&&!XR_STOP.has(w))}
+const xrCompact=s=>xrNorm(s).replace(/[^0-9a-z]/g,"");
+function xrItemText(i){return[i.code,tOf(i.type).n,planName(i.planId),i.notes,i.maker,i.model].filter(Boolean).join(" · ")}
+/* palavras do texto (e pares seguidos) já sem separadores, para encontrar a referência do equipamento: "DO 1.03" = "DO-1.03" */
+function xrWords(t){const w=xrNorm(t).split(/[\s|,;:()]+/).map(x=>x.replace(/[^0-9a-z]/g,"")).filter(Boolean);const out=new Set(w);for(let k=0;k+1<w.length;k++)out.add(w[k]+w[k+1]);return out}
+function xrCompare(rep){const its=S.items;const byId=new Map(),byCode=new Map();
+ for(const i of its){if(i.devId){const k=String(i.devId).toUpperCase();if(!byId.has(k))byId.set(k,[]);byId.get(k).push(i)}const c=xrCompact(i.code);if(c.length>=3&&(/[a-z]/.test(c)&&/\d/.test(c)||c.length>=5))byCode.set(c,i)}
+ const score=(t,i)=>{const rt=[...new Set(xrToks(t))];if(!rt.length)return 1;const it=new Set(xrToks(xrItemText(i)));const n=rt.filter(w=>it.has(w)).length;return n/rt.length};
+ const codeHit=t=>{for(const w of xrWords(t)){const i=byCode.get(w);if(i)return i}return null};
+ const out={ok:[],txt:[],swap:[],nf:[],only:[]};const seen=new Set();
+ for(const r of rep.rows){const id=String(r.id).toUpperCase();seen.add(id);const t=r.t||"";const own=(byId.get(id)||[])[0]||null;const c=t?codeHit(t):null;
+  if(own){const sc=c===own?1:score(t,own);
+   if(c&&c!==own){out.swap.push({r,item:own,other:c});continue}
+   if(sc>=.5||!t){out.ok.push({r,item:own,sc});continue}
+   out.txt.push({r,item:own,sc});continue}
+  if(c){out.swap.push({r,item:null,other:c});continue}
+  const near=[];for(const [k,l] of byId){if(Math.abs(k.length-id.length)>1)continue;if(editDist(id,k,1)<=1)near.push(...l)}
+  out.nf.push({r,near:near.filter(i=>!seen.has(String(i.devId).toUpperCase())).slice(0,2)})}
+ for(const [k,l] of byId)if(!seen.has(k))for(const i of l)out.only.push({item:i});
+ return out}
+
+/* ---------- carregar ---------- */
+(()=>{const inp=document.createElement("input");inp.type="file";inp.id="xrIn";inp.hidden=true;inp.multiple=true;inp.accept=".pdf,.xlsx,.xls,.xlsm,.ods,.csv,.txt,application/pdf,text/csv,text/plain";document.body.appendChild(inp);
+ inp.onchange=async()=>{const fs=[...inp.files];inp.value="";if(!fs.length)return;const msg=$("xrMsg");const show=(t,c)=>{if(msg){msg.hidden=false;msg.className="msg "+(c||"busy");msg.innerHTML=t}};
+  const done=[],bad=[];let last="";
+  for(const f of fs){try{show(`A abrir ${esc(f.name)}…`);const lines=await fileLines(f,t=>show(esc(f.name)+": "+esc(t)));const r=idsFromLines(lines);
+    if(!r.ids.length){bad.push(f.name);continue}
+    const cnt=new Map();for(const ln of lines){const u=String(ln||"").toUpperCase();for(const x of r.ids)if(u.includes(x.id))cnt.set(x.id,(cnt.get(x.id)||0)+1)}
+    const rows=r.ids.slice(0,6000).map(x=>({id:x.id,t:String(x.t||"").replace(/\s*[;\t|]+\s*/g," · ").replace(/(\s·\s)+/g," · ").replace(/^[\s·,;:-]+|[\s·,;:-]+$/g,"").slice(0,160),n:cnt.get(x.id)||1}));
+    const key="xr_"+uid();await api.set("meta",key,{name:f.name,at:now(),by:S.meId,len:r.len,rows});done.push(`${f.name} (${rows.length})`);last=key}
+   catch(e){bad.push(f.name+": "+(e.message||e))}}
+  if(last)XRV={key:last,tab:"",q:""};
+  const txt=(done.length?`Carregado${done.length>1?"s":""}: <b>${esc(done.join(", "))}</b>.`:"")+(bad.length?` Sem IDs ou com erro: ${esc(bad.join("; "))}. Se for uma digitalização pouco nítida, exporta em Excel ou CSV.`:"");
+  if(done.length)toast(done.length>1?`${done.length} relatórios carregados.`:"Relatório carregado.");
+  setTimeout(()=>{renderPage("ids");const m=$("xrMsg");if(m&&txt){m.hidden=false;m.className="msg "+(bad.length?"warn":"ok");m.innerHTML=txt}},250)}})();
+
+/* ---------- cartão ---------- */
+function xrCard(){const L2=xrList();
+ const up=S.canWrite?`<button type="button" class="btn primary" id="xrUp">Carregar relatórios</button>`:"";
+ const head=`<div class="refh"><div><h3>Pasta de relatórios externos</h3><p class="muted">Carrega relatórios de outras equipas ou do fabricante (PDF, Excel, CSV ou texto) com o ID e o texto de cada equipamento. Cada linha é comparada com a obra pelo ID e pelo texto.</p></div><div class="toolrow">${up}</div></div><div class="msg" id="xrMsg" hidden></div>`;
+ if(!L2.length)return`<section class="card refc xrc" id="xrCard">${head}<div class="empty2">A pasta está vazia.${S.canWrite?" Podes escolher vários ficheiros de uma vez.":""}</div></section>`;
+ const cur=L2.find(r=>r.key===XRV.key)||L2[0];const C=xrCompare(cur);const tot=cur.rows.length;
+ const files=L2.map(r=>{const c=r.key===cur.key?C:xrCompare(r);const ok=c.ok.length;const pc=r.rows.length?Math.round(ok*100/r.rows.length):0;
+  return`<button type="button" class="xrf${r.key===cur.key?" on":""}" data-xr="${esc(r.key)}"><span class="xrfi" aria-hidden="true">${/\.pdf$/i.test(r.name)?"PDF":/\.(xlsx?|xlsm|ods)$/i.test(r.name)?"XLS":/\.csv$/i.test(r.name)?"CSV":"TXT"}</span><span class="xrfn"><b>${esc(r.name)}</b><small>${r.rows.length} linhas · ${fmtDate(r.at)}${r.by?" · "+esc(nameOf(r.by)):""}</small></span><span class="xrfp" style="--p:${pc}">${pc}% certos</span></button>`}).join("");
+ const tab=XRV.tab&&C[XRV.tab]?XRV.tab:(C.swap.length?"swap":C.txt.length?"txt":C.nf.length?"nf":"ok");
+ const sub={ok:"ID e texto batem certo",txt:"ID na obra, texto não bate",swap:"o texto aponta para outro equipamento",nf:"ID do relatório sem equipamento",only:"IDs da obra fora do relatório"};
+ const tiles=Object.keys(XR_N).map(k=>`<button type="button" class="reft${tab===k?" on":""}" data-xrt="${k}" style="--c:${XR_C[k]}"><b>${C[k].length}</b><span>${XR_N[k]}</span><small>${sub[k]}</small></button>`).join("");
+ const canDel=S.canWrite&&(S.isCoord||cur.by===S.meId);
+ return`<section class="card refc xrc" id="xrCard">${head}
+  <div class="xrfs">${files}</div>
+  <div class="xrbar"><b>${esc(cur.name)}</b><span class="muted">${tot} linhas lidas · comparadas com ${S.items.filter(i=>i.devId).length} equipamentos com ID</span><span class="tfsp" style="flex:1"></span><button type="button" class="btn sm" id="xrCsv">Exportar comparação</button>${canDel?`<button type="button" class="btn sm danger" id="xrDel">Remover da pasta</button>`:""}</div>
+  <div class="refts xrts">${tiles}</div>
+  <div class="toolrow"><input type="search" id="xrQ" placeholder="Filtrar por ID, referência ou texto" value="${esc(XRV.q)}" style="flex:1;min-width:0"></div>
+  ${xrTable(tab,C,cur)}</section>`}
+function xrTable(tab,C,rep){const q=xrNorm(XRV.q).trim();
+ const hit=(...a)=>!q||a.some(x=>xrNorm(x).includes(q));
+ const open=i=>i?`<button type="button" class="btn sm" data-item="${esc(i.id)}">Abrir</button>`:"";
+ const rt=r=>`${esc(r.t||"")}${r.n>1?` <span class="xrdup" title="Este ID aparece em ${r.n} linhas do relatório">repetido ×${r.n}</span>`:""}`;
+ const oT=i=>`<span class="mono">${esc(i.code||"—")}</span> <span class="muted">${esc([tOf(i.type).n,planName(i.planId)].join(" · "))}</span>`;
+ const W=S.canWrite;let head,rows;
+ if(tab==="ok"){head="<th>ID</th><th>Texto no relatório</th><th>Na obra</th><th></th>";
+  rows=C.ok.filter(x=>hit(x.r.id,x.r.t,xrItemText(x.item))).map(x=>`<tr><td class="mono"><b class="okc">${esc(x.r.id)}</b></td><td>${rt(x.r)||'<span class="muted">sem texto</span>'}</td><td>${oT(x.item)}</td><td>${open(x.item)}</td></tr>`)}
+ else if(tab==="txt"){head="<th>ID</th><th>Texto no relatório</th><th>Na obra</th><th></th>";
+  rows=C.txt.filter(x=>hit(x.r.id,x.r.t,xrItemText(x.item))).map(x=>`<tr><td class="mono"><b>${esc(x.r.id)}</b></td><td>${rt(x.r)}</td><td>${oT(x.item)}${x.item.notes?`<div class="muted" style="font-size:12px">${esc(String(x.item.notes).slice(0,120))}</div>`:""}</td><td class="xra">${W?`<button type="button" class="btn sm" data-xrnote="${esc(x.item.id)}" data-v="${esc(x.r.t)}" title="Junta o texto do relatório às notas do equipamento">Copiar texto para a ficha</button>`:""}${open(x.item)}</td></tr>`)}
+ else if(tab==="swap"){head="<th>ID no relatório</th><th>Texto no relatório</th><th>Na obra</th><th></th>";
+  rows=C.swap.filter(x=>hit(x.r.id,x.r.t,xrItemText(x.other))).map(x=>{const o=x.other;
+   return`<tr><td class="mono"><b class="bad">${esc(x.r.id)}</b>${x.item?`<div class="muted" style="font-size:12px">na obra é ${esc(x.item.code)}</div>`:""}</td><td>${rt(x.r)}</td><td>${oT(o)}<div class="muted" style="font-size:12px">ID na obra: <span class="mono">${esc(o.devId||"sem ID")}</span></div></td><td class="xra">${W?`<button type="button" class="cand" data-xrfix="${esc(o.id)}" data-v="${esc(x.r.id)}">Pôr ${esc(x.r.id)} em ${esc(o.code)}</button>`:""}${open(o)}</td></tr>`})}
+ else if(tab==="nf"){head="<th>ID no relatório</th><th>Texto no relatório</th><th>Parecido na obra</th>";
+  rows=C.nf.filter(x=>hit(x.r.id,x.r.t)).map(x=>`<tr><td class="mono"><b class="bad">${esc(x.r.id)}</b></td><td>${rt(x.r)}</td><td>${x.near.length?x.near.map(i=>W?`<button type="button" class="cand" data-xrfix="${esc(i.id)}" data-v="${esc(x.r.id)}" title="${esc(xrItemText(i))}">${esc(i.code)}: ${esc(i.devId)} → ${esc(x.r.id)}</button>`:`<span class="mono">${esc(i.code)}: ${esc(i.devId)}</span>`).join(" "):`<span class="muted">sem ID parecido na obra</span>`}</td></tr>`)}
+ else{head="<th>ID na obra</th><th>Equipamento</th><th></th>";
+  rows=C.only.filter(x=>hit(x.item.devId,xrItemText(x.item))).map(x=>`<tr><td class="mono"><b>${esc(x.item.devId)}</b></td><td>${oT(x.item)}</td><td>${open(x.item)}</td></tr>`)}
+ const n=rows.length;const cols=(head.match(/<th>/g)||[]).length;
+ return`<div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${rows.slice(0,400).join("")||`<tr><td colspan="${cols}" class="empty2">${q?"Nada com este filtro.":"Nada nesta lista."}</td></tr>`}</tbody></table></div>${n>400?`<p class="muted">… e mais ${n-400} (usa o filtro ou exporta).</p>`:""}`}
+function wireXr(W){const up=$("xrUp");if(up)up.onclick=()=>$("xrIn").click();if(!W)return;
+ W.querySelectorAll("[data-xr]").forEach(b=>b.onclick=()=>{XRV={key:b.dataset.xr,tab:"",q:XRV.q};renderPage("ids");xrScroll()});
+ W.querySelectorAll("[data-xrt]").forEach(b=>b.onclick=()=>{XRV.tab=b.dataset.xrt;renderPage("ids");xrScroll()});
+ const q=$("xrQ");if(q){let tm;q.oninput=()=>{clearTimeout(tm);tm=setTimeout(()=>{XRV.q=q.value;renderPage("ids");const n=$("xrQ");if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}},250)}}
+ W.querySelectorAll("[data-xrfix]").forEach(b=>b.onclick=async e=>{e.stopPropagation();const it=S.items.find(i=>i.id===b.dataset.xrfix);if(!it)return;const v=b.dataset.v;const o=findDup(it.id,"devId",v);
+  const patch={devId:v,readConf:"alta",readState:"ok",readNote:`ID ${v} corrigido pelo relatório externo.`,updatedAt:now(),updatedBy:S.meId};
+  logPatch(it,patch,"ID: "+v+" (relatório externo)");await api.update("items",it.id,patch);toast(o?`ID ${v} guardado em ${it.code}, mas está repetido com ${o.code}.`:`ID ${v} guardado em ${it.code}.`);renderPage("ids");xrScroll()});
+ W.querySelectorAll("[data-xrnote]").forEach(b=>b.onclick=async e=>{e.stopPropagation();const it=S.items.find(i=>i.id===b.dataset.xrnote);if(!it)return;const cur=xrList().find(r=>r.key===XRV.key)||xrList()[0];
+  const add=`Relatório ${cur?cur.name:"externo"}: ${b.dataset.v}`;const notes=it.notes?String(it.notes)+"\n"+add:add;const patch={notes,updatedAt:now(),updatedBy:S.meId};
+  logPatch(it,patch,"Notas: texto do relatório externo");await api.update("items",it.id,patch);toast(`Texto copiado para ${it.code}.`);renderPage("ids");xrScroll()});
+ const dl=$("xrDel");if(dl)dl.onclick=async()=>{if(!dl.classList.contains("armed")){dl.classList.add("armed");dl.textContent="Confirmar remover";return}
+  const cur=xrList().find(r=>r.key===XRV.key)||xrList()[0];if(!cur)return;await api.del("meta",cur.key);XRV={key:"",tab:"",q:""};toast("Relatório removido da pasta.");renderPage("ids")};
+ const cv=$("xrCsv");if(cv)cv.onclick=()=>{const cur=xrList().find(r=>r.key===XRV.key)||xrList()[0];if(!cur)return;const C=xrCompare(cur);
+  const e=v=>{v=String(v??"");return/[;"\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v};const rows=[["Estado","ID no relatório","Texto no relatório","Repetido","Ref. na obra","ID na obra","Tipo","Planta","Notas"]];
+  const it=i=>i?[i.code,i.devId||"",tOf(i.type).n,planName(i.planId),i.notes||""]:["","","","",""];
+  for(const x of C.ok)rows.push(["Certo",x.r.id,x.r.t,x.r.n>1?x.r.n:"",...it(x.item)]);
+  for(const x of C.txt)rows.push(["Texto diferente",x.r.id,x.r.t,x.r.n>1?x.r.n:"",...it(x.item)]);
+  for(const x of C.swap)rows.push(["ID trocado",x.r.id,x.r.t,x.r.n>1?x.r.n:"",...it(x.other)]);
+  for(const x of C.nf)rows.push(["Não encontrado",x.r.id,x.r.t,x.r.n>1?x.r.n:"",...it(x.near[0])]);
+  for(const x of C.only)rows.push(["Só na obra","","","",...it(x.item)]);
+  saveFile(slug()+"_"+cur.name.replace(/\.[a-z0-9]+$/i,"").replace(/[^\p{L}\p{N}]+/gu,"_").slice(0,40)+"_comparacao.csv","﻿"+rows.map(r=>r.map(e).join(";")).join("\n"))}}
+function xrScroll(){const c=$("xrCard");if(c&&c.getBoundingClientRect().top<0)c.scrollIntoView({block:"start"})}
+const idsPageXr=idsPage;
+idsPage=function(){const h=idsPageXr();const k='<div class="card" style="padding:12px;display:grid;gap:10px"><div class="toolrow"><input type="search" id="idQ"';const i=h.indexOf(k);return i<0?h+xrCard():h.slice(0,i)+xrCard()+h.slice(i)};
+const wireIdsXr=wireIds;
+wireIds=function(W){wireIdsXr(W);wireXr(W||$("pageWrap"))};
 
 /* =========================================================
    ObraFlow · PDF com texto pesquisável

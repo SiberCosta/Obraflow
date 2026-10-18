@@ -545,7 +545,7 @@ function boot(){buildNav();S.field=!!LS.get("tf-field",false);document.body.clas
 /* aviso se algum ficheiro no servidor for de outra versão (ex.: tecnico.js não foi substituído no GitHub) */
 function checkVer(){const v=window.TF_VER;const m=[];if(!window.TEC)m.push("tecnico.js (em falta)");else if(TEC.build!==v)m.push("tecnico.js (versão "+(TEC.build||"antiga")+")");if(window.TF_DATA2_VER!==v)m.push("tfdata2.js");if(window.TF_DATA3_VER!==v)m.push("tfdata3.js");if(window.TF_APP_VER!==v)m.push("tfapp.js");
  if(!m.length)return;const d=document.createElement("div");d.className="tfkind real";d.style.margin="10px 16px 0";d.innerHTML=`<b>⚠ Ficheiros desatualizados no servidor</b><span>A página é da versão ${esc(v)}, mas estes ficheiros não: <b>${esc(m.join(", "))}</b>. Volta a carregar a pasta <b>tecflow/</b> completa para o GitHub e recarrega a página.</span>`;const a=$("tfAviso");(a&&a.parentNode?a.parentNode:document.body).insertBefore(d,a?a.nextSibling:document.body.firstChild)}
-window.TF_APP_VER="46";
+window.TF_APP_VER="49";
 window.TF={render,search,nav,stat};
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();

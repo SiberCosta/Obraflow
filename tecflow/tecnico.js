@@ -828,14 +828,14 @@ function planSvg(p,P){const S=SIMS[p.n];P=P||SIMPLAN[p.n];if(!P)return"";const N
   <text x="780" y="414" class="pl-ty">${esc(P.tipo)}</text></svg>`}
 function simHtml(p){const S=SIMS[p.n];if(!S)return"";const B=BUSST[p.n]||{c:"#e8a317",c2:"#475569",lab:p.n,v:"",off:[],sc:[]};
  return`<div class="sim sim3" data-sim="${esc(p.n)}" style="--bc:${B.c};--bc2:${B.c2}">
- <section class="s3-scene">${SIMPLAN[p.n]?`<div class="s3-views" role="tablist"><button type="button" data-vw="plan" class="on" role="tab">🏠 Planta · ${SIMPLANS[p.n]?SIMPLANS[p.n].length+" exemplos":""}</button><button type="button" data-vw="esq" role="tab">▦ Esquema</button></div><span class="s3-bus s3-bus2 ok"></span>`:""}<div class="s3-tx" hidden><i></i>Telegrama em trânsito…</div>
+ <section class="s3-scene">${SIMPLAN[p.n]?`<div class="s3-views" role="tablist"><button type="button" data-vw="plan" class="on" role="tab">🏠 Planta · ${SIMPLANS[p.n]?SIMPLANS[p.n].length+" exemplos":""}</button><button type="button" data-vw="esq" role="tab">▦ Esquema</button></div><span class="s3-bus s3-bus2 ok"></span>`:""}<button type="button" class="s3-fs" title="Ver o simulador em ecrã inteiro">⛶ Ecrã inteiro</button><div class="s3-tx" hidden><i></i>Telegrama em trânsito…</div>
   ${SIMPLANS[p.n]?`<div class="s3-scen"><div class="s3-sc">${SIMPLANS[p.n].map((P,k)=>`<button type="button" data-scn="${k}" class="${k?"":"on"}">${esc(P.tipo.split(" — ")[0])}</button>`).join("")}</div><div class="s3-story"></div></div><div class="s3-planw">${planSvg(p,SIMPLANS[p.n][0])}</div>`:""}
   <div class="s3-grid"${SIMPLAN[p.n]?" hidden":""}>${S.nodes.map((nd,k)=>{const [a,b]=nd[1].split(" · ");const t=ntype2(nd[1]);return`<article class="s3-card sb-n${k===0?" master":""}" data-n="${nd[0]}" data-t="${t}">
    <div class="s3-top"><span class="s3-tag">${esc(b||(k===0?"MESTRE":nd[0]))}</span><span class="s3-adr">${esc(nd[0])}</span></div>
    <div class="s3-ico"><svg viewBox="0 0 24 24">${NICO[t]||NICO.ctl}</svg></div>
    <h4>${esc(a)}</h4><p class="s3-st"></p>${k===0?`<span class="s3-bus ok">Bus OK${B.v?" ("+esc(B.v)+")":""}</span>`:""}<span class="s3-fault" hidden>AVARIA</span></article>`}).join("")}</div>
   <div class="s3-wire"><div class="s3-bar"></div><i class="s3-dot"></i><i class="s3-pkl"></i></div><p class="s3-lab"><span>${esc(B.lab)}</span></p></section>
- <div class="simtg" hidden></div>
+ <div class="simtg s3-tgres"><span class="tgk">Último telegrama</span><span class="tgph">carrega num botão do painel para ver aqui o telegrama descodificado</span></div>
  <div class="s3-cols"><section class="s3-panel"><h3><span>Enviar telegrama</span><small>${esc(p.n)}</small></h3><div class="simctl">${S.ctl({})}</div></section>
   <section class="s3-mon"><header><span><i class="s3-live"></i>Monitor do bus</span><span><button type="button" class="s3-b sl-cp">Copiar</button><button type="button" class="s3-b sl-clr">Limpar</button></span></header><div class="simlog" aria-live="polite"></div></section></div>
  <section class="s3-faults"><div class="s3-fh"><span class="s3-fi">⚠</span><div><b>Simular avarias</b><small>Injeta falhas reais para ver o comportamento do protocolo e treinar o diagnóstico.</small></div></div>
@@ -845,10 +845,12 @@ function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._
  const planUpd=()=>{if(!PLN||!PLN.glow)return;PLN.glow(s).forEach((g,k)=>{const c=el.querySelector(`[data-gl="${k}"]`);if(!c)return;c.style.opacity=g.lv;if(g.col){c.setAttribute("fill",g.col);c.style.opacity=g.lv*.55}})};
  const view=v=>{el.querySelectorAll("[data-vw]").forEach(b=>b.classList.toggle("on",b.dataset.vw===v));const pw=el.querySelector(".s3-planw");if(pw)pw.hidden=v!=="plan";el.querySelector(".s3-grid").hidden=v==="plan"&&!!pw;el.dataset.view=v};
  el.querySelectorAll("[data-vw]").forEach(b=>b.onclick=()=>view(b.dataset.vw));if(PLN)view("plan");
- const story=()=>{const st=el.querySelector(".s3-story");if(!st||!PLN)return;st.innerHTML=`<p><b>Exemplo:</b> ${esc(PLN.txt||"")}</p>${PLN.tasks&&PLN.tasks.length?`<ol class="s3-tasks">${PLN.tasks.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:""}`};
+ const story=()=>{const st=el.querySelector(".s3-story");if(!st||!PLN)return;st.innerHTML=`<p><b>Exemplo:</b> ${esc(PLN.txt||"")}</p>${PLN.tasks&&PLN.tasks.length?`<details class="s3-td"><summary>Tarefas de treino (${PLN.tasks.length})</summary><ol class="s3-tasks">${PLN.tasks.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></details>`:""}`};
  const scen=k=>{const L=SIMPLANS[P];if(!L||!L[k])return;PLN=L[k];el.querySelectorAll("[data-scn]").forEach(b=>b.classList.toggle("on",+b.dataset.scn===k));const pw=el.querySelector(".s3-planw");if(pw)pw.innerHTML=planSvg({n:P},PLN);story();relabel();setTimeout(()=>{try{ui.out();busState()}catch(e){}},0)};
  const relabel=()=>{el.querySelectorAll(".simctl [data-a]").forEach(b=>{if(!b.dataset.orig)b.dataset.orig=b.textContent;let t=b.dataset.orig;if(PLN&&PLN.nm&&el.dataset.view!=="esq")S.nodes.forEach(nd=>{const nm=PLN.nm[nd[0]];if(!nm)return;const def=nd[1].split(" · ")[0];const i=t.toLowerCase().indexOf(def.toLowerCase());if(i>=0)t=t.slice(0,i)+(i?nm.charAt(0).toLowerCase()+nm.slice(1):nm)+t.slice(i+def.length)});b.textContent=t})};
- el.querySelectorAll("[data-scn]").forEach(b=>b.onclick=()=>scen(+b.dataset.scn));story();relabel();el.querySelectorAll("[data-vw]").forEach(b=>b.addEventListener("click",relabel));const NM=id=>{if(typeof PLN!=="undefined"&&PLN&&PLN.nm&&PLN.nm[id]&&el.dataset.view!=="esq")return PLN.nm[id];const nd=S.nodes.find(x=>x[0]===id);return nd?nd[1].replace(" · "," "):id};
+ el.querySelectorAll("[data-scn]").forEach(b=>b.onclick=()=>scen(+b.dataset.scn));story();relabel();
+ const fs=el.querySelector(".s3-fs");if(fs){if(!el.requestFullscreen)fs.hidden=true;fs.onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen();else el.requestFullscreen()}catch(e){}};document.addEventListener("fullscreenchange",()=>{fs.textContent=document.fullscreenElement===el?"✕ Sair do ecrã inteiro":"⛶ Ecrã inteiro"})}
+ el.querySelectorAll("[data-vw]").forEach(b=>b.addEventListener("click",relabel));const NM=id=>{if(typeof PLN!=="undefined"&&PLN&&PLN.nm&&PLN.nm[id]&&el.dataset.view!=="esq")return PLN.nm[id];const nd=S.nodes.find(x=>x[0]===id);return nd?nd[1].replace(" · "," "):id};
  const log=el.querySelector(".simlog");const wire=el.querySelector(".s3-wire");const dot=wire.querySelector(".s3-dot");const pkl=wire.querySelector(".s3-pkl");const txi=el.querySelector(".s3-tx");let busy=false;
  const TAG={tx:"TX",rx:"RX",err:"ERRO",warn:"AVISO",ok:"OK","":"SISTEMA",flt:"AVARIA"};
  const setNode=(id,v)=>{const g=card(id);if(!g||!v)return;if(v.lv!==undefined){g.style.setProperty("--lv",v.lv);g.classList.toggle("lit",v.lv>0)}if(v.rgb){g.style.setProperty("--rgb",`rgb(${v.rgb.join(",")})`);g.classList.toggle("lit",v.rgb.some(Boolean));g.classList.add("rgb")}
@@ -863,14 +865,19 @@ function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._
   send:(a,b,t,fl)=>new Promise(res=>{const isRx=/^(RX|Resposta|RSP|I-Am|ComplexAck|SimpleAck|COV-Notification|resposta)/i.test(String(t))||(b!=="*"&&S.nodes[0]&&b===S.nodes[0][0]&&a!==b);
    ui.log(String(t).replace(/^(TX|RX)\s*/,""),isRx?"rx":"tx",NM(a)+" → "+(b==="*"?"todos":NM(b)));
    const lab=(fl&&fl.short)||String(t).replace(/^(TX|RX)\s*/,"").split(/[ (]/).slice(0,2).join(" ");pkl.textContent=lab.slice(0,18);
-   if(fl&&fl.f){const tg=el.querySelector(".simtg");tg.hidden=false;tg.innerHTML=`<span class="tgk">${esc(fl.title||"Trama")}</span>${fl.f.map(x=>`<span class="tgf" style="--c:${x[2]||"#0891b2"}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join("")}`;
+   if(fl&&fl.f){const tg=el.querySelector(".simtg");tg.hidden=false;tg.classList.add("has");tg.innerHTML=`<span class="tgk">${esc(fl.title||"Trama")}</span>${fl.f.map(x=>`<span class="tgf" style="--c:${x[2]||"#0891b2"}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join("")}`;
     const val=fl.f.find(x=>x[0]==="Valor");if(val&&/meter/.test((card(a)||{dataset:{}}).dataset.t||""))setNode(a,{st:`<b>${esc(val[1])}</b>`,on:1})}
-   const ga=card(a);ga&&ga.classList.add("tx");const gp=pn(a);gp&&gp.classList.add("tx");txi.hidden=false;wire.classList.add("busy");
-   const ppk=el.querySelector(".pl-pk");if(PLN&&ppk&&el.dataset.view==="plan"){const px=id=>(PLN.pos[id]||[0])[0];const xs=Object.values(PLN.pos).map(v=>v[0]);const a0=px(a),b0=b==="*"?null:px(b);const kp=b==="*"?[a0,Math.min(...xs),Math.max(...xs),a0]:[a0,b0];
-    ppk.style.opacity=1;try{ppk.animate(kp.map(c=>({transform:`translate(${c}px,0)`})),{duration:b==="*"?1100:Math.max(500,Math.abs(b0-a0)*1.6),easing:"cubic-bezier(.45,.05,.35,1)"}).onfinish=()=>{ppk.style.opacity=0}}catch(e){ppk.style.opacity=0}}
-   const x0=cx(a),x1=b==="*"?null:cx(b);const W=wire.getBoundingClientRect().width;const kf=b==="*"?[x0,6,W-6,x0]:[x0,x1];const dur=b==="*"?1100:Math.max(500,Math.abs(x1-x0)*1.6);
-   const done=()=>{ga&&ga.classList.remove("tx");gp&&gp.classList.remove("tx");txi.hidden=true;wire.classList.remove("busy");dot.style.transform="";pkl.style.transform="";if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".s3-card,.s3-pn").forEach(g=>{if(g!==ga&&g!==gp){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()};
-   try{const o={duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"};const fr=kf.map(c=>({transform:`translateX(${c}px)`}));dot.animate(fr,o);const an=pkl.animate(fr,o);an.onfinish=done}catch(e){done()}}),
+   const ga=card(a);ga&&ga.classList.add("tx");const gp=pn(a);gp&&gp.classList.add("tx");txi.hidden=false;wire.classList.add("s3-run");
+   const ppk=el.querySelector(".pl-pk");if(PLN&&ppk&&el.dataset.view==="plan"){const px=id=>(PLN.pos[id]||[0])[0];const xs=Object.values(PLN.pos).map(v=>v[0]);const a0=px(a),b0=b==="*"?null:px(b);
+    const run=(node,from,to,ms)=>{node.style.opacity=1;try{node.animate([{transform:`translate(${from}px,0)`},{transform:`translate(${to}px,0)`}],{duration:ms,easing:"cubic-bezier(.45,.05,.35,1)"}).onfinish=()=>{node.style.opacity=0;if(node!==ppk)node.remove()}}catch(e){node.style.opacity=0}};
+    if(b==="*"){const c2=ppk.cloneNode(true);c2.classList.add("pl-pk2");ppk.parentNode.appendChild(c2);run(ppk,a0,Math.min(...xs),900);run(c2,a0,Math.max(...xs),900)}else run(ppk,a0,b0,Math.max(500,Math.abs(b0-a0)*1.6))}
+   const x0=cx(a),x1=b==="*"?null:cx(b);const W=wire.getBoundingClientRect().width;const dur=b==="*"?950:Math.max(500,Math.abs(x1-x0)*1.6);
+   const cl=x=>Math.max(44,Math.min(W-44,x));const o={duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"};let d2=null;if(b==="*"){d2=dot.cloneNode();d2.className="s3-dot s3-dot2";wire.appendChild(d2)}
+   const done=()=>{ga&&ga.classList.remove("tx");gp&&gp.classList.remove("tx");txi.hidden=true;wire.classList.remove("s3-run");dot.style.transform="";pkl.style.transform="";if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".s3-card,.s3-pn").forEach(g=>{if(g!==ga&&g!==gp){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()};
+   try{const T=x=>({transform:`translateX(${x}px)`});let an;
+    if(b==="*"){dot.animate([T(x0),T(6)],o);d2.animate([T(x0),T(W-6)],o);an=pkl.animate([{transform:`translateX(${cl(x0)}px)`,opacity:.5},{transform:`translateX(${cl(x0)}px)`,opacity:1,offset:.2},{transform:`translateX(${cl(x0)}px)`,opacity:1}],o)}
+    else{dot.animate([T(x0),T(x1)],o);an=pkl.animate([T(cl(x0)),T(cl(x1))],o)}
+    an.onfinish=()=>{if(d2)d2.remove();done()}}catch(e){if(d2)d2.remove();done()}}),
   out:()=>{if(vis){Object.entries(vis(s)).forEach(([id,v])=>setNode(id,v))}planUpd()}};
  S.nodes.forEach(nd=>{const t=ntype2(nd[1]);if(t==="meter")setNode(nd[0],{st:"— — —"})});
  ui.out();busState();ui.log("Pronto. Usa o painel para enviar telegramas ou simula avarias.","");
@@ -883,7 +890,7 @@ function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._
  el.querySelectorAll("[data-f]").forEach(c=>c.onclick=()=>{const k=c.dataset.f;F[k]=!F[k];if(F[k]){if(B.off.includes(k)||B.sc.includes(k))[...B.off,...B.sc].filter(x=>x!==k).forEach(x=>{F[x]=false;const o=el.querySelector(`[data-f="${x}"]`);o&&(o.classList.remove("on"),o.setAttribute("aria-pressed","false"))})}
   c.classList.toggle("on",F[k]);c.setAttribute("aria-pressed",F[k]);busState();ui.log((F[k]?"Avaria ativada: ":"Avaria resolvida: ")+c.textContent.trim(),F[k]?"flt":"ok")});
  el.querySelector("[data-frst]").onclick=()=>{Object.keys(F).forEach(k=>F[k]=false);el.querySelectorAll("[data-f]").forEach(c=>{c.classList.remove("on");c.setAttribute("aria-pressed","false")});busState();ui.log("Todas as avarias repostas. Sistema em estado normal.","ok")};
- el.querySelectorAll(".simctl [data-a]").forEach(b=>b.onclick=async()=>{if(busy)return;busy=true;el.classList.add("busy");try{await S.act(b.dataset.a,s,F,ui,ctl())}finally{busy=false;el.classList.remove("busy")}})})}
+ el.querySelectorAll(".simctl [data-a]").forEach(b=>b.onclick=async()=>{if(busy)return;busy=true;el.classList.add("s3-busy");try{await S.act(b.dataset.a,s,F,ui,ctl())}finally{busy=false;el.classList.remove("s3-busy")}})})}
 /* acrescenta o separador «Simular» a cada protocolo */
 const protoDetailBase=protoDetail;
 protoDetail=function(p){let h=protoDetailBase(p);if(!SIMS[p.n])return h;
@@ -1316,5 +1323,5 @@ function index(){return{kb:KB.map(k=>({id:k.id,t:k.t,k:k.k||"",f:k.f||"",calc:k.
  proto:PROTO.map(p=>({n:p.n,uso:p.uso||"",norma:p.norma||"",lim:p.lim||""})),sproto:SPROTO.map(p=>({n:p.n,uso:p.uso||""})),
  lel:Object.entries(LEL).map(([id,v])=>({id,n:v.n})),lels:Object.entries(LEL_S).map(([id,v])=>({id,n:v.n})),
  esq:Object.entries(ESQ2).map(([id,v])=>({id,t:v.t})),ex:EXS.map(e=>({id:e.id,t:e.t||e.n||e.id})),calcs:CALCS.map(c=>({id:c[0],t:c[1]}))}}
-window.TEC={build:"46",render,panel,index,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
+window.TEC={build:"49",render,panel,index,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
 })();

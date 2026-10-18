@@ -2,7 +2,7 @@
    - a app (html, css, js) vem da rede quando há ligação e fica guardada para abrir sem rede
    - bibliotecas e tipos de letra (CDN) ficam guardados depois da primeira vez
    - nada do Supabase (dados e ficheiros) passa por aqui: isso é tratado pela app */
-const VERSION = "v46";
+const VERSION = "v49";
 const SHELL = "obra-shell-" + VERSION, LIBS = "obra-libs-" + VERSION;
 const CORE = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
   "vendor/pdf.js", "vendor/pdf.worker.js", "vendor/jszip.min.js",

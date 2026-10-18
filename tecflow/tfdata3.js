@@ -2,7 +2,7 @@
    TecFlow — Eletricidade (eletricista e técnico de redes elétricas) e ITED (v45)
    ========================================================= */
 "use strict";
-window.TF_DATA3_VER="46";
+window.TF_DATA3_VER="49";
 Object.assign(TF_REF,{
  dl96:{t:"Decreto-Lei n.º 96/2017 — regime das instalações elétricas particulares",s:"nr"},
  l14:{t:"Lei n.º 14/2015 — requisitos dos técnicos responsáveis e entidades inspetoras de instalações elétricas",s:"nr"},

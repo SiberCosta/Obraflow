@@ -1,5 +1,5 @@
 // TecFlow — guarda a plataforma no aparelho para funcionar sem rede
-const VERSION = "tf46";
+const VERSION = "tf49";
 const SHELL = "tecflow-" + VERSION, LIBS = "tecflow-libs";
 const CORE = ["./", "index.html", "styles.css", "tecnico.js", "tecflow.js", "tfdata.js", "tfdata2.js", "tfdata3.js", "tfapp.js", "tf.css", "manifest.webmanifest", "logo.svg",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
