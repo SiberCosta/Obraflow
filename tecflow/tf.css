@@ -249,3 +249,66 @@ body.tfapp #pageWrap>*{min-width:0;max-width:100%}
 @media (max-width:900px){.tfhoje{grid-template-columns:1fr}.tfareas.sm{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:520px){.tfglos>div{grid-template-columns:1fr}.tfareas.sm .tfai{width:36px;height:36px}}
 .tffb table,.tfcard>table{display:block;overflow-x:auto;max-width:100%}
+/* ===== v44 · simuladores de protocolos — nova apresentação ===== */
+.sim2{gap:12px}
+.sim2 .simwrap{border-radius:16px;overflow-x:auto;background:radial-gradient(140% 120% at 50% -10%,#1b4d6b 0%,#0f2a3d 55%,#0a1a26 100%);box-shadow:inset 0 0 0 1px rgba(142,201,232,.16),0 10px 26px rgba(10,26,37,.22)}
+.sim2 .simbus{display:block;width:100%;min-width:620px;height:auto;background:linear-gradient(rgba(142,201,232,.05) 1px,transparent 1px) 0 0/20px 20px,linear-gradient(90deg,rgba(142,201,232,.05) 1px,transparent 1px) 0 0/20px 20px}
+.sim2 .sb-lab{font:700 10.5px var(--f-mono,ui-monospace),monospace;fill:#8ec9e8;letter-spacing:.04em}
+.sim2 .sb-cab{stroke-width:5;stroke-linecap:round;fill:none}
+.sim2 .sb-end{fill:#0a1a26;stroke:#8ec9e8;stroke-width:2}
+.sim2 .sb-drop{stroke-width:2.2;fill:none}
+.sim2 .sb-tx{font:700 11.5px var(--f-body),system-ui,sans-serif;fill:#e8f1f5;text-anchor:middle}
+.sim2 .sb-chip{fill:rgba(34,195,238,.14);stroke:rgba(34,195,238,.5)}
+.sim2 .sb-chipt{font:700 10px var(--f-mono,ui-monospace),monospace;fill:#67e8f9;text-anchor:middle}
+.sim2 .sb-led{fill:#1e293b;stroke:#334155;stroke-width:1.2;transition:fill .15s}
+/* equipamentos */
+.sim2 .dv-b{fill:#e5e7eb;stroke:#94a3b8;stroke-width:1.2}.sim2 .dv-t{fill:#cbd5e1}.sim2 .dv-rail{fill:#64748b}.sim2 .dv-term{fill:#475569}
+.sim2 .dv-k{font:800 8.5px var(--f-body);fill:#475569;text-anchor:middle;letter-spacing:.08em}
+.sim2 .dv-led{fill:#475569}.sim2 .dv-led.on{fill:#22c55e;filter:drop-shadow(0 0 3px #22c55e)}
+.sim2 .dv-bolt{fill:#f59e0b}
+.sim2 .dv-plate{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1.2}.sim2 .dv-rock{fill:#fff;stroke:#cbd5e1;transition:transform .12s;transform-origin:0 65px}.sim2 .dv-sep{stroke:#e2e8f0}.sim2 .dv-dot{fill:#22c3ee}
+.sim2 .dv-btn.tx .dv-rock{transform:scale(.94);fill:#e0f2fe}
+.sim2 .dv-chl{fill:#334155;stroke:#1e293b}.sim2 .dv-chl.on{fill:#f59e0b;filter:drop-shadow(0 0 5px #f59e0b)}.sim2 .dv-chn{font:700 8px var(--f-mono,monospace);fill:#475569;text-anchor:middle}
+.sim2 .dv-scr{fill:#0b2433;stroke:#155e75}.sim2 .dv-scrt{font:700 9.5px var(--f-mono,monospace);fill:#67e8f9;text-anchor:middle}
+.sim2 .dv-rod{fill:#94a3b8}.sim2 .dv-shade{fill:#cbd5e1;stroke:#94a3b8}.sim2 .dv-diff{fill:#e2e8f0;transition:fill .3s}
+.sim2 .dv-glow{opacity:calc(var(--lv,0)*1);transition:opacity .4s}.sim2 .dv-lum.lit .dv-diff{fill:#fef3c7}
+.sim2 .dv-lvl{font:800 10px var(--f-mono,monospace);fill:#fde68a;text-anchor:middle}
+.sim2 .dv-lcd{fill:#a7c957;stroke:#4d7c0f}.sim2 .dv-lcdt{font:700 9px var(--f-mono,monospace);fill:#1f2a1f;text-anchor:middle}.sim2 .dv-lcdt.s{font-size:8px}
+.sim2 .dv-dial{fill:#fff;stroke:#94a3b8}.sim2 .dv-needle{stroke:#dc2626;stroke-width:2;stroke-linecap:round}
+.sim2 .dv-mon{fill:#1f2937;stroke:#475569}.sim2 .dv-lines{stroke:#38bdf8;stroke-width:2.5;stroke-linecap:round;opacity:.7}.sim2 .dv-stand{fill:#475569}.sim2 .dv-stand2{stroke:#94a3b8;stroke-width:3;stroke-linecap:round}
+.sim2 .dv-port{fill:#1f2937}.sim2 .dv-arw{fill:none;stroke:#0e7490;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.sim2 .dv-lens{fill:#0f172a;stroke:#94a3b8;stroke-width:2}.sim2 .dv-beam{fill:var(--rgb,#fff);opacity:0;transition:opacity .3s,fill .3s}.sim2 .dv-proj.lit .dv-beam{opacity:.75}.sim2 .dv-proj.lit .dv-lens{fill:var(--rgb)}
+.sim2 .dv-fan{fill:#cbd5e1;stroke:#94a3b8}.sim2 .dv-blade{stroke:#475569;stroke-width:3;stroke-linecap:round}.sim2 .dv-grill{fill:#94a3b8}
+/* estados (envio, receção, ok, avaria) */
+.sim2 .sb-n.tx .sb-led{fill:#fde047;filter:drop-shadow(0 0 5px #facc15)}
+.sim2 .sb-n.rx .sb-led{fill:#38bdf8;filter:drop-shadow(0 0 5px #38bdf8)}
+.sim2 .sb-n.ok .sb-led{fill:#22c55e;filter:drop-shadow(0 0 6px #22c55e)}
+.sim2 .sb-n.bad .sb-led{fill:#ef4444;filter:drop-shadow(0 0 7px #ef4444)}
+.sim2 .sb-n.bad{animation:sbshake .4s 2}
+@keyframes sbshake{25%{transform:translate(var(--x,0),0) translateX(-2px)}75%{transform:translateX(2px)}}
+.sim2 .sb-n.bad .sb-tx{fill:#fca5a5}
+.sim2 .sb-pkb{fill:#fde047}.sim2 .sb-pkl{font:800 9.5px var(--f-mono,monospace);fill:#1d2421;text-anchor:middle}.sim2 .sb-pkd{fill:#fde047;filter:drop-shadow(0 0 8px #facc15)}
+.sim2 .sb-pk.bc .sb-pkb,.sim2 .sb-pk.bc .sb-pkd{fill:#67e8f9}.sim2 .sb-pk.bc .sb-pkd{filter:drop-shadow(0 0 8px #22d3ee)}
+/* consola e avarias */
+.sim2 .simcons{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px}
+.sim2 .simctl,.sim2 .simfaults{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--tfline);background:var(--tfpanel)}
+.sim2 .simfaults{align-items:flex-start;align-content:flex-start;background:color-mix(in srgb,#f97316 5%,var(--tfpanel));border-color:color-mix(in srgb,#f97316 35%,var(--tfline))}
+.sim2 .simh{flex-basis:100%;font:800 11px var(--f-mono,monospace);letter-spacing:.1em;text-transform:uppercase;color:#0e7490}
+.sim2 .simfaults .simh{color:#c2410c}
+.sim2 .simctl .btn{min-height:40px;border-radius:10px}
+.sim2 .simfl{display:flex;flex-wrap:wrap;gap:6px}
+.sim2 .fchip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid color-mix(in srgb,#f97316 40%,var(--tfline));background:var(--tfpanel);font:600 12.5px var(--f-body);cursor:pointer;user-select:none}
+.sim2 .fchip input{position:absolute;opacity:0;pointer-events:none}
+.sim2 .fchip::before{content:"";width:10px;height:10px;border-radius:50%;border:2px solid #f97316;flex:none}
+.sim2 .fchip.on{background:#f97316;border-color:#f97316;color:#fff}.sim2 .fchip.on::before{background:#fff;border-color:#fff}
+.sim2 .fchip:focus-within{outline:2px solid #0ea5e9;outline-offset:2px}
+/* monitor */
+.sim2 .simlog{background:#0a1a26;color:#cfe3ee;border-radius:14px;padding:10px 12px;font:12px/1.55 var(--f-mono,ui-monospace),monospace;max-height:220px;overflow:auto}
+.sim2 .sl{display:grid;grid-template-columns:auto auto 1fr;gap:10px;padding:2px 0;border-bottom:1px solid rgba(142,201,232,.06)}
+.sim2 .sl time{color:#5b8aa6}.sim2 .sl-d{color:#fde047;white-space:nowrap}.sim2 .sl.tx .sl-t{color:#e2e8f0}
+.sim2 .sl.ok .sl-t{color:#86efac}.sim2 .sl.err .sl-t{color:#fca5a5}.sim2 .sl.warn .sl-t{color:#fdba74}
+.sim2 .sl:not(:has(.sl-d)){grid-template-columns:auto 1fr}
+.sim2 .simtg{border-radius:12px}
+@media (max-width:760px){.sim2 .simcons{grid-template-columns:1fr}.sim2 .sl{grid-template-columns:auto 1fr}.sim2 .sl-d{grid-column:2}.sim2 .sl .sl-t{grid-column:1/-1}}
+.sim2 .simhint{display:none;margin:-6px 0 0;font-size:12px;color:var(--tfmut);text-align:center}
+@media (max-width:640px){.sim2 .simhint{display:block}.sim2 .simbus{min-width:640px}.sim2 .simtg{gap:4px}.sim2 .simtg .tgf b{font-size:11.5px}}

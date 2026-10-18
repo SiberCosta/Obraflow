@@ -724,31 +724,71 @@ const NICO={ps:'<path d="M13 2 5 13h6l-1 9 8-11h-6z"/>',btn:'<rect x="5" y="5" w
  meter:'<circle cx="12" cy="13" r="8"/><path d="m12 13 3-4M8 5l1 2M16 5l-1 2"/>',net:'<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M7 12h0M11 12h0M15 12h0"/>',gw:'<path d="M4 12h16M14 6l6 6-6 6M10 6 4 12l6 6"/>',
  proj:'<path d="M4 9h10l6-4v14l-6-4H4z"/>',hvac:'<circle cx="12" cy="12" r="8"/><path d="M12 4c2 3 2 5 0 8s-2 5 0 8M4 12c3-2 5-2 8 0s5 2 8 0"/>'};
 const ntype=l=>/fonte/i.test(l)?"ps":/bot[aã]o/i.test(l)?"btn":/atuador/i.test(l)?"act":/visor/i.test(l)?"disp":/lumin/i.test(l)?"lum":/analisador|contador|água|térmico|agua/i.test(l)?"meter":/switch|router/i.test(l)?"net":/gateway/i.test(l)?"gw":/projetor/i.test(l)?"proj":/uta|chiller|quadro/i.test(l)?"hvac":"ctl";
-function simHtml(p){const S=SIMS[p.n];if(!S)return"";const n=S.nodes.length;const W=640,sp=(W-130)/(n-1);
- return`<div class="sim" data-sim="${esc(p.n)}"><div class="simwrap"><svg class="simbus" viewBox="0 0 ${W} 132" role="img"><line x1="22" y1="108" x2="${W-22}" y2="108" class="sb-l"/><line x1="22" y1="114" x2="${W-22}" y2="114" class="sb-l2"/>
-  ${S.nodes.map((nd,i)=>{const x=65+i*sp;const [a,b]=nd[1].split(" · ");return`<g class="sb-n" data-n="${nd[0]}" transform="translate(${x},0)"><line x1="0" y1="74" x2="0" y2="108" class="sb-t"/><circle cx="0" cy="108" r="3.5" class="sb-j"/><rect x="-52" y="8" width="104" height="66" rx="12" class="sb-b"/>
-   <g transform="translate(-11,14)"><svg width="22" height="22" viewBox="0 0 24 24" class="sb-ic">${NICO[ntype(nd[1])]}</svg></g><text x="0" y="${b?52:56}" class="sb-tx">${esc(a.length>16?a.slice(0,15)+"…":a)}</text>${b?`<text x="0" y="66" class="sb-tx s">${esc(b)}</text>`:""}<circle cx="42" cy="18" r="4" class="sb-led"/></g>`}).join("")}
-  <g class="sb-pk" transform="translate(-60,0)"><rect x="-34" y="80" width="68" height="16" rx="8" class="sb-pkb"/><text x="0" y="91.5" class="sb-pkl"></text><circle r="7" cx="0" cy="108" class="sb-pkd"/></g></svg></div>
-  <div class="simtg" hidden></div>
-  <div class="simpanel"><div class="simctl">${S.ctl({})}</div><div class="simout"></div></div>
-  <details class="simf2"><summary>⚠ Simular avarias <small>(ativa um erro e vê o sintoma)</small></summary><div class="simfl">${S.faults.map(f=>`<label class="fsw"><input type="checkbox" data-f="${f[0]}"><span class="tg"></span>${f[1]}</label>`).join("")}</div></details>
-  <div class="simlog" aria-live="polite"><div class="sl-h"><span>monitor do bus</span><button type="button" class="sl-clr" title="Limpar">limpar</button></div></div></div>`}
-function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const S=SIMS[el.dataset.sim];const s=S.st();const F={};const n=S.nodes.length,W=640,sp=(W-130)/(n-1);
- const X=id=>{const i=S.nodes.findIndex(x=>x[0]===id);return 65+i*sp};const pk=el.querySelector(".sb-pk");const log=el.querySelector(".simlog");let busy=false;
- const ui={log:(t,k)=>{const d=document.createElement("div");d.className="sl "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${esc(t).replace(/^([✓✗⚠])/,"<b>$1</b>")}`;log.appendChild(d);while(log.children.length>40)log.children[1].remove();log.scrollTop=log.scrollHeight;d.classList.add("new")},
+/* ---------- apresentação dos simuladores (v44): equipamentos desenhados, cabo do bus, consola e monitor ---------- */
+const BUSST={"KNX TP":{c1:"#dc2626",c2:"#1f2937",lab:"KNX TP · par 2×0,8 mm · 30 V DC (SELV)"},"DALI / DALI-2":{c1:"#c4b5fd",c2:"#8b5cf6",lab:"DALI · 2 fios sem polaridade · ≈16 V"},"Modbus RTU":{c1:"#facc15",c2:"#22c55e",lab:"RS-485 · A / B · 9600 bit/s 8N1"},
+ "Modbus TCP":{c1:"#38bdf8",c2:"#0284c7",lab:"Ethernet · TCP 502 → gateway → RS-485"},"BACnet MS/TP · BACnet/IP":{c1:"#38bdf8",c2:"#f59e0b",lab:"BACnet/IP (UDP 47808) ↔ router ↔ MS/TP"},"DMX512":{c1:"#f472b6",c2:"#be185d",lab:"DMX512 · RS-485 · 512 canais"},"M-Bus":{c1:"#cbd5e1",c2:"#64748b",lab:"M-Bus · 2 fios · alimentado pelo mestre"}};
+const ntype2=l=>/gtc|scada|mestre \(/i.test(l)?"pc":/controlador/i.test(l)?"ctl":ntype(l);
+const SIMVIS={
+ "KNX TP":s=>({AT:{ch:[s.l1,s.l2],chl:["S1","S2"]},VS:{txt:["Sala 1 "+(s.l1?"ON":"OFF"),"Sala 2 "+(s.l2?"ON":"OFF")]},PS:{on:1}}),
+ "DALI / DALI-2":s=>{const o={CT:{txt:["DALI","16 V"]}};s.lv.forEach((v,i)=>o["L"+i]={lv:v/100,txt:[v+"%"]});return o},
+ "DMX512":s=>{const o={CT:{txt:["DMX","512 ch"]}};s.c.forEach((c,i)=>o["F"+(i+1)]={rgb:c});return o},
+ "M-Bus":s=>{const o={M:{txt:["M-Bus","2400 bd"]}};["A1","A2","T3","T4"].forEach(k=>o[k]={txt:[s.r[k]||"— — —"]});return o}};
+function devSvg(t){
+ const din=(w)=>`<rect x="${-w/2}" y="26" width="${w}" height="86" rx="5" class="dv-b"/><rect x="${-w/2}" y="26" width="${w}" height="13" rx="5" class="dv-t"/><rect x="${-w/2}" y="104" width="${w}" height="8" class="dv-rail"/>${[...Array(Math.max(2,Math.round(w/16)))].map((_,k,a)=>`<rect x="${-w/2+6+k*((w-12)/a.length)}" y="96" width="7" height="6" rx="1" class="dv-term"/>`).join("")}`;
+ return({
+ ps:din(60)+`<circle cx="18" cy="50" r="4" class="dv-led on"/><text x="0" y="66" class="dv-k">PSU</text><path d="M-3 70l-7 12h6l-2 9 9-13h-6l3-8z" class="dv-bolt"/>`,
+ btn:`<rect x="-34" y="30" width="68" height="70" rx="11" class="dv-plate"/><rect x="-24" y="40" width="48" height="50" rx="7" class="dv-rock"/><line x1="-24" y1="65" x2="24" y2="65" class="dv-sep"/><circle cx="-14" cy="52" r="2.2" class="dv-dot"/><circle cx="-14" cy="78" r="2.2" class="dv-dot"/>`,
+ act:din(80)+`<g data-ch></g><text x="0" y="88" class="dv-k">ATUADOR</text>`,
+ disp:`<rect x="-40" y="28" width="80" height="66" rx="9" class="dv-plate"/><rect x="-33" y="35" width="66" height="44" rx="4" class="dv-scr"/><text x="0" y="53" class="dv-scrt" data-t0></text><text x="0" y="68" class="dv-scrt" data-t1></text><circle cx="0" cy="86" r="2.5" class="dv-dot"/>`,
+ lum:`<ellipse cx="0" cy="84" rx="44" ry="30" class="dv-glow"/><rect x="-6" y="22" width="12" height="10" class="dv-rod"/><path d="M-30 32h60l-10 22h-40z" class="dv-shade"/><ellipse cx="0" cy="56" rx="20" ry="5" class="dv-diff"/><text x="0" y="100" class="dv-lvl" data-t0></text>`,
+ meter:`<rect x="-32" y="26" width="64" height="86" rx="9" class="dv-plate"/><rect x="-25" y="36" width="50" height="22" rx="3" class="dv-lcd"/><text x="0" y="51" class="dv-lcdt" data-t0></text><circle cx="0" cy="84" r="13" class="dv-dial"/><path d="M0 84l6-8" class="dv-needle"/>`,
+ pc:`<rect x="-42" y="26" width="84" height="58" rx="6" class="dv-mon"/><rect x="-36" y="32" width="72" height="44" rx="2" class="dv-scr"/><path d="M-30 44h26M-30 52h40M-30 60h18M-30 68h32" class="dv-lines"/><path d="M-10 84h20l5 16h-30z" class="dv-stand"/><rect x="-24" y="100" width="48" height="5" rx="2" class="dv-stand"/>`,
+ net:`<rect x="-44" y="48" width="88" height="34" rx="6" class="dv-b"/>${[...Array(6)].map((_,k)=>`<rect x="${-36+k*12.5}" y="62" width="9" height="9" rx="1.5" class="dv-port"/><circle cx="${-31.5+k*12.5}" cy="56" r="1.6" class="dv-led on"/>`).join("")}`,
+ gw:`<rect x="-36" y="32" width="72" height="72" rx="9" class="dv-b"/><path d="M-20 58h40M12 50l8 8-8 8M20 78h-40M-12 70l-8 8 8 8" class="dv-arw"/>`,
+ proj:`<path d="M24 38 L46 20 L46 92 L24 70z" class="dv-beam"/><rect x="-30" y="36" width="54" height="36" rx="7" class="dv-b"/><circle cx="20" cy="54" r="11" class="dv-lens"/><path d="M-10 72v14M-22 88h24" class="dv-stand2"/>`,
+ hvac:`<rect x="-40" y="30" width="80" height="72" rx="8" class="dv-b"/><circle cx="-10" cy="66" r="22" class="dv-fan"/><path d="M-10 66l0-18M-10 66l16 8M-10 66l-15 9" class="dv-blade"/><rect x="18" y="44" width="14" height="44" rx="3" class="dv-grill"/>`,
+ ctl:din(76)+`<rect x="-28" y="46" width="56" height="24" rx="3" class="dv-lcd"/><text x="0" y="57" class="dv-lcdt s" data-t0></text><text x="0" y="66" class="dv-lcdt s" data-t1></text>`})[t]||din(70)}
+function wrap2(a,n){const w=a.split(" ");const L=[""];w.forEach(x=>{const c=L[L.length-1];if((c+" "+x).trim().length>n&&c)L.push(x);else L[L.length-1]=(c+" "+x).trim()});return L.slice(0,2).map((l,i,ar)=>i===1&&L.length>2?l+"…":l)}
+function simHtml(p){const S=SIMS[p.n];if(!S)return"";const n=S.nodes.length;const W=780,H=232,B=BUSST[p.n]||{c1:"#e8a317",c2:"#475569",lab:p.n};const sp=(W-150)/(n-1);
+ return`<div class="sim sim2" data-sim="${esc(p.n)}">
+ <div class="simwrap"><svg class="simbus" viewBox="0 0 ${W} ${H}" role="img" aria-label="Simulador ${esc(p.n)}">
+  <defs><radialGradient id="glw_${esc(p.n).replace(/\W/g,"")}" cx="50%" cy="30%" r="70%"><stop offset="0" stop-color="#fde68a" stop-opacity=".95"/><stop offset=".55" stop-color="#fbbf24" stop-opacity=".35"/><stop offset="1" stop-color="#fbbf24" stop-opacity="0"/></radialGradient></defs>
+  <text x="18" y="${H-8}" class="sb-lab">${esc(B.lab)}</text>
+  <path d="M30 196H${W-30}" class="sb-cab" style="stroke:${B.c1}"/><path d="M30 203H${W-30}" class="sb-cab" style="stroke:${B.c2}"/><circle cx="30" cy="199.5" r="6" class="sb-end"/><circle cx="${W-30}" cy="199.5" r="6" class="sb-end"/>
+  ${S.nodes.map((nd,i)=>{const x=75+i*sp;const [a,b]=nd[1].split(" · ");const L=wrap2(a,15);const t=ntype2(nd[1]);
+   return`<g class="sb-n dv-${t}" data-n="${nd[0]}" transform="translate(${x},0)"><path d="M-4 ${b?162:150}V196" class="sb-drop" style="stroke:${B.c1}"/><path d="M4 ${b?162:150}V203" class="sb-drop" style="stroke:${B.c2}"/><circle cx="-4" cy="196" r="2.6" style="fill:${B.c1}"/><circle cx="4" cy="203" r="2.6" style="fill:${B.c2}"/>
+    ${t==="lum"?`<ellipse cx="0" cy="84" rx="44" ry="30" class="dv-glow" fill="url(#glw_${esc(p.n).replace(/\W/g,"")})"/>`:""}${devSvg(t).replace(/<ellipse cx="0" cy="84" rx="44" ry="30" class="dv-glow"\/>/,"")}
+    <circle cx="34" cy="30" r="4.5" class="sb-led"/>
+    ${L.map((l,k)=>`<text x="0" y="${128+k*13}" class="sb-tx">${esc(l)}</text>`).join("")}${b?`<g transform="translate(0,${128+L.length*13+2})"><rect x="${-Math.max(22,b.length*3.4)}" y="-9" width="${Math.max(44,b.length*6.8)}" height="15" rx="7.5" class="sb-chip"/><text x="0" y="2" class="sb-chipt">${esc(b)}</text></g>`:""}</g>`}).join("")}
+  <g class="sb-pk" transform="translate(-80,0)"><rect x="-40" y="170" width="80" height="17" rx="8.5" class="sb-pkb"/><text x="0" y="182" class="sb-pkl"></text><circle r="7" cx="0" cy="199.5" class="sb-pkd"/></g></svg></div><p class="simhint">↔ Desliza para ver todos os equipamentos</p>
+ <div class="simtg" hidden></div>
+ <div class="simcons"><div class="simctl"><span class="simh">Consola</span>${S.ctl({})}</div>
+  <div class="simfaults"><span class="simh">⚠ Avarias para treino</span><div class="simfl">${S.faults.map(f=>`<label class="fchip"><input type="checkbox" data-f="${f[0]}"><span>${esc(f[1])}</span></label>`).join("")}</div></div></div>
+ <div class="simlog" aria-live="polite"><div class="sl-h"><span>Monitor do bus</span><button type="button" class="sl-clr" title="Limpar">limpar</button></div></div></div>`}
+function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const S=SIMS[el.dataset.sim];const s=S.st();const F={};const n=S.nodes.length,W=780,sp=(W-150)/(n-1);
+ const X=id=>{const i=S.nodes.findIndex(x=>x[0]===id);return 75+i*sp};const NM=id=>{const nd=S.nodes.find(x=>x[0]===id);return nd?nd[1].replace(" · "," "):id};
+ const pk=el.querySelector(".sb-pk");const log=el.querySelector(".simlog");let busy=false;const vis=SIMVIS[el.dataset.sim];const extra={};
+ const setNode=(id,v)=>{const g=el.querySelector(`[data-n="${id}"]`);if(!g||!v)return;
+  if(v.lv!==undefined){g.style.setProperty("--lv",v.lv);g.classList.toggle("lit",v.lv>0)}
+  if(v.rgb){const on=v.rgb.some(Boolean);g.style.setProperty("--rgb",`rgb(${v.rgb.join(",")})`);g.classList.toggle("lit",on)}
+  if(v.txt){const t0=g.querySelector("[data-t0]"),t1=g.querySelector("[data-t1]");if(t0)t0.textContent=String(v.txt[0]||"").slice(0,12);if(t1)t1.textContent=String(v.txt[1]||"").slice(0,12)}
+  if(v.ch){const c=g.querySelector("[data-ch]");if(c)c.innerHTML=v.ch.map((on,k)=>{const x=-((v.ch.length-1)*22)/2+k*22;return`<circle cx="${x}" cy="54" r="6" class="dv-chl ${on?"on":""}"/><text x="${x}" y="72" class="dv-chn">${esc((v.chl||[])[k]||"C"+(k+1))}</text>`}).join("")}};
+ const ui={log:(t,k,dir)=>{const d=document.createElement("div");d.className="sl "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${dir?`<span class="sl-d">${esc(dir)}</span>`:""}<span class="sl-t">${esc(t).replace(/^([✓✗⚠])/,"<b>$1</b>")}</span>`;log.appendChild(d);while(log.children.length>40)log.children[1].remove();log.scrollTop=log.scrollHeight;d.classList.add("new")},
   flash:(id,k)=>{const g=el.querySelector(`[data-n="${id}"]`);if(!g)return;g.classList.remove("ok","bad");void g.getBBox();g.classList.add(k);setTimeout(()=>g.classList.remove(k),1400)},
-  send:(a,b,t,fl)=>new Promise(res=>{ui.log(t,"tx");const x0=X(a),x1=b==="*"?null:X(b);pk.setAttribute("class","sb-pk "+(b==="*"?"bc":""));
-   const lab=(fl&&fl.short)||String(t).replace(/^(TX|RX)\s*/,"").split(/[ (]/).slice(0,2).join(" ");pk.querySelector(".sb-pkl").textContent=lab.slice(0,14);
-   if(fl&&fl.f){const tg=el.querySelector(".simtg");tg.hidden=false;tg.innerHTML=`<span class="tgk">${esc(fl.title||"Trama")}</span>${fl.f.map(x=>`<span class="tgf" style="--c:${x[2]||"#0891b2"}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join("")}`}
-   const kf=b==="*"?[x0,22,W-22,x0]:[x0,x1];const dur=b==="*"?1100:Math.max(450,Math.abs(x1-x0)*1.9);
+  send:(a,b,t,fl)=>new Promise(res=>{ui.log(String(t).replace(/^(TX|RX)\s*/,""),"tx",NM(a)+" → "+(b==="*"?"todos":NM(b)));const x0=X(a),x1=b==="*"?null:X(b);pk.setAttribute("class","sb-pk "+(b==="*"?"bc":""));
+   const lab=(fl&&fl.short)||String(t).replace(/^(TX|RX)\s*/,"").split(/[ (]/).slice(0,2).join(" ");pk.querySelector(".sb-pkl").textContent=lab.slice(0,15);
+   if(fl&&fl.f){const tg=el.querySelector(".simtg");tg.hidden=false;tg.innerHTML=`<span class="tgk">${esc(fl.title||"Trama")}</span>${fl.f.map(x=>`<span class="tgf" style="--c:${x[2]||"#0891b2"}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join("")}`;
+    const val=fl.f.find(x=>x[0]==="Valor");if(val&&/meter|ctl/.test((el.querySelector(`[data-n="${a}"]`)||{}).getAttribute?.("class")||"")){extra[a]={txt:[val[1]]};setNode(a,extra[a])}}
+   const kf=b==="*"?[x0,30,W-30,x0]:[x0,x1];const dur=b==="*"?1200:Math.max(500,Math.abs(x1-x0)*1.9);
    const ga=el.querySelector(`[data-n="${a}"]`);ga&&ga.classList.add("tx");
-   try{const an=pk.animate(kf.map(c=>({transform:`translate(${c}px,0)`})),{duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"});an.onfinish=()=>{pk.setAttribute("transform","translate(-60,0)");pk.style.transform="";ga&&ga.classList.remove("tx");if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".sb-n").forEach(g=>{if(g!==ga){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()}}catch(e){ga&&ga.classList.remove("tx");res()}}),
-  out:()=>{el.querySelector(".simout").innerHTML=S.out(s)}};
- ui.out();ui.log("Pronto. Usa os botões para enviar telegramas; em «Simular avarias» vês o que acontece com os erros mais comuns.","");
+   try{const an=pk.animate(kf.map(c=>({transform:`translate(${c}px,0)`})),{duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"});an.onfinish=()=>{pk.setAttribute("transform","translate(-80,0)");pk.style.transform="";ga&&ga.classList.remove("tx");if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".sb-n").forEach(g=>{if(g!==ga){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()}}catch(e){ga&&ga.classList.remove("tx");res()}}),
+  out:()=>{if(vis){const V=vis(s);Object.entries(V).forEach(([id,v])=>setNode(id,v))}}};
+ S.nodes.forEach(nd=>{if(ntype2(nd[1])==="meter")setNode(nd[0],{txt:["— — —"]})});
+ ui.out();ui.log("Pronto. Usa a consola para enviar telegramas; ativa uma avaria para ver o sintoma.","");
  el.querySelector(".sl-clr").onclick=()=>{[...log.querySelectorAll(".sl")].forEach(x=>x.remove())};
  const ctl=()=>{const c={};el.querySelectorAll(".simctl [data-k]").forEach(i=>c[i.dataset.k]=i.value);return c};
  el.querySelectorAll(".simctl input[type=range]").forEach(r=>r.oninput=()=>{const v=r.parentElement.querySelector("[data-v]");if(v)v.textContent=r.value+"%"});
- el.querySelectorAll("[data-f]").forEach(c=>c.onchange=()=>{F[c.dataset.f]=c.checked;ui.log((c.checked?"Avaria ativada: ":"Avaria removida: ")+c.parentElement.textContent.trim(),c.checked?"warn":"ok")});
+ el.querySelectorAll("[data-f]").forEach(c=>c.onchange=()=>{F[c.dataset.f]=c.checked;c.closest(".fchip").classList.toggle("on",c.checked);ui.log((c.checked?"Avaria ativada: ":"Avaria removida: ")+c.parentElement.textContent.trim(),c.checked?"warn":"ok")});
  el.querySelectorAll(".simctl [data-a]").forEach(b=>b.onclick=async()=>{if(busy)return;busy=true;el.classList.add("busy");try{await S.act(b.dataset.a,s,F,ui,ctl())}finally{busy=false;el.classList.remove("busy")}})})}
 /* acrescenta o separador «Simular» a cada protocolo */
 const protoDetailBase=protoDetail;

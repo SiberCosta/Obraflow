@@ -414,6 +414,7 @@ O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **s
 - SADI: **Tipos de detetores** (onde usar cada um, parte da EN 54) e **Alarmes falsos** (causas e prevenção).
 - Diagnóstico: **Ferramentas** (o que levar e para quê, com opções gratuitas).
 - Biblioteca: **Glossário** com 40 termos.
+- **Simuladores de protocolos redesenhados**: equipamentos desenhados (fonte e atuador em calha DIN, botão de parede, luminárias que acendem com o nível, contadores com visor, projetores com a cor do feixe, GTC), cabo do bus com as cores e a legenda de cada protocolo, consola organizada, avarias sempre visíveis e monitor do bus com «origem → destino».
 - Mais 13 temas do dia, 9 avarias, 16 perguntas de treino, 7 fichas de bolso e 3 cenários novos no simulador do FDUL221 (E04, E10, E16).
 
 **Notas**
