@@ -2,7 +2,7 @@
    - a app (html, css, js) vem da rede quando há ligação e fica guardada para abrir sem rede
    - bibliotecas e tipos de letra (CDN) ficam guardados depois da primeira vez
    - nada do Supabase (dados e ficheiros) passa por aqui: isso é tratado pela app */
-const VERSION = "v44";
+const VERSION = "v46";
 const SHELL = "obra-shell-" + VERSION, LIBS = "obra-libs-" + VERSION;
 const CORE = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
   "vendor/pdf.js", "vendor/pdf.worker.js", "vendor/jszip.min.js",
@@ -21,7 +21,7 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin === location.origin) {
     // rede primeiro (para receber atualizações), guardado se não houver rede
-    e.respondWith(fetch(req).then(r => {
+    e.respondWith(fetch(req, { cache: "no-cache" }).then(r => {
       if (r.ok) { const cp = r.clone(); caches.open(SHELL).then(c => c.put(req, cp)); }
       return r;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || (req.mode === "navigate" ? caches.match("index.html") : Response.error()))));

@@ -312,3 +312,153 @@ body.tfapp #pageWrap>*{min-width:0;max-width:100%}
 @media (max-width:760px){.sim2 .simcons{grid-template-columns:1fr}.sim2 .sl{grid-template-columns:auto 1fr}.sim2 .sl-d{grid-column:2}.sim2 .sl .sl-t{grid-column:1/-1}}
 .sim2 .simhint{display:none;margin:-6px 0 0;font-size:12px;color:var(--tfmut);text-align:center}
 @media (max-width:640px){.sim2 .simhint{display:block}.sim2 .simbus{min-width:640px}.sim2 .simtg{gap:4px}.sim2 .simtg .tgf b{font-size:11.5px}}
+/* ===== v45 · simuladores — estilo do simulador DALI interativo de referência ===== */
+.sim3{--s9:#0f172a;--s95:#020617;--s8:#1e293b;--s7:#334155;--s5:#64748b;--s4:#94a3b8;--s3:#cbd5e1;--cy:#22d3ee;display:grid;gap:16px;color:#f1f5f9;font-family:var(--f-body);background:var(--s95);padding:14px;border-radius:18px}
+.sim3 .s3-scene{position:relative;overflow:hidden;background:color-mix(in srgb,var(--s9) 92%,transparent);border:1px solid var(--s8);border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.35)}
+.sim3 .s3-tx{position:absolute;top:12px;right:18px;display:flex;align-items:center;gap:8px;font:700 11px var(--f-mono,monospace);color:var(--cy);letter-spacing:.06em;text-transform:uppercase;animation:s3p 1s infinite}
+.sim3 .s3-tx[hidden]{display:none}.sim3 .s3-tx i{width:8px;height:8px;border-radius:50%;background:var(--cy)}
+@keyframes s3p{50%{opacity:.45}}
+.sim3 .s3-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin:14px 0 26px}
+.sim3 .s3-card{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:14px 12px;border-radius:14px;background:var(--s95);border:1px solid var(--s8);transition:border-color .25s,box-shadow .25s,transform .15s}
+.sim3 .s3-card.master{background:linear-gradient(180deg,#1e1b4b,var(--s9));border-color:rgba(99,102,241,.4);box-shadow:0 8px 20px rgba(30,27,75,.35)}
+.sim3 .s3-top{display:flex;justify-content:space-between;align-items:center;width:100%;gap:6px}
+.sim3 .s3-tag{font:700 10px var(--f-body);padding:2px 8px;border-radius:6px;background:rgba(34,211,238,.1);color:var(--cy);border:1px solid rgba(34,211,238,.25);white-space:nowrap;max-width:70%;overflow:hidden;text-overflow:ellipsis}
+.sim3 .s3-card.master .s3-tag{background:rgba(99,102,241,.15);color:#a5b4fc;border-color:rgba(99,102,241,.35)}
+.sim3 .s3-adr{font:600 10px var(--f-mono,monospace);color:var(--s5)}
+.sim3 .s3-ico{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:var(--s9);color:#475569;margin:4px 0;transition:all .3s}
+.sim3 .s3-ico svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sim3 .s3-card.master .s3-ico{background:rgba(99,102,241,.2);color:#818cf8}
+.sim3 .s3-card.lit .s3-ico{background:#facc15;color:#0f172a;box-shadow:0 0 calc(6px + var(--lv,1)*22px) rgba(250,204,21,calc(.25 + var(--lv,1)*.7))}
+.sim3 .s3-card.lit[data-t="meter"] .s3-ico,.sim3 .s3-card.lit[data-t="act"] .s3-ico,.sim3 .s3-card.lit[data-t="btn"] .s3-ico{background:rgba(34,211,238,.18);color:var(--cy);box-shadow:0 0 14px rgba(34,211,238,.35)}
+.sim3 .s3-card.rgb.lit .s3-ico{background:var(--rgb);color:#0f172a;box-shadow:0 0 22px var(--rgb)}
+.sim3 .s3-card h4{margin:0;font:700 13.5px var(--f-body);color:#fff;line-height:1.25}
+.sim3 .s3-st{margin:0;font-size:12px;color:var(--s4);min-height:16px}.sim3 .s3-st b{color:var(--cy);font-family:var(--f-mono,monospace)}
+.sim3 .s3-bus{margin-top:4px;font:700 10px var(--f-body);padding:2px 9px;border-radius:999px;border:1px solid}
+.sim3 .s3-bus.ok{background:rgba(16,185,129,.18);color:#34d399;border-color:rgba(16,185,129,.35)}
+.sim3 .s3-bus.off{background:var(--s8);color:var(--s4);border-color:var(--s7)}
+.sim3 .s3-bus.sc{background:rgba(239,68,68,.2);color:#f87171;border-color:rgba(239,68,68,.45)}
+.sim3 .s3-fault{font:800 9px var(--f-body);letter-spacing:.06em;color:#f87171;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);padding:2px 7px;border-radius:5px}
+.sim3 .s3-fault[hidden]{display:none}
+.sim3 .s3-card.faulty{border-color:rgba(239,68,68,.5)}
+.sim3 .s3-card.tx{border-color:#f59e0b;box-shadow:0 0 0 1px #f59e0b,0 0 18px rgba(245,158,11,.35);transform:translateY(-2px)}
+.sim3 .s3-card.rx{border-color:var(--cy);box-shadow:0 0 0 1px var(--cy),0 0 16px rgba(34,211,238,.3)}
+.sim3 .s3-card.ok{border-color:#10b981;box-shadow:0 0 0 1px #10b981,0 0 18px rgba(16,185,129,.35)}
+.sim3 .s3-card.bad{border-color:#ef4444;box-shadow:0 0 0 1px #ef4444,0 0 20px rgba(239,68,68,.45);animation:s3s .35s 2}
+@keyframes s3s{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+/* barramento */
+.sim3 .s3-wire{position:relative;height:10px}
+.sim3 .s3-bar{height:8px;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--bc) 70%,#000),var(--bc),color-mix(in srgb,var(--bc) 70%,#000));box-shadow:0 4px 14px color-mix(in srgb,var(--bc) 30%,transparent);transition:all .3s}
+.sim3 .s3-wire.busy .s3-bar{filter:brightness(1.25)}
+.sim3 .s3-wire.sc .s3-bar{background:#dc2626;box-shadow:0 0 16px rgba(239,68,68,.5);animation:s3p .8s infinite}
+.sim3 .s3-wire.off .s3-bar{background:var(--s7);box-shadow:none}
+.sim3 .s3-dot{position:absolute;left:-7px;top:-3px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 12px #fff,0 0 22px var(--cy);opacity:0;pointer-events:none}
+.sim3 .s3-wire.busy .s3-dot{opacity:1}
+.sim3 .s3-pkl{position:absolute;left:0;top:-30px;font:800 10px var(--f-mono,monospace);font-style:normal;white-space:nowrap;color:#0f172a;background:#fde047;padding:2px 8px;border-radius:999px;opacity:0;margin-left:-30px;pointer-events:none}
+.sim3 .s3-wire.busy .s3-pkl{opacity:1}
+.sim3 .s3-lab{margin:12px 0 0;text-align:center}.sim3 .s3-lab span{display:inline-block;font:700 10px var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:#fbbf24;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.22);padding:4px 12px;border-radius:999px}
+/* painel + monitor */
+.sim3 .s3-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px}
+.sim3 .s3-panel,.sim3 .s3-mon{background:var(--s9);border:1px solid var(--s8);border-radius:16px;padding:18px;box-shadow:0 12px 26px rgba(0,0,0,.3)}
+.sim3 .s3-mon{background:var(--s95)}
+.sim3 .s3-panel h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 14px;font:700 15px var(--f-body);color:#fff}
+.sim3 .s3-panel h3 small{font:600 10px var(--f-mono,monospace);background:var(--s8);color:var(--s4);padding:2px 8px;border-radius:5px}
+.sim3 .simctl{display:grid;gap:12px;background:none;border:0;padding:0;box-shadow:none}
+.sim3 .simf{display:grid;gap:6px;font:600 12px var(--f-body);color:var(--s4)}
+.sim3 .simf b[data-v]{float:right;color:var(--cy);font:700 13px var(--f-mono,monospace)}
+.sim3 .simf select{width:100%;background:var(--s95);border:1px solid var(--s8);color:#fff;border-radius:11px;padding:10px 12px;font:500 14px var(--f-body)}
+.sim3 .simf select:focus{outline:none;border-color:var(--cy)}
+.sim3 .simf input[type=range]{width:100%;accent-color:var(--cy)}
+.sim3 .s3-quick{display:flex;gap:4px;margin-top:-4px}
+.sim3 .s3-quick button{flex:1;padding:5px 0;font:600 10.5px var(--f-mono,monospace);background:var(--s95);color:var(--s3);border:1px solid var(--s8);border-radius:6px;cursor:pointer}
+.sim3 .s3-quick button:hover{background:var(--s8)}
+.sim3 .simctl .btn{width:100%;min-height:44px;border-radius:12px;font:700 14px var(--f-body);cursor:pointer;border:1px solid var(--s7);background:var(--s8);color:var(--s3);box-shadow:none}
+.sim3 .simctl .btn.primary{background:var(--cy);border-color:var(--cy);color:#0f172a;box-shadow:0 8px 20px rgba(34,211,238,.2)}
+.sim3 .simctl .btn.primary:hover{background:#67e8f9}.sim3 .simctl .btn:not(.primary):hover{background:var(--s7)}
+.sim3.busy .simctl .btn{opacity:.55;pointer-events:none}
+.sim3 .s3-mon header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--s9)}
+.sim3 .s3-mon header>span:first-child{display:flex;align-items:center;gap:8px;font:700 11.5px var(--f-mono,monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--s4)}
+.sim3 .s3-live{width:10px;height:10px;border-radius:50%;background:#10b981;animation:s3p 1.4s infinite}
+.sim3 .s3-b{font:600 11px var(--f-body);background:var(--s9);color:var(--s4);border:1px solid var(--s8);border-radius:8px;padding:4px 10px;margin-left:6px;cursor:pointer}.sim3 .s3-b:hover{color:#fff;background:var(--s8)}
+.sim3 .simlog{background:color-mix(in srgb,var(--s95) 80%,transparent);border:1px solid var(--s9);border-radius:12px;padding:10px;height:230px;overflow:auto;font:12px/1.6 var(--f-mono,ui-monospace),monospace;color:var(--s3);max-height:none}
+.sim3 .simlog .sl{margin:0 0 6px;display:block;border:0;padding:0}
+.sim3 .sl time{color:var(--s5)}.sim3 .sl-g{letter-spacing:.05em}.sim3 .sl-d{color:var(--s4)}
+.sim3 .sl.tx .sl-g{color:#34d399}.sim3 .sl.rx .sl-g{color:var(--cy)}.sim3 .sl.err .sl-g,.sim3 .sl.err .sl-t{color:#f87171;font-weight:700}.sim3 .sl.warn .sl-g,.sim3 .sl.warn .sl-t{color:#fbbf24}.sim3 .sl.ok .sl-g{color:#34d399}.sim3 .sl.flt .sl-g,.sim3 .sl.flt .sl-t{color:#fb923c;font-weight:700}.sim3 .sl:not(.tx):not(.rx):not(.err):not(.warn):not(.ok):not(.flt) .sl-g{color:var(--cy)}
+/* telegrama descodificado */
+.sim3 .simtg{background:var(--s9);border:1px solid var(--s8);color:#e2e8f0}.sim3 .simtg .tgk{color:var(--s4)}
+.sim3 .simtg .tgf{background:var(--s95);border-color:var(--s8)}.sim3 .simtg .tgf small{color:var(--s4)}.sim3 .simtg .tgf b{color:#fff}
+/* avarias */
+.sim3 .s3-faults{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:16px;padding:16px 18px}
+.sim3 .s3-fh{display:flex;align-items:center;gap:12px}.sim3 .s3-fi{width:40px;height:40px;flex:none;display:grid;place-items:center;border-radius:12px;background:rgba(245,158,11,.2);color:#fbbf24;border:1px solid rgba(245,158,11,.3);font-size:18px}
+.sim3 .s3-fh b{display:block;color:#fde68a;font-size:14px}.sim3 .s3-fh small{color:rgba(252,211,77,.8);font-size:12px}
+.sim3 .s3-fb{display:flex;flex-wrap:wrap;gap:8px}
+.sim3 .s3-fbtn{padding:8px 12px;font:600 12.5px var(--f-body);background:var(--s9);color:#fcd34d;border:1px solid rgba(245,158,11,.3);border-radius:12px;cursor:pointer;transition:background .2s}
+.sim3 .s3-fbtn:hover{background:rgba(245,158,11,.2)}.sim3 .s3-fbtn.on{background:rgba(239,68,68,.3);border-color:#ef4444;color:#fecaca}
+.sim3 .s3-fbtn.rst{background:var(--s8);color:var(--s3);border-color:var(--s7)}
+@media (max-width:900px){.sim3 .s3-cols{grid-template-columns:1fr}}
+@media (max-width:520px){.sim3{padding:10px}.sim3 .s3-scene{padding:14px}.sim3 .s3-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sim3 .s3-card{padding:12px 8px}.sim3 .s3-pkl{display:none}.sim3 .s3-faults{padding:14px}.sim3 .s3-fbtn{flex:1 1 auto}}
+.sim3 .simf select{background:#020617!important;color:#fff!important;-webkit-text-fill-color:#fff;appearance:auto}
+.sim3 .simf select option{background:#0f172a;color:#fff}
+.sim3 .simctl .btn{display:flex;align-items:center;justify-content:center;text-align:center}
+/* v45 · vista «Planta» */
+.sim3 .s3-views{display:inline-flex;gap:4px;padding:4px;border-radius:12px;background:var(--s95);border:1px solid var(--s8);margin-bottom:10px}
+.sim3 .s3-views button{padding:7px 12px;border:0;border-radius:9px;background:none;color:var(--s4);font:600 12.5px var(--f-body);cursor:pointer}
+.sim3 .s3-views button.on{background:var(--cy);color:#0f172a}
+.sim3 .s3-planw{margin:4px 0 22px;border-radius:12px;overflow:hidden;background:#0b1424;border:1px solid var(--s8)}
+.sim3 .s3-planw[hidden]{display:none}.sim3 .s3-grid[hidden]{display:none}
+.sim3 .s3-plan{display:block;width:100%;height:auto}
+.sim3 .pl-floor{fill:#111c2e}.sim3 .pl-room{fill:rgba(148,163,184,.03);stroke:#475569;stroke-width:3}
+.sim3 .pl-wall{fill:none;stroke:#94a3b8;stroke-width:6}
+.sim3 .pl-corr{fill:rgba(34,211,238,.035)}.sim3 .pl-cl{font:600 10px var(--f-mono,monospace);fill:#475569;text-anchor:middle;letter-spacing:.1em;text-transform:uppercase}
+.sim3 .pl-rn{font:700 12px var(--f-body);fill:#94a3b8}
+.sim3 .pl-door{stroke:#111c2e;stroke-width:5}.sim3 .pl-swing{fill:none;stroke:#334155;stroke-width:1.2;stroke-dasharray:3 3}
+.sim3 .pl-cab{stroke:var(--bc);stroke-width:4;stroke-linecap:round}.sim3 .pl-cab2{stroke:var(--bc2);stroke-width:4;stroke-linecap:round}
+.sim3 .pl-br{stroke:var(--bc);stroke-width:2.5;stroke-dasharray:6 4}
+.sim3 .s3-plan.sc .pl-cab,.sim3 .s3-plan.sc .pl-cab2{stroke:#ef4444;animation:s3p .8s infinite}.sim3 .s3-plan.off .pl-cab,.sim3 .s3-plan.off .pl-cab2,.sim3 .s3-plan.off .pl-br{stroke:#334155}
+.sim3 .pl-glows circle{transition:opacity .4s,fill .3s;mix-blend-mode:screen}
+.sim3 .pl-nb{fill:#020617;stroke:#475569;stroke-width:2;transition:all .25s}
+.sim3 .pl-ic{fill:none;stroke:#cbd5e1;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.sim3 .pl-nl{font:700 11px var(--f-body);fill:#f1f5f9;text-anchor:middle;paint-order:stroke;stroke:#0b1424;stroke-width:4px}
+.sim3 .pl-na{font:700 10px var(--f-mono,monospace);fill:var(--cy);text-anchor:middle;paint-order:stroke;stroke:#0b1424;stroke-width:4px}
+.sim3 .pl-ty{font:600 11px var(--f-body);fill:#64748b;text-anchor:end}
+.sim3 .s3-pn.tx .pl-nb{stroke:#f59e0b;fill:#422006;filter:drop-shadow(0 0 8px #f59e0b)}
+.sim3 .s3-pn.rx .pl-nb{stroke:var(--cy);filter:drop-shadow(0 0 7px var(--cy))}
+.sim3 .s3-pn.ok .pl-nb{stroke:#10b981;fill:#052e1c;filter:drop-shadow(0 0 8px #10b981)}
+.sim3 .s3-pn.bad .pl-nb,.sim3 .s3-pn.faulty .pl-nb{stroke:#ef4444;fill:#450a0a}.sim3 .s3-pn.bad .pl-nb{filter:drop-shadow(0 0 9px #ef4444)}
+.sim3 .s3-pn[data-t="lum"] .pl-nb{stroke:#facc15}
+.sim3 .pl-pkd{fill:#fff;filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 10px #22d3ee)}
+.sim3 .s3-planw{max-width:920px;margin-left:auto;margin-right:auto}
+.sim3[data-view="plan"] .s3-wire{display:none}
+.sim3[data-view="plan"] .s3-lab{margin-top:0}
+.sim3 .s3-bus2{margin-left:10px;vertical-align:top;position:relative;top:7px}
+.sim3[data-view="esq"] .s3-bus2{display:none}
+@media (max-width:700px){.sim3 .s3-planw{overflow-x:auto}.sim3 .s3-plan{min-width:640px}.sim3 .s3-planw::after{content:"↔ desliza para ver a planta toda";display:block;text-align:center;font-size:11px;color:#64748b;padding:4px 0 6px;position:sticky;left:0}}
+/* v45 · vários exemplos por protocolo */
+.sim3[data-view="esq"] .s3-scen{display:none}
+.sim3 .s3-scen{display:grid;gap:10px;margin:2px 0 12px}
+.sim3 .s3-sc{display:flex;flex-wrap:wrap;gap:6px}
+.sim3 .s3-sc button{padding:7px 13px;border-radius:999px;border:1px solid var(--s7);background:var(--s9);color:var(--s3);font:600 12.5px var(--f-body);cursor:pointer}
+.sim3 .s3-sc button.on{background:#f59e0b;border-color:#f59e0b;color:#0f172a}
+.sim3 .s3-story{background:var(--s95);border:1px solid var(--s8);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;color:var(--s3)}
+.sim3 .s3-story p{margin:0}.sim3 .s3-story b{color:#fff}
+.sim3 .s3-tasks{margin:6px 0 0;padding-left:20px;color:var(--s4);display:grid;gap:2px}
+.sim3 .s3-tasks li::marker{color:#f59e0b;font-weight:700}
+.sim3 .pl-glows circle{filter:blur(8px)}
+
+.tfareas.sm{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (max-width:1100px){.tfareas.sm{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.tfareas.sm{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* v46 · ordem de aprendizagem */
+.tfnav a i{display:inline-grid;place-items:center;width:18px;height:18px;margin-right:6px;border-radius:50%;background:rgba(15,27,45,.08);font:800 10.5px var(--f-body);font-style:normal;color:var(--tfmut)}
+.tfnav a.on i{background:var(--tfc);color:var(--tfn)}
+.tfsubn a i{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-right:6px;border-radius:50%;background:rgba(15,27,45,.07);font:800 10.5px var(--f-body);font-style:normal}
+.tfsubn a.seen:not(.on) i{background:#dcfce7;color:#15803d}
+.tfsubn a.on i{background:rgba(255,255,255,.25);color:#fff}
+.tfstep{display:block;font:700 11px var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:var(--tfmut);margin-bottom:2px}
+.tfnext{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+.tfnext a{display:grid;gap:3px;padding:14px 16px;border-radius:14px;border:1px solid var(--tfline);background:var(--tfpanel);color:var(--ink);text-decoration:none}
+.tfnext a:hover{border-color:#0e7490}.tfnext a small{color:var(--tfmut);font-size:12px}.tfnext a b{font-size:15px}
+.tfnext .nx{text-align:right;background:var(--tfn);border-color:var(--tfn);color:#fff}.tfnext .nx small{color:#9fb3c8}
+.tfarea-c{position:relative}.tfnum{position:absolute;top:12px;right:14px;font:800 22px var(--f-body);font-style:normal;color:color-mix(in srgb,var(--ac) 55%,transparent)}.tfnum.ref{font-size:16px}
+.tfarea-c .tfbar2{margin-top:2px}
+@media (max-width:520px){.tfnext{grid-template-columns:1fr}.tfnext .nx{order:-1}}

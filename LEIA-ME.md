@@ -390,11 +390,14 @@ Foi feito um teste à plataforma toda, do registo ao Técnico, em computador, ta
 
 O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **sem conta** e sem servidor. Está na pasta `tecflow/`; depois de carregares o zip para o GitHub o endereço é **`https://siberdeny19-source.github.io/planta-obra/tecflow/`**. O **Técnico saiu do ObraFlow** (cartão, menu lateral e botão nas tarefas): calculadoras, guia, esquemas, automação e SADI estão agora só no TecFlow. O ficheiro `tecnico.js` da raiz deixou de existir — pode ser apagado do GitHub.
 
-**Quatro áreas**
+**Cinco áreas**
 - **Automação predial** — KNX, BACnet, Modbus RTU/TCP, DALI, M-Bus (protocolos e simuladores), escolher a rede, tipologias, **comunicação IP** (calculadora de sub-rede, portas), **gateways e BMS** (lista de pontos, modelo CSV) e bancada de ligações.
 - **SADI e segurança contra incêndio** — visão geral, protocolos, ligação do laço, exemplo Siemens, **testador FDUL221**, simulador de laço, avarias e alarmes, **intervenção real e manutenção** (NT 12) e **requisitos em Portugal** (RJ-SCIE, RT-SCIE, NT 12, registo na ANEPC).
 - **Diagnóstico e manutenção** — análise de falhas (sistema → sintoma/código → verificações), leitura de LEDs, medições de referência, calculadoras RTIEBT, interpretar esquemas (com simbologia) e **relatórios** (modelos NT 12, FDnet, bus de campo; PDF).
+- **Eletricidade** (versão 45) — fundamentos e fórmulas (com calculadora de potência), proteções e diferenciais (curvas B/C/D, tipos AC/A/F/B, SPD), terras e equipotencial (TT/TN/IT), redes de distribuição (BT/MT/AT/MAT, PT, chegada ao cliente), segurança elétrica (5 regras de ouro, efeitos da corrente, EPI, acidente), ensaios e certificação (RTIEBT parte 6, DL 96/2017), motores e comandos (com calculadora de corrente), ITED (4.ª edição: PC/CC/FO, ATI, ZAP, ensaios e termo de responsabilidade) e legislação. Mais 6 temas, 13 perguntas de treino, 5 fichas de bolso e 13 termos no glossário.
 - **Biblioteca técnica** — **os meus PDF** (manuais, fichas técnicas, procedimentos e normas guardados no aparelho, funcionam sem rede), fichas de bolso em PDF, normas e referências, guia de bolso, fabricantes e tabelas.
+
+**Ordem de aprendizagem (versão 46)** — tudo segue a progressão de um eletricista: **1 Eletricidade** (a começar pela segurança) → **2 Diagnóstico e manutenção** (ferramentas, medir, LEDs, esquemas, falhas, relatórios) → **3 Automação predial** (tipologias → protocolos → bancada → IP/BMS → comissionamento) → **4 SADI** (visão geral e requisitos → detetores → laço → FDUL221 → avarias → intervenção real) → Biblioteca. As secções estão numeradas, marcam ✓ quando já foram vistas, e cada página termina com «Anterior / Seguinte». Os três percursos por nível foram refeitos pela mesma ordem.
 
 **Para ser útil no dia a dia**
 - **Tema do dia** com histórico dos temas consultados.
@@ -414,7 +417,10 @@ O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **s
 - SADI: **Tipos de detetores** (onde usar cada um, parte da EN 54) e **Alarmes falsos** (causas e prevenção).
 - Diagnóstico: **Ferramentas** (o que levar e para quê, com opções gratuitas).
 - Biblioteca: **Glossário** com 40 termos.
-- **Simuladores de protocolos redesenhados**: equipamentos desenhados (fonte e atuador em calha DIN, botão de parede, luminárias que acendem com o nível, contadores com visor, projetores com a cor do feixe, GTC), cabo do bus com as cores e a legenda de cada protocolo, consola organizada, avarias sempre visíveis e monitor do bus com «origem → destino».
+- **Simuladores de protocolos (versão 45)** com o estilo do simulador DALI de referência: cartões de cada equipamento (grupo/endereço, ícone que acende, estado), barramento com legenda e impulso a correr, estado do bus na fonte (Bus OK / Sem alimentação / Curto-circuito), painel «Enviar telegrama» com atalhos 0–100 % e destino individual no DALI, monitor com [TX]/[RX]/[ERRO] e Copiar/Limpar, e barra de avarias com «Repor». Funciona sem rede (sem bibliotecas externas).
+- **Vista «Planta»** em cada simulador: o sistema montado numa casa (KNX) ou num edifício de escritórios/loja/prédio (DALI, Modbus, BACnet, DMX, M-Bus), com divisões, equipamentos no sítio, cabo no corredor técnico, luzes a acender nas divisões e o telegrama a percorrer o cabo. O botão «Esquema» mostra os cartões.
+- **Três exemplos por protocolo** (21 no total), cada um com descrição e tarefas de treino: KNX (moradia, escritório, quarto de hotel), DALI (escritório, sala de aula, loja), Modbus RTU (escritórios, hotel, fábrica), Modbus TCP (escritórios, centro comercial, data center), BACnet (escritórios, hospital, escola), DMX512 (loja, auditório, fachada) e M-Bus (prédio, condomínio, residência de estudantes).
+- **Aviso de ficheiros desatualizados**: se a pasta `tecflow/` não for toda substituída no GitHub, a página mostra quais os ficheiros que ficaram antigos.
 - Mais 13 temas do dia, 9 avarias, 16 perguntas de treino, 7 fichas de bolso e 3 cenários novos no simulador do FDUL221 (E04, E10, E16).
 
 **Notas**

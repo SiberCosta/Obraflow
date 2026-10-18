@@ -24,6 +24,7 @@ const IC={
  led:'<circle cx="12" cy="10" r="5"/><path d="M10 15v5M14 15v5"/>',
  meter:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6v4H9z"/><circle cx="12" cy="16" r="2"/>',
  doc:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/>',
+ bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
  path:'<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h4a4 4 0 0 0 0-8H12a4 4 0 0 1 0-8h4"/>'};
 const ic=(k,c="")=>`<svg class="tfi ${c}" viewBox="0 0 24 24" aria-hidden="true">${IC[k]||""}</svg>`;
 const badge=s=>{const v=TF_SRC[s];return v?`<span class="tfsrc s-${s}" title="${esc(v[1])}">${esc(v[0])}</span>`:""};
@@ -76,12 +77,12 @@ function home(w){const t=dayTheme();const nh=LS.get("tf-themes",[]).length;const
   <div class="tfhoje2">${cont||`<a class="tfcont" href="#/percurso/ini"><span>🧭</span><div><small>Começar um percurso</small><b>Escolhe o teu nível</b></div><i>→</i></a>`}
    <a class="tfcont" href="#/treino?go=1"><span>🎯</span><div><small>Treino adaptativo</small><b>${wk.length?"Reforçar: "+wk.slice(0,2).map(k=>TF_TOPICS[k]).join(", "):"5 perguntas rápidas"}</b></div><i>→</i></a></div>
  </section>
- <section class="tfareas sm">${TF_AREAS.map(a=>`<a class="tfarea-c" href="#/${a.id}" style="--ac:${a.c}"><span class="tfai">${ic(a.ic)}</span><b>${esc(a.t)}</b><small>${a.subs.length} secções</small></a>`).join("")}</section>
+ <h2 class="tfh">Por onde aprender</h2><section class="tfareas sm">${TF_AREAS.map((a,k)=>{const sn=LS.get("tf-seen",{});const v=a.subs.filter(x=>sn[a.id+"/"+x[0]]).length;return`<a class="tfarea-c" href="#/${a.id}" style="--ac:${a.c}">${k<4?`<em class="tfnum">${k+1}</em>`:`<em class="tfnum ref">📚</em>`}<span class="tfai">${ic(a.ic)}</span><b>${esc(a.t)}</b><small>${v}/${a.subs.length} secções vistas</small><span class="tfbar2"><i style="width:${Math.round(v/a.subs.length*100)}%"></i></span></a>`}).join("")}</section>
  <nav class="tfmore">${[["#/bib/fichas","pdf","Fichas de bolso"],["#/sadi/fdul","fire","FDUL221"],["#/percurso/"+(lv||"ini"),"path","Percursos"],["#/bib/docs","doc","Os meus PDF"],["#/bib/glos","book","Glossário"]].map(x=>`<a href="${x[0]}">${ic(x[1])}<span>${x[2]}</span></a>`).join("")}<button type="button" id="hmField">${ic("field")}<span>Modo de terreno</span></button></nav>`;
  wireHomeCommon(w);$("hmField").onclick=()=>setField(true)}
 function wireHomeCommon(w){const f=w.querySelector("#hmQf");if(f)f.onsubmit=e=>{e.preventDefault();nav("#/pesq?q="+encodeURIComponent($("hmQ").value))};
  w.querySelectorAll("[data-qq]").forEach(b=>b.onclick=()=>nav("#/pesq?q="+encodeURIComponent(b.dataset.qq)))}
-function fieldHome(w){const T=[["#/diag/falhas","probe","Análise de falhas","Sintoma → verificações"],["#/sadi/fdul?m=3","fire","Códigos FDUL221","E01 a E17"],["#/diag/led","led","LEDs","O que significa cada luz"],["#/diag/med","meter","Medições","Valores esperados"],["#/diag/calc?sub=qt","probe","Queda de tensão","Calcular já"],["#/bib/fichas","pdf","Fichas de bolso","Resumos"],["#/bib/docs","doc","Os meus PDF","Manuais no aparelho"],["#/diag/rel","doc","Relatório","Registar a intervenção"],["#/ia","ask","Perguntar","Assistente técnico"]];
+function fieldHome(w){const T=[["#/diag/falhas","probe","Análise de falhas","Sintoma → verificações"],["#/sadi/fdul?m=3","fire","Códigos FDUL221","E01 a E17"],["#/diag/led","led","LEDs","O que significa cada luz"],["#/diag/med","meter","Medições","Valores esperados"],["#/diag/calc?sub=qt","probe","Queda de tensão","Calcular já"],["#/elet/seg","bolt","5 regras de ouro","Antes de trabalhar"],["#/bib/fichas","pdf","Fichas de bolso","Resumos"],["#/bib/docs","doc","Os meus PDF","Manuais no aparelho"],["#/diag/rel","doc","Relatório","Registar a intervenção"],["#/ia","ask","Perguntar","Assistente técnico"]];
  w.innerHTML=`<section class="tffield"><div class="tffh"><b>🦺 Modo de terreno</b><button class="tfbtn2" id="fdOff">Sair do modo de terreno</button></div>
   <form class="tfbig" id="hmQf"><span>${ic("search")}</span><input id="hmQ" placeholder="Código, equipamento, protocolo…" autocomplete="off" enterkeyhint="search"><button class="tfbtn2 pri">Ir</button></form>
   <div class="tftiles">${T.map(t=>`<a href="${t[0]}">${ic(t[1])}<b>${t[2]}</b><small>${t[3]}</small></a>`).join("")}</div>
@@ -95,13 +96,13 @@ function temaPage(w,id){const t=TF_THEMES.find(x=>x.id===id)||dayTheme();themeSe
  w.innerHTML=`${crumb([["#/","Início"],[null,"Tema"]])}<article class="tfcard tftema big"><header><span class="tfk">☀ Tema · ${esc(a?a.t:"")}</span>${badge(t.s)}<span class="tfchip">Nível ${t.lv}</span></header><h2>${esc(t.t)}</h2><p class="tflead">${esc(t.x)}</p>
  <div class="tfrow"><a class="tfbtn2 pri" href="${t.go}">Aprofundar na área →</a><a class="tfbtn2" href="#/treino?top=${topicOfArea(t.a)}&go=1">Treinar este tema</a></div></article>
  ${rel.length?`<h3 class="tfh">Temas relacionados</h3><div class="tflist">${rel.map(x=>`<a href="#/tema/${x.id}"><b>${esc(x.t)}</b>${badge(x.s)}</a>`).join("")}</div>`:""}`}
-const topicOfArea=a=>({auto:"modbus",sadi:"sadi",diag:"medir",bib:"rtiebt"})[a]||"sadi";
+const topicOfArea=a=>({auto:"modbus",sadi:"sadi",diag:"medir",bib:"rtiebt",elet:"elet"})[a]||"sadi";
 const crumb=l=>`<nav class="tfcrumb">${l.map(([h,t],i)=>h?`<a href="${h}">${esc(t)}</a>`:`<b>${esc(t)}</b>`).join("<span>›</span>")}</nav>`;
 
 /* ---------------- áreas ---------------- */
-function areaPage(w,aid,sub,q){const a=area(aid);if(!a.subs.find(s=>s[0]===sub))sub=a.subs[0][0];
- w.innerHTML=`<section class="tfahead" style="--ac:${a.c}"><span class="tfai">${ic(a.ic)}</span><div><h2>${esc(a.t)}</h2><p>${esc(a.d)}</p></div></section>
- <nav class="tfsubn" style="--ac:${a.c}">${a.subs.map(s=>`<a href="#/${aid}/${s[0]}" class="${s[0]===sub?"on":""}">${aid==="sadi"&&TF_KIND[s[0]]==="learn"?"🎓 ":aid==="sadi"&&TF_KIND[s[0]]==="real"?"🛡 ":""}${esc(s[1])}</a>`).join("")}</nav>
+function areaPage(w,aid,sub,q){const a=area(aid);if(!a.subs.find(s=>s[0]===sub))sub=a.subs[0][0];const seen=LS.get("tf-seen",{});seen[aid+"/"+sub]=1;LS.set("tf-seen",seen);const ai=TF_AREAS.indexOf(a);
+ w.innerHTML=`<section class="tfahead" style="--ac:${a.c}"><span class="tfai">${ic(a.ic)}</span><div><small class="tfstep">${ai<4?"Etapa "+(ai+1)+" de 4 · ":""}${a.subs.filter(x=>seen[aid+"/"+x[0]]).length}/${a.subs.length} secções vistas</small><h2>${esc(a.t)}</h2><p>${esc(a.d)}</p></div></section>
+ <nav class="tfsubn" style="--ac:${a.c}">${a.subs.map((s2,k)=>`<a href="#/${aid}/${s2[0]}" class="${s2[0]===sub?"on":""}${seen[aid+"/"+s2[0]]?" seen":""}"><i>${seen[aid+"/"+s2[0]]&&s2[0]!==sub?"✓":k+1}</i>${aid==="sadi"&&TF_KIND[s2[0]]==="learn"?"🎓 ":aid==="sadi"&&TF_KIND[s2[0]]==="real"?"🛡 ":""}${esc(s2[1])}</a>`).join("")}</nav>
  <div class="tfpanel" id="tfP"></div>`;
  const E=$("tfP");if(aid==="sadi")E.insertAdjacentHTML("beforebegin",kindBanner(TF_KIND[sub]));
  const P=(n,o)=>{const d=document.createElement("div");d.dataset.p=n;E.appendChild(d);if(!window.TEC||!TEC.panel(n,d,o))d.innerHTML=`<p class="muted">Conteúdo indisponível.</p>`};
@@ -109,7 +110,13 @@ function areaPage(w,aid,sub,q){const a=area(aid);if(!a.subs.find(s=>s[0]===sub))
  ({auto:{dados:()=>tabsPage(E),com:()=>comPage(E),prot:()=>P("auto",{sub:"tab"}),sel:()=>P("auto",{sub:"sel"}),topo:()=>P("auto",{sub:"topo"}),ip:()=>ipPage(E),gw:()=>gwPage(E),banc:()=>P("banc")},
   sadi:{det:()=>detPage(E),fa:()=>faPage(E),geral:()=>P("seg",{sub:"sadi"}),proto:()=>P("seg",{sub:"proto"}),lig:()=>P("seg",{sub:"lig"}),sie:()=>P("seg",{sub:"sie"}),sim:()=>P("seg",{sub:"sim"}),fdul:()=>fdulPage(E,+q.m||1),av:()=>faultList(E,["sadi","fdul"]),real:()=>realPage(E),reg:()=>regPage(E)},
   diag:{ferr:()=>toolsPage(E),falhas:()=>falhas(E,q.sys),led:()=>ledPage(E),med:()=>medPage(E),calc:()=>P("calc",{sub:q.sub||"qt"}),esq:()=>{P("esq",q.e?{sub:q.e}:{});simbolos(E)},rel:()=>relPage(E)},
-  bib:{glos:()=>glosPage(E,q.t),docs:()=>docsPage(E),fichas:()=>fichasPage(E,q.f),ref:()=>refPage(E),guia:()=>P("guia",q.g?{guia:q.g}:{}),fab:()=>fabPage(E),tab:()=>P("tab")}})[aid][sub]()}
+  elet:Object.fromEntries(area("elet").subs.map(x=>[x[0],()=>eletPage(E,x[0])])),
+  bib:{glos:()=>glosPage(E,q.t),docs:()=>docsPage(E),fichas:()=>fichasPage(E,q.f),ref:()=>refPage(E),guia:()=>P("guia",q.g?{guia:q.g}:{}),fab:()=>fabPage(E),tab:()=>P("tab")}})[aid][sub]();
+ /* seguir a ordem de aprendizagem: anterior / seguinte */
+ const si=a.subs.findIndex(x=>x[0]===sub);const na=TF_AREAS[ai+1];const pa=TF_AREAS[ai-1];
+ const prev=si>0?["#/"+aid+"/"+a.subs[si-1][0],a.subs[si-1][1],a.t]:pa?["#/"+pa.id+"/"+pa.subs[pa.subs.length-1][0],pa.subs[pa.subs.length-1][1],pa.t]:null;
+ const next=si<a.subs.length-1?["#/"+aid+"/"+a.subs[si+1][0],a.subs[si+1][1],a.t]:na?["#/"+na.id+"/"+na.subs[0][0],na.subs[0][1],na.t]:["#/treino?go=1","Treino adaptativo","Testar o que aprendeste"];
+ const f=document.createElement("nav");f.className="tfnext";f.innerHTML=`${prev?`<a href="${prev[0]}" class="pv"><small>← Anterior · ${esc(prev[2])}</small><b>${esc(prev[1])}</b></a>`:"<span></span>"}<a href="${next[0]}" class="nx"><small>Seguinte · ${esc(next[2])} →</small><b>${esc(next[1])}</b></a>`;w.appendChild(f)}
 
 
 /* ---------- v44: tabelas rápidas, comissionamento, detetores, alarmes falsos, ferramentas, glossário ---------- */
@@ -135,6 +142,23 @@ function glosPage(E,t){const L=TF_GLOS.slice().sort((a,b)=>a[0].localeCompare(b[
  <div class="tfglos">${L.map(g=>`<div data-l="${g[0][0].toUpperCase()}" id="gl_${norm(g[0]).replace(/[^a-z0-9]+/g,"-")}"><b>${esc(g[0])}</b><span>${esc(g[1])}</span></div>`).join("")}</div>`;
  const q=$("glQ");const f=()=>{const n=norm(q.value);E.querySelectorAll(".tfglos>div").forEach(d=>d.hidden=n&&!norm(d.textContent).includes(n))};q.oninput=f;f();
  E.querySelectorAll("[data-gl]").forEach(b=>b.onclick=()=>{q.value="";f();const d=E.querySelector(`.tfglos [data-l="${b.dataset.gl}"]`);if(d)d.scrollIntoView({block:"center",behavior:"smooth"})})}
+
+
+/* ---------- Eletricidade ---------- */
+function eletPage(E,sub){const L=TF_ELET[sub]||[];E.innerHTML=(sub==="seg"?`<div class="tfkind real"><b>🛡 Segurança</b><span>Trabalhos em instalações elétricas só por pessoas qualificadas e autorizadas, com os procedimentos da empresa e do operador da rede.</span></div>`:"")+
+ (sub==="fund"?ohmCalc():"")+(sub==="mot"?motCalc():"")+
+ L.map(x=>`<section class="tfcard"><h3>${esc(x.t)} ${badge(x.s)}</h3>${x.h}${x.ref?`<p class="mut">Fonte: ${refL(x.ref)}</p>`:""}</section>`).join("")+
+ (sub==="fund"?`<div class="tfrow"><a class="tfbtn2" href="#/diag/calc?sub=qt">Calcular queda de tensão →</a><a class="tfbtn2" href="#/diag/calc?sub=prot">Proteções / amperagem →</a><a class="tfbtn2" href="#/diag/calc?sub=pot">Potências E-REDES →</a></div>`:"")+
+ (sub==="ens"?`<div class="tfrow"><a class="tfbtn2" href="#/diag/med">Valores de medição →</a><a class="tfbtn2 pri" href="#/diag/rel">Fazer relatório →</a></div>`:"");
+ if(sub==="fund")wireOhm(E);if(sub==="mot")wireMot(E)}
+const nfmt=(v,d=2)=>isFinite(v)?(+v).toLocaleString("pt-PT",{maximumFractionDigits:d}):"—";
+function ohmCalc(){return`<section class="tfcard"><h3>Calculadora: tensão, corrente, potência</h3><div class="tfform"><label>Sistema<select id="ohS"><option value="dc">Contínua / resistiva</option><option value="mono" selected>Monofásico 230 V</option><option value="tri">Trifásico 400 V</option></select></label><label>Tensão U (V)<input id="ohU" inputmode="decimal" value="230"></label><label>Corrente I (A)<input id="ohI" inputmode="decimal" value="10"></label><label>cos φ<input id="ohC" inputmode="decimal" value="1"></label></div><div id="ohR" class="tfres"></div><p class="mut">Muda o sistema para ajustar a tensão; podes escrever qualquer valor.</p></section>`}
+function wireOhm(E){const g=id=>parseFloat(String($(id).value).replace(",","."));const run=()=>{const sy=$("ohS").value,U=g("ohU"),I=g("ohI"),c=sy==="dc"?1:Math.min(1,Math.max(0,g("ohC")));const k=sy==="tri"?Math.sqrt(3):1;const S=k*U*I,P=S*c,Q=S*Math.sqrt(Math.max(0,1-c*c));
+ $("ohR").innerHTML=`<div class="tfkv"><span>Potência ativa P</span><b>${nfmt(P/1000,3)} kW</b><span>Potência aparente S</span><b>${nfmt(S/1000,3)} kVA</b><span>Potência reativa Q</span><b>${nfmt(Q/1000,3)} kvar</b>${sy!=="tri"?`<span>Resistência equivalente</span><b>${nfmt(U/I*c,2)} Ω</b>`:""}<span>Energia em 1 h</span><b>${nfmt(P/1000,3)} kWh</b></div>`};
+ $("ohS").onchange=()=>{const sy=$("ohS").value;$("ohU").value=sy==="tri"?400:sy==="mono"?230:$("ohU").value;$("ohC").disabled=sy==="dc";run()};["ohU","ohI","ohC"].forEach(i=>$(i).addEventListener("input",run));run()}
+function motCalc(){return`<section class="tfcard"><h3>Calculadora: corrente de um motor trifásico</h3><div class="tfform"><label>Potência útil (kW)<input id="moP" inputmode="decimal" value="7,5"></label><label>Tensão (V)<input id="moU" inputmode="decimal" value="400"></label><label>cos φ<input id="moC" inputmode="decimal" value="0,85"></label><label>Rendimento η<input id="moN" inputmode="decimal" value="0,9"></label></div><div id="moR" class="tfres"></div><p class="mut">Usa sempre a corrente da chapa do motor quando a tens.</p></section>`}
+function wireMot(E){const g=id=>parseFloat(String($(id).value).replace(",","."));const run=()=>{const P=g("moP")*1000,U=g("moU"),c=g("moC"),n=g("moN");const I=P/(Math.sqrt(3)*U*c*n);
+ $("moR").innerHTML=`<div class="tfkv"><span>Corrente nominal</span><b>${nfmt(I,1)} A</b><span>Arranque direto</span><b>≈ ${nfmt(I*5,0)} a ${nfmt(I*8,0)} A</b><span>Arranque estrela-triângulo</span><b>≈ ${nfmt(I*5/3,0)} a ${nfmt(I*8/3,0)} A</b><span>Relé térmico</span><b>regular a ≈ ${nfmt(I,1)} A (valor da chapa)</b></div>`};["moP","moU","moC","moN"].forEach(i=>$(i).addEventListener("input",run));run()}
 
 /* ---------- automação: IP e gateways ---------- */
 function ipPage(E){E.innerHTML=`<div class="tfkind ref"><b>📘 Comunicação IP</b><span>O essencial para pôr controladores, gateways e GTC a falar na mesma rede.</span></div>
@@ -454,6 +478,7 @@ function buildIdx(){const L=[];const add=(type,t,k,to,s)=>L.push({type,t,k:norm(
  TF_MANUF.forEach(m=>{add("Fabricante",m.n,m.p+" "+m.sys.join(" ")+" "+(m.eq||[]).join(" "),"#/bib/fab");(m.eq||[]).forEach(e=>add("Equipamento",e+" ("+m.n+")",m.p,e==="FDUL221"?"#/sadi/fdul":"#/sadi/sie","of"))});
  TF_THEMES.forEach(t=>add("Tema",t.t,t.x,"#/tema/"+t.id,t.s));
  TF_PORTS.forEach(p=>add("Protocolo",p[0]+" — "+p[1],"porta","#/auto/ip","nr"));
+ if(typeof TF_ELET!=="undefined")Object.entries(TF_ELET).forEach(([k,L])=>L.forEach(x=>add("Eletricidade",x.t,x.h.replace(/<[^>]+>/g," "),"#/elet/"+k,x.s)));
  if(typeof TF_TAB!=="undefined"){Object.entries(TF_TAB).forEach(([k,x])=>{add("Tabela",x.t,x.r.map(r=>r.join(" ")).join(" ")+" "+(x.n||""),"#/auto/dados",x.s);x.r.forEach(r=>add("Tabela",x.t.split(" — ")[0]+": "+r[0]+" — "+r[1],r.slice(2).join(" "),"#/auto/dados",x.s))});
   TF_GLOS.forEach(g=>add("Glossário",g[0],g[1],"#/bib/glos?t="+encodeURIComponent(g[0]),"dd"));TF_DET.forEach(d=>add("Equipamento",d.t+" ("+d.n+")",d.uso+" "+d.ev,"#/sadi/det",d.s));
   TF_TOOLS.forEach(t=>add("Ferramenta",t.t,t.p,"#/diag/ferr",t.s));TF_COM.forEach(c=>add("Comissionamento",c.t,c.p.join(" "),"#/auto/com",c.s));TF_FA.forEach(f=>add("Alarme falso",f.c,f.p.join(" "),"#/sadi/fa",f.s))}
@@ -510,12 +535,17 @@ function iaPage(w,q){w.innerHTML=`${crumb([["#/","Início"],[null,"Assistente"]]
  if(!window.TEC||!TEC.panel("ia",$("iaB"),q.q?{q:q.q}:{}))$("iaB").innerHTML=`<p class="muted">Assistente indisponível.</p>`}
 
 /* ---------------- arranque ---------------- */
-function boot(){S.field=!!LS.get("tf-field",false);document.body.classList.toggle("field",S.field);hookTec();
+function buildNav(){const n=document.querySelector(".tfnav");if(!n)return;n.innerHTML=`<a href="#/" data-r="">Início</a>${TF_AREAS.map((a,k)=>`<a href="#/${a.id}" data-r="${a.id}">${k<4?`<i>${k+1}</i>`:""}${esc(a.t.replace(" e segurança contra incêndio"," e incêndio"))}</a>`).join("")}<a href="#/treino" data-r="treino">Treino</a><a href="#/ia" data-r="ia">Assistente</a>`}
+function boot(){buildNav();S.field=!!LS.get("tf-field",false);document.body.classList.toggle("field",S.field);hookTec();
  const fb=$("tfFieldB");if(fb){fb.setAttribute("aria-pressed",S.field);fb.onclick=()=>setField(!S.field)}
  const hq=$("tfQf");if(hq)hq.onsubmit=e=>{e.preventDefault();const v=$("tfQ").value;nav("#/pesq?q="+encodeURIComponent(v));$("tfQ").blur()};
  /* links antigos (?tab=…, ?q=…) */
  const P=new URLSearchParams(location.search);if(!location.hash){const t=P.get("tab"),qq=P.get("q");if(qq)location.replace("#/ia?q="+encodeURIComponent(qq));else if(t==="calc")location.replace("#/diag/calc");else if(t==="cons")location.replace("#/bib/guia");else if(t==="ia")location.replace("#/ia")}
- render()}
+ render();setTimeout(checkVer,300)}
+/* aviso se algum ficheiro no servidor for de outra versão (ex.: tecnico.js não foi substituído no GitHub) */
+function checkVer(){const v=window.TF_VER;const m=[];if(!window.TEC)m.push("tecnico.js (em falta)");else if(TEC.build!==v)m.push("tecnico.js (versão "+(TEC.build||"antiga")+")");if(window.TF_DATA2_VER!==v)m.push("tfdata2.js");if(window.TF_DATA3_VER!==v)m.push("tfdata3.js");if(window.TF_APP_VER!==v)m.push("tfapp.js");
+ if(!m.length)return;const d=document.createElement("div");d.className="tfkind real";d.style.margin="10px 16px 0";d.innerHTML=`<b>⚠ Ficheiros desatualizados no servidor</b><span>A página é da versão ${esc(v)}, mas estes ficheiros não: <b>${esc(m.join(", "))}</b>. Volta a carregar a pasta <b>tecflow/</b> completa para o GitHub e recarrega a página.</span>`;const a=$("tfAviso");(a&&a.parentNode?a.parentNode:document.body).insertBefore(d,a?a.nextSibling:document.body.firstChild)}
+window.TF_APP_VER="46";
 window.TF={render,search,nav,stat};
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();

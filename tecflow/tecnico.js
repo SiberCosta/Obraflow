@@ -724,71 +724,165 @@ const NICO={ps:'<path d="M13 2 5 13h6l-1 9 8-11h-6z"/>',btn:'<rect x="5" y="5" w
  meter:'<circle cx="12" cy="13" r="8"/><path d="m12 13 3-4M8 5l1 2M16 5l-1 2"/>',net:'<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M7 12h0M11 12h0M15 12h0"/>',gw:'<path d="M4 12h16M14 6l6 6-6 6M10 6 4 12l6 6"/>',
  proj:'<path d="M4 9h10l6-4v14l-6-4H4z"/>',hvac:'<circle cx="12" cy="12" r="8"/><path d="M12 4c2 3 2 5 0 8s-2 5 0 8M4 12c3-2 5-2 8 0s5 2 8 0"/>'};
 const ntype=l=>/fonte/i.test(l)?"ps":/bot[aã]o/i.test(l)?"btn":/atuador/i.test(l)?"act":/visor/i.test(l)?"disp":/lumin/i.test(l)?"lum":/analisador|contador|água|térmico|agua/i.test(l)?"meter":/switch|router/i.test(l)?"net":/gateway/i.test(l)?"gw":/projetor/i.test(l)?"proj":/uta|chiller|quadro/i.test(l)?"hvac":"ctl";
-/* ---------- apresentação dos simuladores (v44): equipamentos desenhados, cabo do bus, consola e monitor ---------- */
-const BUSST={"KNX TP":{c1:"#dc2626",c2:"#1f2937",lab:"KNX TP · par 2×0,8 mm · 30 V DC (SELV)"},"DALI / DALI-2":{c1:"#c4b5fd",c2:"#8b5cf6",lab:"DALI · 2 fios sem polaridade · ≈16 V"},"Modbus RTU":{c1:"#facc15",c2:"#22c55e",lab:"RS-485 · A / B · 9600 bit/s 8N1"},
- "Modbus TCP":{c1:"#38bdf8",c2:"#0284c7",lab:"Ethernet · TCP 502 → gateway → RS-485"},"BACnet MS/TP · BACnet/IP":{c1:"#38bdf8",c2:"#f59e0b",lab:"BACnet/IP (UDP 47808) ↔ router ↔ MS/TP"},"DMX512":{c1:"#f472b6",c2:"#be185d",lab:"DMX512 · RS-485 · 512 canais"},"M-Bus":{c1:"#cbd5e1",c2:"#64748b",lab:"M-Bus · 2 fios · alimentado pelo mestre"}};
+/* ---------- apresentação dos simuladores (v45): baseada no simulador DALI interativo (cartões, barramento, consola, monitor, avarias) ---------- */
+NICO.pc='<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 8h6M7 11h9"/>';
+const BUSST={"KNX TP":{c:"#22c55e",c2:"#dc2626",lab:"Barramento KNX TP · par 2×0,8 mm · 30 V DC (SELV)",v:"30 V",off:["ps"],sc:[]},
+ "DALI / DALI-2":{c:"#f59e0b",c2:"#fbbf24",lab:"Barramento DALI DA+/DA− · sem polaridade · máx. 250 mA",v:"16 V",off:["nops"],sc:["sc"]},
+ "Modbus RTU":{c:"#facc15",c2:"#22c55e",lab:"RS-485 · A / B · 9600 bit/s 8N1 · terminação 120 Ω nas pontas",v:"RS-485",off:[],sc:["ab"],scTxt:"A/B trocados"},
+ "Modbus TCP":{c:"#38bdf8",c2:"#0284c7",lab:"Ethernet · Modbus TCP porta 502 → gateway → RS-485",v:"LAN",off:[],sc:[]},
+ "BACnet MS/TP · BACnet/IP":{c:"#38bdf8",c2:"#f59e0b",lab:"BACnet/IP (UDP 47808) ↔ router/BBMD ↔ MS/TP (RS-485)",v:"IP",off:[],sc:[]},
+ "DMX512":{c:"#f472b6",c2:"#be185d",lab:"DMX512 · RS-485 · 512 canais · terminação 120 Ω no fim",v:"DMX",off:[],sc:[]},
+ "M-Bus":{c:"#94a3b8",c2:"#64748b",lab:"M-Bus · 2 fios · alimentado pelo mestre",v:"M-Bus",off:["pow"],offTxt:"Tensão baixa",sc:[]}};
 const ntype2=l=>/gtc|scada|mestre \(/i.test(l)?"pc":/controlador/i.test(l)?"ctl":ntype(l);
+const SIMFN={"KNX TP":{pol:["B1"],ps:["PS"],dup:["B2"]},"DALI / DALI-2":{drv:["L4"],vd:["L3","L4"],nops:["CT"],sc:["CT"]},"Modbus RTU":{baud:["S3"],dup:["S2","S4"],ab:["M"],term:["S4"]},
+ "Modbus TCP":{ip:["C"],fw:["SW"],uid:["GW"]},"BACnet MS/TP · BACnet/IP":{dup:["D3"],bbmd:["R"]},"DMX512":{ovl:["F2"],term:["F4"]},"M-Bus":{pow:["M"],dup:["A2","T3"]}};
 const SIMVIS={
- "KNX TP":s=>({AT:{ch:[s.l1,s.l2],chl:["S1","S2"]},VS:{txt:["Sala 1 "+(s.l1?"ON":"OFF"),"Sala 2 "+(s.l2?"ON":"OFF")]},PS:{on:1}}),
- "DALI / DALI-2":s=>{const o={CT:{txt:["DALI","16 V"]}};s.lv.forEach((v,i)=>o["L"+i]={lv:v/100,txt:[v+"%"]});return o},
- "DMX512":s=>{const o={CT:{txt:["DMX","512 ch"]}};s.c.forEach((c,i)=>o["F"+(i+1)]={rgb:c});return o},
- "M-Bus":s=>{const o={M:{txt:["M-Bus","2400 bd"]}};["A1","A2","T3","T4"].forEach(k=>o[k]={txt:[s.r[k]||"— — —"]});return o}};
-function devSvg(t){
- const din=(w)=>`<rect x="${-w/2}" y="26" width="${w}" height="86" rx="5" class="dv-b"/><rect x="${-w/2}" y="26" width="${w}" height="13" rx="5" class="dv-t"/><rect x="${-w/2}" y="104" width="${w}" height="8" class="dv-rail"/>${[...Array(Math.max(2,Math.round(w/16)))].map((_,k,a)=>`<rect x="${-w/2+6+k*((w-12)/a.length)}" y="96" width="7" height="6" rx="1" class="dv-term"/>`).join("")}`;
- return({
- ps:din(60)+`<circle cx="18" cy="50" r="4" class="dv-led on"/><text x="0" y="66" class="dv-k">PSU</text><path d="M-3 70l-7 12h6l-2 9 9-13h-6l3-8z" class="dv-bolt"/>`,
- btn:`<rect x="-34" y="30" width="68" height="70" rx="11" class="dv-plate"/><rect x="-24" y="40" width="48" height="50" rx="7" class="dv-rock"/><line x1="-24" y1="65" x2="24" y2="65" class="dv-sep"/><circle cx="-14" cy="52" r="2.2" class="dv-dot"/><circle cx="-14" cy="78" r="2.2" class="dv-dot"/>`,
- act:din(80)+`<g data-ch></g><text x="0" y="88" class="dv-k">ATUADOR</text>`,
- disp:`<rect x="-40" y="28" width="80" height="66" rx="9" class="dv-plate"/><rect x="-33" y="35" width="66" height="44" rx="4" class="dv-scr"/><text x="0" y="53" class="dv-scrt" data-t0></text><text x="0" y="68" class="dv-scrt" data-t1></text><circle cx="0" cy="86" r="2.5" class="dv-dot"/>`,
- lum:`<ellipse cx="0" cy="84" rx="44" ry="30" class="dv-glow"/><rect x="-6" y="22" width="12" height="10" class="dv-rod"/><path d="M-30 32h60l-10 22h-40z" class="dv-shade"/><ellipse cx="0" cy="56" rx="20" ry="5" class="dv-diff"/><text x="0" y="100" class="dv-lvl" data-t0></text>`,
- meter:`<rect x="-32" y="26" width="64" height="86" rx="9" class="dv-plate"/><rect x="-25" y="36" width="50" height="22" rx="3" class="dv-lcd"/><text x="0" y="51" class="dv-lcdt" data-t0></text><circle cx="0" cy="84" r="13" class="dv-dial"/><path d="M0 84l6-8" class="dv-needle"/>`,
- pc:`<rect x="-42" y="26" width="84" height="58" rx="6" class="dv-mon"/><rect x="-36" y="32" width="72" height="44" rx="2" class="dv-scr"/><path d="M-30 44h26M-30 52h40M-30 60h18M-30 68h32" class="dv-lines"/><path d="M-10 84h20l5 16h-30z" class="dv-stand"/><rect x="-24" y="100" width="48" height="5" rx="2" class="dv-stand"/>`,
- net:`<rect x="-44" y="48" width="88" height="34" rx="6" class="dv-b"/>${[...Array(6)].map((_,k)=>`<rect x="${-36+k*12.5}" y="62" width="9" height="9" rx="1.5" class="dv-port"/><circle cx="${-31.5+k*12.5}" cy="56" r="1.6" class="dv-led on"/>`).join("")}`,
- gw:`<rect x="-36" y="32" width="72" height="72" rx="9" class="dv-b"/><path d="M-20 58h40M12 50l8 8-8 8M20 78h-40M-12 70l-8 8 8 8" class="dv-arw"/>`,
- proj:`<path d="M24 38 L46 20 L46 92 L24 70z" class="dv-beam"/><rect x="-30" y="36" width="54" height="36" rx="7" class="dv-b"/><circle cx="20" cy="54" r="11" class="dv-lens"/><path d="M-10 72v14M-22 88h24" class="dv-stand2"/>`,
- hvac:`<rect x="-40" y="30" width="80" height="72" rx="8" class="dv-b"/><circle cx="-10" cy="66" r="22" class="dv-fan"/><path d="M-10 66l0-18M-10 66l16 8M-10 66l-15 9" class="dv-blade"/><rect x="18" y="44" width="14" height="44" rx="3" class="dv-grill"/>`,
- ctl:din(76)+`<rect x="-28" y="46" width="56" height="24" rx="3" class="dv-lcd"/><text x="0" y="57" class="dv-lcdt s" data-t0></text><text x="0" y="66" class="dv-lcdt s" data-t1></text>`})[t]||din(70)}
-function wrap2(a,n){const w=a.split(" ");const L=[""];w.forEach(x=>{const c=L[L.length-1];if((c+" "+x).trim().length>n&&c)L.push(x);else L[L.length-1]=(c+" "+x).trim()});return L.slice(0,2).map((l,i,ar)=>i===1&&L.length>2?l+"…":l)}
-function simHtml(p){const S=SIMS[p.n];if(!S)return"";const n=S.nodes.length;const W=780,H=232,B=BUSST[p.n]||{c1:"#e8a317",c2:"#475569",lab:p.n};const sp=(W-150)/(n-1);
- return`<div class="sim sim2" data-sim="${esc(p.n)}">
- <div class="simwrap"><svg class="simbus" viewBox="0 0 ${W} ${H}" role="img" aria-label="Simulador ${esc(p.n)}">
-  <defs><radialGradient id="glw_${esc(p.n).replace(/\W/g,"")}" cx="50%" cy="30%" r="70%"><stop offset="0" stop-color="#fde68a" stop-opacity=".95"/><stop offset=".55" stop-color="#fbbf24" stop-opacity=".35"/><stop offset="1" stop-color="#fbbf24" stop-opacity="0"/></radialGradient></defs>
-  <text x="18" y="${H-8}" class="sb-lab">${esc(B.lab)}</text>
-  <path d="M30 196H${W-30}" class="sb-cab" style="stroke:${B.c1}"/><path d="M30 203H${W-30}" class="sb-cab" style="stroke:${B.c2}"/><circle cx="30" cy="199.5" r="6" class="sb-end"/><circle cx="${W-30}" cy="199.5" r="6" class="sb-end"/>
-  ${S.nodes.map((nd,i)=>{const x=75+i*sp;const [a,b]=nd[1].split(" · ");const L=wrap2(a,15);const t=ntype2(nd[1]);
-   return`<g class="sb-n dv-${t}" data-n="${nd[0]}" transform="translate(${x},0)"><path d="M-4 ${b?162:150}V196" class="sb-drop" style="stroke:${B.c1}"/><path d="M4 ${b?162:150}V203" class="sb-drop" style="stroke:${B.c2}"/><circle cx="-4" cy="196" r="2.6" style="fill:${B.c1}"/><circle cx="4" cy="203" r="2.6" style="fill:${B.c2}"/>
-    ${t==="lum"?`<ellipse cx="0" cy="84" rx="44" ry="30" class="dv-glow" fill="url(#glw_${esc(p.n).replace(/\W/g,"")})"/>`:""}${devSvg(t).replace(/<ellipse cx="0" cy="84" rx="44" ry="30" class="dv-glow"\/>/,"")}
-    <circle cx="34" cy="30" r="4.5" class="sb-led"/>
-    ${L.map((l,k)=>`<text x="0" y="${128+k*13}" class="sb-tx">${esc(l)}</text>`).join("")}${b?`<g transform="translate(0,${128+L.length*13+2})"><rect x="${-Math.max(22,b.length*3.4)}" y="-9" width="${Math.max(44,b.length*6.8)}" height="15" rx="7.5" class="sb-chip"/><text x="0" y="2" class="sb-chipt">${esc(b)}</text></g>`:""}</g>`}).join("")}
-  <g class="sb-pk" transform="translate(-80,0)"><rect x="-40" y="170" width="80" height="17" rx="8.5" class="sb-pkb"/><text x="0" y="182" class="sb-pkl"></text><circle r="7" cx="0" cy="199.5" class="sb-pkd"/></g></svg></div><p class="simhint">↔ Desliza para ver todos os equipamentos</p>
+ "KNX TP":s=>({AT:{st:`S1 ${s.l1?"ON":"OFF"} · S2 ${s.l2?"ON":"OFF"}`,on:s.l1||s.l2},VS:{st:`Sala 1 ${s.l1?"ON":"OFF"} · Sala 2 ${s.l2?"ON":"OFF"}`},B1:{st:"Grupo 1/0/1",on:s.l1},B2:{st:"Grupo 1/0/2",on:s.l2}}),
+ "DALI / DALI-2":s=>{const o={};s.lv.forEach((v,i)=>o["L"+i]={lv:v/100,st:`Nível: <b>${v}%</b>`});return o},
+ "DMX512":s=>{const o={};s.c.forEach((c,i)=>o["F"+(i+1)]={rgb:c,st:`RGB <b>${c.join("/")}</b>`});return o},
+ "M-Bus":s=>{const o={};["A1","A2","T3","T4"].forEach(k=>o[k]={st:s.r[k]?`<b>${s.r[k]}</b>`:"— — —",on:!!s.r[k]});return o}};
+/* DALI: destino individual, curto-circuito e atalhos de nível (como no simulador de referência) */
+(()=>{const D=SIMS["DALI / DALI-2"];if(!D||D._v45)return;D._v45=1;D.faults=[["sc","Curto-circuito no bus"],...D.faults];
+ D.ctl=s=>`<label class="simf">Destino (endereço / grupo)<select data-k="g"><option value="0">Todos (broadcast)</option><option value="1">Grupo 1 (G1: L0, L1)</option><option value="2">Grupo 2 (G2: L2, L3, L4)</option>${[0,1,2,3,4].map(i=>`<option value="a${i}">Luminária ${i} (endereço ${i})</option>`).join("")}</select></label><label class="simf">Nível (arc power) <b data-v>60%</b><input type="range" min="0" max="100" step="5" value="60" data-k="lv"></label><button class="btn sm primary" data-a="go">Enviar telegrama</button><button class="btn sm" data-a="q">Perguntar avarias</button>`;
+ const act0=D.act;D.act=async(a,s,F,ui,c)=>{if(F.sc){ui.log("✗ Curto-circuito no bus DALI: tensão 0 V e corrente máxima — telegrama abortado. Procurar o curto (desligar troços).","err");ui.flash("CT","bad");return}
+  const g=String(c.g||"0");if(!g.startsWith("a"))return act0(a,s,F,ui,c);const i=+g.slice(1);
+  if(F.nops)return act0(a,s,F,ui,c);
+  if(a==="q"){await ui.send("CT","L"+i,`QUERY STATUS → endereço ${i}`);if(F.drv&&i===4){await ui.send("L4","CT","Resposta: falha de lâmpada/driver");ui.flash("L4","bad")}else{await ui.send("L"+i,"CT",`Resposta: OK · nível ${s.lv[i]}%`);ui.flash("L"+i,"ok")}return}
+  const lv=+c.lv;await ui.send("CT","L"+i,`DAPC endereço ${i} → ${lv}%`,{short:`A${i} ${lv}%`,title:"Comando DALI (forward frame 16 bits)",f:[["Endereço",`${(i<<1).toString(16).toUpperCase().padStart(2,"0")} (curto ${i})`,"#e8a317"],["Nível (arc power)",String(Math.round(lv/100*254))+" de 254","#0891b2"],["Percentagem",lv+"%","#16a34a"]]});
+  if(F.vd&&i>=3){ui.log(`✗ L${i} não recebeu (tensão < 9,5 V no fim da linha). Aumentar secção/encurtar.`,"err");ui.flash("L"+i,"bad");return}if(F.drv&&i===4){ui.flash("L4","bad");return}s.lv[i]=lv;ui.flash("L"+i,"ok");ui.out()}})();
+/* ---------- vista «Planta»: o mesmo sistema numa casa ou num escritório ---------- */
+/* planta base 800×420: 3 divisões em cima, corredor ao meio (onde passa o cabo), 3 divisões em baixo */
+const PL_R=[[20,20,260,160],[280,20,260,160],[540,20,240,160],[20,240,260,160],[280,240,260,160],[540,240,240,160]];
+const SIMPLAN={
+ "KNX TP":{tipo:"Casa (moradia T2)",rooms:["Sala 1 · estar","Sala 2 · jantar","Cozinha","Quarto","Hall","Quadro elétrico"],
+  pos:{PS:[600,330],B1:[80,150],B2:[340,150],AT:[720,330],VS:[410,300]},glow:s=>[{x:150,y:95,lv:s.l1?1:0},{x:410,y:95,lv:s.l2?1:0}]},
+ "DALI / DALI-2":{tipo:"Escritório",rooms:["Sala de reuniões (G1)","Open space (G2)","Gabinete","Receção","Copa","Quadro elétrico"],
+  pos:{CT:[700,330],L0:[100,90],L1:[200,90],L2:[340,90],L3:[430,90],L4:[500,140]},glow:s=>s.lv.map((v,i)=>({x:[100,200,340,430,500][i],y:[90,90,90,90,140][i],lv:v/100,r:64}))},
+ "Modbus RTU":{tipo:"Edifício de escritórios — quadros elétricos",rooms:["Piso 0 · QE-P0","Piso 1 · QE-P1","Sala técnica","Piso 2 · QE-P2","Piso 3 · QE-P3","Arrumos"],
+  pos:{M:[660,90],S1:[150,90],S2:[410,90],S3:[150,330],S4:[410,330]}},
+ "Modbus TCP":{tipo:"Edifício de escritórios — rede técnica",rooms:["Sala de controlo","Bastidor de rede","Quadro geral","Gabinete","Corredor técnico","QE-P1"],
+  pos:{C:[150,90],SW:[410,90],GW:[660,90],S1:[660,330],S2:[410,330]}},
+ "BACnet MS/TP · BACnet/IP":{tipo:"Edifício de escritórios — AVAC",rooms:["Sala da GTC","Bastidor (router/BBMD)","Cobertura · UTA","Central térmica · chiller","Quadro AVAC","Escritórios"],
+  pos:{G:[150,90],R:[410,90],D1:[660,90],D2:[150,330],D3:[410,330]}},
+ "DMX512":{tipo:"Loja / showroom",rooms:["Montra","Palco de demonstração","Régie (controlador)","Provadores","Armazém","Caixa"],
+  pos:{CT:[660,100],F1:[340,100],F2:[460,100],F3:[90,100],F4:[200,100]},glow:s=>s.c.map((c,i)=>({x:[340,460,90,200][i],y:[140,140,140,140][i],lv:c.some(Boolean)?.9:0,col:`rgb(${c.join(",")})`,r:58}))},
+ "M-Bus":{tipo:"Prédio de habitação — contagem",rooms:["Fração A · água","Fração B · água","Fração C · térmica","Fração D · térmica","Hall de entrada","Sala técnica (mestre)"],
+  pos:{M:[660,330],A1:[150,90],A2:[410,90],T3:[660,90],T4:[150,330]}}};
+/* vários exemplos por protocolo (o primeiro é o da SIMPLAN) */
+const PKG=(a,b)=>s=>[{x:a[0],y:a[1],lv:s.l1?1:0},{x:b[0],y:b[1],lv:s.l2?1:0}];
+const PLG=(P)=>s=>s.lv.map((v,i)=>({x:P["L"+i][0],y:P["L"+i][1],lv:v/100,r:64}));
+const PDG=(P)=>s=>s.c.map((c,i)=>{const q=P["F"+(i+1)];return{x:q[0],y:q[1]+(q[1]<210?40:-40),lv:c.some(Boolean)?.9:0,col:`rgb(${c.join(",")})`,r:58}});
+const SIMPLANS={
+ "KNX TP":[{...SIMPLAN["KNX TP"],txt:"Moradia: um botão em cada sala comanda a luz dessa sala através do atuador no quadro; o visor no hall mostra o estado.",tasks:["Acende a sala 1 e a sala 2 e confirma no visor.","Ativa «Fonte KNX desligada» e tenta acender: o que mede o técnico no bus?","Ativa «Polaridade trocada» e vê que só o botão 1.1.3 deixa de funcionar."]},
+  {tipo:"Escritório",rooms:["Gabinete da direção","Sala de reuniões","Open space","Receção","Arquivo","Quadro elétrico"],nm:{B1:"Botão gabinete",B2:"Botão reuniões",VS:"Painel da receção"},
+   pos:{PS:[600,330],B1:[80,150],B2:[340,150],AT:[720,330],VS:[150,300]},glow:PKG([150,90],[410,90]),txt:"Escritório: o atuador no quadro comanda a luz do gabinete e da sala de reuniões; a receção vê o estado no painel.",tasks:["Liga a luz da sala de reuniões a partir do botão.","Usa «Ler estado» no painel da receção.","Simula o endereço 1.1.4 duplicado e lê o monitor."]},
+  {tipo:"Quarto de hotel",rooms:["Quarto 101","Casa de banho 101","Quarto 102","Corredor (quadro de piso)","Copa de piso","Quadro do piso"],nm:{B1:"Botão entrada 101",B2:"Botão cabeceira 102",VS:"Painel da receção"},
+   pos:{PS:[600,330],B1:[60,150],B2:[600,150],AT:[720,330],VS:[150,300]},glow:PKG([150,90],[660,90]),txt:"Hotel: cada quarto tem botões ligados ao mesmo bus; a receção supervisiona as luzes dos quartos.",tasks:["Acende os dois quartos e confirma no painel da receção.","Desliga a fonte KNX: todos os quartos ficam sem comando.","Que endereços físicos têm os botões?"]}],
+ "DALI / DALI-2":[{...SIMPLAN["DALI / DALI-2"],txt:"Escritório: G1 ilumina a mesa da sala de reuniões, G2 o open space; o controlador está no quadro.",tasks:["Cena «Apresentação»: G1 a 30 %, G2 a 0 %.","Cena «Reunião»: G1 a 100 %, G2 a 80 %.","Ativa «Driver da luminária 4 avariado» e usa «Perguntar avarias»."]},
+  {tipo:"Escola — sala de aula",rooms:["Sala de aula (G1 quadro · G2 janelas)","Sala de aula (cont.)","Arrecadação","Corredor","Sala de professores","Quadro elétrico"],
+   pos:{CT:[700,330],L0:[90,100],L1:[200,100],L2:[340,130],L3:[430,130],L4:[500,130]},txt:"Sala de aula: G1 sobre o quadro, G2 junto às janelas (pode baixar com luz natural).",tasks:["G2 a 25 % (dia de sol) e G1 a 100 %.","Envia para a luminária 3 só (endereço 3).","Simula «Queda de tensão > 2 V» e vê que as luminárias do fim da linha falham."]},
+  {tipo:"Loja",rooms:["Montra (G1)","Área de venda (G2)","Provadores","Entrada","Caixa","Quadro elétrico"],
+   pos:{CT:[700,330],L0:[100,110],L1:[200,110],L2:[340,90],L3:[430,90],L4:[500,90]},txt:"Loja: G1 destaca a montra, G2 a área de venda; à noite só a montra fica acesa.",tasks:["Fecho da loja: G1 a 60 %, G2 a 0 %.","Abertura: todos a 100 % (broadcast).","Simula «Sem fonte do bus DALI»: o que vê o técnico?"]}],
+ "Modbus RTU":[{...SIMPLAN["Modbus RTU"],txt:"Edifício de escritórios: a GTC lê a energia dos quadros de cada piso pelo RS-485.",tasks:["Lê a tensão dos 4 analisadores.","Ativa «Sem terminação» e repete leituras: aparecem erros de CRC.","Ativa «A/B trocados»: nenhum responde."]},
+  {tipo:"Hotel — contagem de energia",rooms:["Ala norte · QE-AN","Ala sul · QE-AS","Sala técnica (GTC)","Cozinha · QE-COZ","Lavandaria · QE-LAV","Garagem"],nm:{S1:"Analisador ala norte",S2:"Analisador ala sul",S3:"Analisador cozinha",S4:"Analisador lavandaria"},
+   pos:{M:[660,90],S1:[150,90],S2:[410,90],S3:[150,330],S4:[410,330]},txt:"Hotel: cada ala e serviço tem um analisador; a GTC compara consumos.",tasks:["Lê a energia (kWh) da cozinha.","«Analisador 3 com outra velocidade»: qual deixa de responder?","«Endereço duplicado 2 e 4»: o que aparece no monitor?"]},
+  {tipo:"Fábrica — quadros de máquinas",rooms:["Linha 1 · QM1","Linha 2 · QM2","Posto de comando (GTC)","Compressores · QM3","Armazém · QM4","Escritório da fábrica"],nm:{M:"Mestre (SCADA)",S1:"Analisador linha 1",S2:"Analisador linha 2",S3:"Analisador compressores",S4:"Analisador armazém"},
+   pos:{M:[660,90],S1:[150,90],S2:[410,90],S3:[150,330],S4:[410,330]},txt:"Fábrica: o SCADA lê corrente e energia de cada máquina; o cabo RS-485 percorre a nave em linha.",tasks:["Lê a corrente (A) dos compressores.","Explica porque não se liga o RS-485 em estrela.","Ativa todas as avarias, uma de cada vez, e regista o sintoma."]}],
+ "Modbus TCP":[{...SIMPLAN["Modbus TCP"],txt:"Escritórios: o SCADA fala Modbus TCP com o gateway, que traduz para RS-485 nos analisadores.",tasks:["Lê o Unit 1 e o Unit 2.","«IP errado»: que teste fazes primeiro?","«Unit ID errado»: que exceção aparece?"]},
+  {tipo:"Centro comercial",rooms:["Centro de controlo","Bastidor do piso 0","Quadro geral","Loja âncora · QE","Galeria","Restauração · QE"],nm:{S1:"Analisador loja âncora",S2:"Analisador restauração"},
+   pos:{C:[150,90],SW:[410,90],GW:[660,90],S1:[150,330],S2:[660,330]},txt:"Centro comercial: o centro de controlo lê os quadros das lojas através da rede IP e de gateways.",tasks:["Lê os dois analisadores.","«Firewall a bloquear a porta 502»: que porta abrir?","Desenha o caminho do telegrama na planta."]},
+  {tipo:"Data center",rooms:["NOC (supervisão)","Sala de bastidores","UPS / QGBT","Sala de servidores A","Sala de servidores B","Climatização"],nm:{C:"SCADA do NOC",S1:"Medidor PDU sala A",S2:"Medidor PDU sala B"},
+   pos:{C:[150,90],SW:[410,90],GW:[660,90],S1:[150,330],S2:[410,330]},txt:"Data center: medidores das PDU lidos pelo NOC; cada falha de leitura é um alarme.",tasks:["Lê a sala A e a sala B.","«Unit ID errado» → exceção 0B: o que significa?","Que dados mínimos documentas por equipamento IP?"]}],
+ "BACnet MS/TP · BACnet/IP":[{...SIMPLAN["BACnet MS/TP · BACnet/IP"],txt:"Escritórios: a GTC em BACnet/IP descobre e lê a UTA, o chiller e o quadro AVAC no MS/TP.",tasks:["Who-Is: quantos dispositivos respondem?","ReadProperty da temperatura da UTA.","«Sem BBMD»: porque falha a descoberta?"]},
+  {tipo:"Hospital",rooms:["Central de supervisão","Bastidor (BBMD)","Bloco operatório · UTA","Central térmica · chiller","Internamento · quadro AVAC","Urgência"],nm:{D1:"UTA bloco operatório",D2:"Chiller",D3:"Quadro AVAC internamento"},
+   pos:{G:[150,90],R:[410,90],D1:[660,90],D2:[150,330],D3:[410,330]},txt:"Hospital: a UTA do bloco operatório é crítica; a GTC subscreve alterações (COV) para alarmar logo.",tasks:["Subscreve COV na UTA do bloco.","«Instância duplicada»: que risco há num hospital?","Lê a temperatura e confirma no equipamento."]},
+  {tipo:"Escola",rooms:["Secretaria (GTC)","Bastidor","Pavilhão · UTA","Caldeira / chiller","Salas de aula · quadro AVAC","Refeitório"],nm:{D1:"UTA pavilhão",D2:"Chiller / caldeira",D3:"Quadro AVAC salas"},
+   pos:{G:[150,90],R:[410,90],D1:[660,90],D2:[150,330],D3:[410,330]},txt:"Escola: horários de AVAC por bloco; a GTC na secretaria liga e desliga por calendário.",tasks:["Who-Is e lista os Device Instance.","Lê a UTA do pavilhão.","Explica o papel do router entre IP e MS/TP."]}],
+ "DMX512":[{...SIMPLAN["DMX512"],txt:"Loja: quatro projetores RGB no palco e na montra, comandados da régie.",tasks:["Montra a vermelho, palco a branco.","«Projetor 2 com endereço 1»: o que acontece às cores?","«Sem terminador»: que sintoma se vê?"]},
+  {tipo:"Auditório",rooms:["Plateia","Palco","Régie (controlador)","Bastidores","Foyer","Sala técnica"],nm:{F1:"Palco esq.",F2:"Palco dir.",F3:"Plateia esq.",F4:"Plateia dir."},
+   pos:{CT:[660,100],F1:[340,100],F2:[470,100],F3:[90,100],F4:[210,100]},glow:null,txt:"Auditório: projetores do palco e da plateia num só universo DMX; endereços de 3 em 3 canais (RGB).",tasks:["Palco azul, plateia âmbar.","Calcula o endereço DMX do 5.º projetor RGB.","Simula o endereço sobreposto."]},
+  {tipo:"Fachada de edifício",rooms:["Fachada norte","Fachada nascente","Sala técnica (controlador)","Fachada sul","Fachada poente","Cobertura"],nm:{F1:"Fachada norte",F2:"Fachada nascente",F3:"Fachada sul",F4:"Fachada poente"},
+   pos:{CT:[660,100],F1:[150,100],F2:[410,100],F3:[150,320],F4:[410,320]},glow:null,txt:"Fachada: quatro projetores exteriores ao longo de um cabo comprido — terminação obrigatória.",tasks:["Todas as fachadas a verde.","«Sem terminador»: porque é pior num cabo longo?","Que tipo de cabo usarias no exterior?"]}],
+ "M-Bus":[{...SIMPLAN["M-Bus"],txt:"Prédio: contadores de água e de energia térmica de cada fração lidos pelo mestre na sala técnica.",tasks:["Lê todos os contadores.","«Mestre subdimensionado»: quais deixam de responder?","«Endereços repetidos»: como resolves sem ir a cada fração?"]},
+  {tipo:"Condomínio de moradias",rooms:["Moradia 1 · água","Moradia 2 · água","Moradia 3 · térmica","Moradia 4 · térmica","Portaria","Casa das máquinas (mestre)"],nm:{A1:"Água moradia 1",A2:"Água moradia 2",T3:"Térmico moradia 3",T4:"Térmico moradia 4"},
+   pos:{M:[660,330],A1:[150,90],A2:[410,90],T3:[660,90],T4:[150,330]},txt:"Condomínio: o mestre na casa das máquinas lê os contadores de cada moradia para a faturação.",tasks:["Lê todas as moradias.","Porque se lê a cada 15 min e não a cada segundo?","Que endereço usarias para seleção secundária?"]},
+  {tipo:"Residência de estudantes",rooms:["Piso 1 · água quente","Piso 2 · água quente","Piso 1 · aquecimento","Piso 2 · aquecimento","Receção","Sala técnica (mestre)"],nm:{A1:"Água piso 1",A2:"Água piso 2",T3:"Térmico piso 1",T4:"Térmico piso 2"},
+   pos:{M:[660,330],A1:[150,90],A2:[410,90],T3:[660,90],T4:[150,330]},txt:"Residência: contagem por piso para repartir custos de água quente e aquecimento.",tasks:["Lê os quatro contadores.","Simula o mestre com poucas cargas.","Quantas cargas unitárias tem cada contador?"]}]};
+/* luzes calculadas a partir das posições quando o exemplo não define outras */
+Object.entries(SIMPLANS).forEach(([k,L])=>L.forEach(P=>{if(P.glow===undefined||P.glow===null){if(k.startsWith("DALI"))P.glow=PLG(P.pos);else if(k==="DMX512")P.glow=PDG(P.pos);else if(P.glow===null)delete P.glow}}));
+function planSvg(p,P){const S=SIMS[p.n];P=P||SIMPLAN[p.n];if(!P)return"";const NMx=id=>(P.nm&&P.nm[id])||null;const xs=S.nodes.map(nd=>(P.pos[nd[0]]||[0])[0]);const x0=Math.min(...xs),x1=Math.max(...xs);
+ return`<svg class="s3-plan" viewBox="0 0 800 420" role="img" aria-label="Planta: ${esc(P.tipo)}">
+  <defs><radialGradient id="pg_${esc(p.n).replace(/\W/g,"")}"><stop offset="0" stop-color="#fde68a" stop-opacity=".95"/><stop offset=".5" stop-color="#facc15" stop-opacity=".35"/><stop offset="1" stop-color="#facc15" stop-opacity="0"/></radialGradient>
+   <pattern id="pf_${esc(p.n).replace(/\W/g,"")}" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="rgba(148,163,184,.07)"/></pattern></defs>
+  <rect x="20" y="20" width="760" height="380" rx="4" class="pl-floor" fill="url(#pf_${esc(p.n).replace(/\W/g,"")})"/>
+  <rect x="20" y="180" width="760" height="60" class="pl-corr"/><text x="400" y="234" class="pl-cl">corredor · calha técnica</text>
+  ${PL_R.map((r,i)=>`<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" class="pl-room"/><text x="${r[0]+12}" y="${i<3?r[1]+22:r[1]+r[3]-12}" class="pl-rn">${esc(P.rooms[i]||"")}</text>
+   <path d="M${r[0]+r[2]/2-22} ${i<3?r[1]+r[3]:r[1]}h44" class="pl-door"/><path d="M${r[0]+r[2]/2-22} ${i<3?r[1]+r[3]:r[1]} a44 44 0 0 ${i<3?0:1} 44 ${i<3?-44:44}" class="pl-swing"/>`).join("")}
+  <rect x="18" y="18" width="764" height="384" rx="5" class="pl-wall"/>
+  <g class="pl-glows">${(P.glow?P.glow(S.st()):[]).map((g,k)=>`<circle data-gl="${k}" cx="${g.x}" cy="${g.y}" r="${g.r||80}" fill="url(#pg_${esc(p.n).replace(/\W/g,"")})" style="opacity:0"/>`).join("")}</g>
+  <path d="M${x0} 210H${x1}" class="pl-cab"/><path d="M${x0} 216H${x1}" class="pl-cab2"/>
+  ${S.nodes.map(nd=>{const [x,y]=P.pos[nd[0]]||[0,0];const t=ntype2(nd[1]);let [a,b]=nd[1].split(" · ");if(NMx(nd[0]))a=NMx(nd[0]);return`<path d="M${x} ${y+(y<210?16:-16)}V210" class="pl-br"/>
+   <g class="s3-pn" data-n="${nd[0]}" data-t="${t}" transform="translate(${x},${y})"><circle r="17" class="pl-nb"/><g transform="translate(-10,-10)"><svg width="20" height="20" viewBox="0 0 24 24" class="pl-ic">${NICO[t]||NICO.ctl}</svg></g>
+   <text y="${y<210?-24:32}" class="pl-nl">${esc(a.length>20?a.slice(0,19)+"…":a)}</text>${b?`<text y="${y<210?-38:46}" class="pl-na">${esc(b)}</text>`:""}</g>`}).join("")}
+  <g class="pl-pk" style="opacity:0"><circle r="7" cx="0" cy="213" class="pl-pkd"/></g>
+  <text x="780" y="414" class="pl-ty">${esc(P.tipo)}</text></svg>`}
+function simHtml(p){const S=SIMS[p.n];if(!S)return"";const B=BUSST[p.n]||{c:"#e8a317",c2:"#475569",lab:p.n,v:"",off:[],sc:[]};
+ return`<div class="sim sim3" data-sim="${esc(p.n)}" style="--bc:${B.c};--bc2:${B.c2}">
+ <section class="s3-scene">${SIMPLAN[p.n]?`<div class="s3-views" role="tablist"><button type="button" data-vw="plan" class="on" role="tab">🏠 Planta · ${SIMPLANS[p.n]?SIMPLANS[p.n].length+" exemplos":""}</button><button type="button" data-vw="esq" role="tab">▦ Esquema</button></div><span class="s3-bus s3-bus2 ok"></span>`:""}<div class="s3-tx" hidden><i></i>Telegrama em trânsito…</div>
+  ${SIMPLANS[p.n]?`<div class="s3-scen"><div class="s3-sc">${SIMPLANS[p.n].map((P,k)=>`<button type="button" data-scn="${k}" class="${k?"":"on"}">${esc(P.tipo.split(" — ")[0])}</button>`).join("")}</div><div class="s3-story"></div></div><div class="s3-planw">${planSvg(p,SIMPLANS[p.n][0])}</div>`:""}
+  <div class="s3-grid"${SIMPLAN[p.n]?" hidden":""}>${S.nodes.map((nd,k)=>{const [a,b]=nd[1].split(" · ");const t=ntype2(nd[1]);return`<article class="s3-card sb-n${k===0?" master":""}" data-n="${nd[0]}" data-t="${t}">
+   <div class="s3-top"><span class="s3-tag">${esc(b||(k===0?"MESTRE":nd[0]))}</span><span class="s3-adr">${esc(nd[0])}</span></div>
+   <div class="s3-ico"><svg viewBox="0 0 24 24">${NICO[t]||NICO.ctl}</svg></div>
+   <h4>${esc(a)}</h4><p class="s3-st"></p>${k===0?`<span class="s3-bus ok">Bus OK${B.v?" ("+esc(B.v)+")":""}</span>`:""}<span class="s3-fault" hidden>AVARIA</span></article>`}).join("")}</div>
+  <div class="s3-wire"><div class="s3-bar"></div><i class="s3-dot"></i><i class="s3-pkl"></i></div><p class="s3-lab"><span>${esc(B.lab)}</span></p></section>
  <div class="simtg" hidden></div>
- <div class="simcons"><div class="simctl"><span class="simh">Consola</span>${S.ctl({})}</div>
-  <div class="simfaults"><span class="simh">⚠ Avarias para treino</span><div class="simfl">${S.faults.map(f=>`<label class="fchip"><input type="checkbox" data-f="${f[0]}"><span>${esc(f[1])}</span></label>`).join("")}</div></div></div>
- <div class="simlog" aria-live="polite"><div class="sl-h"><span>Monitor do bus</span><button type="button" class="sl-clr" title="Limpar">limpar</button></div></div></div>`}
-function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const S=SIMS[el.dataset.sim];const s=S.st();const F={};const n=S.nodes.length,W=780,sp=(W-150)/(n-1);
- const X=id=>{const i=S.nodes.findIndex(x=>x[0]===id);return 75+i*sp};const NM=id=>{const nd=S.nodes.find(x=>x[0]===id);return nd?nd[1].replace(" · "," "):id};
- const pk=el.querySelector(".sb-pk");const log=el.querySelector(".simlog");let busy=false;const vis=SIMVIS[el.dataset.sim];const extra={};
- const setNode=(id,v)=>{const g=el.querySelector(`[data-n="${id}"]`);if(!g||!v)return;
-  if(v.lv!==undefined){g.style.setProperty("--lv",v.lv);g.classList.toggle("lit",v.lv>0)}
-  if(v.rgb){const on=v.rgb.some(Boolean);g.style.setProperty("--rgb",`rgb(${v.rgb.join(",")})`);g.classList.toggle("lit",on)}
-  if(v.txt){const t0=g.querySelector("[data-t0]"),t1=g.querySelector("[data-t1]");if(t0)t0.textContent=String(v.txt[0]||"").slice(0,12);if(t1)t1.textContent=String(v.txt[1]||"").slice(0,12)}
-  if(v.ch){const c=g.querySelector("[data-ch]");if(c)c.innerHTML=v.ch.map((on,k)=>{const x=-((v.ch.length-1)*22)/2+k*22;return`<circle cx="${x}" cy="54" r="6" class="dv-chl ${on?"on":""}"/><text x="${x}" y="72" class="dv-chn">${esc((v.chl||[])[k]||"C"+(k+1))}</text>`}).join("")}};
- const ui={log:(t,k,dir)=>{const d=document.createElement("div");d.className="sl "+(k||"");d.innerHTML=`<time>${new Date().toLocaleTimeString("pt-PT")}</time>${dir?`<span class="sl-d">${esc(dir)}</span>`:""}<span class="sl-t">${esc(t).replace(/^([✓✗⚠])/,"<b>$1</b>")}</span>`;log.appendChild(d);while(log.children.length>40)log.children[1].remove();log.scrollTop=log.scrollHeight;d.classList.add("new")},
-  flash:(id,k)=>{const g=el.querySelector(`[data-n="${id}"]`);if(!g)return;g.classList.remove("ok","bad");void g.getBBox();g.classList.add(k);setTimeout(()=>g.classList.remove(k),1400)},
-  send:(a,b,t,fl)=>new Promise(res=>{ui.log(String(t).replace(/^(TX|RX)\s*/,""),"tx",NM(a)+" → "+(b==="*"?"todos":NM(b)));const x0=X(a),x1=b==="*"?null:X(b);pk.setAttribute("class","sb-pk "+(b==="*"?"bc":""));
-   const lab=(fl&&fl.short)||String(t).replace(/^(TX|RX)\s*/,"").split(/[ (]/).slice(0,2).join(" ");pk.querySelector(".sb-pkl").textContent=lab.slice(0,15);
+ <div class="s3-cols"><section class="s3-panel"><h3><span>Enviar telegrama</span><small>${esc(p.n)}</small></h3><div class="simctl">${S.ctl({})}</div></section>
+  <section class="s3-mon"><header><span><i class="s3-live"></i>Monitor do bus</span><span><button type="button" class="s3-b sl-cp">Copiar</button><button type="button" class="s3-b sl-clr">Limpar</button></span></header><div class="simlog" aria-live="polite"></div></section></div>
+ <section class="s3-faults"><div class="s3-fh"><span class="s3-fi">⚠</span><div><b>Simular avarias</b><small>Injeta falhas reais para ver o comportamento do protocolo e treinar o diagnóstico.</small></div></div>
+  <div class="s3-fb">${S.faults.map(f=>`<button type="button" class="s3-fbtn" data-f="${f[0]}" aria-pressed="false">${esc(f[1])}</button>`).join("")}<button type="button" class="s3-fbtn rst" data-frst>↺ Repor</button></div></section></div>`}
+function wireSims(root){root.querySelectorAll("[data-sim]").forEach(el=>{if(el._w)return;el._w=1;const P=el.dataset.sim;const S=SIMS[P];const s=S.st();const F={};const B=BUSST[P]||{off:[],sc:[]};const FN=SIMFN[P]||{};const vis=SIMVIS[P];
+ const card=id=>el.querySelector(`.s3-card[data-n="${id}"]`);const pn=id=>el.querySelector(`.s3-pn[data-n="${id}"]`);let PLN=(SIMPLANS[P]||[])[0]||SIMPLAN[P];
+ const planUpd=()=>{if(!PLN||!PLN.glow)return;PLN.glow(s).forEach((g,k)=>{const c=el.querySelector(`[data-gl="${k}"]`);if(!c)return;c.style.opacity=g.lv;if(g.col){c.setAttribute("fill",g.col);c.style.opacity=g.lv*.55}})};
+ const view=v=>{el.querySelectorAll("[data-vw]").forEach(b=>b.classList.toggle("on",b.dataset.vw===v));const pw=el.querySelector(".s3-planw");if(pw)pw.hidden=v!=="plan";el.querySelector(".s3-grid").hidden=v==="plan"&&!!pw;el.dataset.view=v};
+ el.querySelectorAll("[data-vw]").forEach(b=>b.onclick=()=>view(b.dataset.vw));if(PLN)view("plan");
+ const story=()=>{const st=el.querySelector(".s3-story");if(!st||!PLN)return;st.innerHTML=`<p><b>Exemplo:</b> ${esc(PLN.txt||"")}</p>${PLN.tasks&&PLN.tasks.length?`<ol class="s3-tasks">${PLN.tasks.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:""}`};
+ const scen=k=>{const L=SIMPLANS[P];if(!L||!L[k])return;PLN=L[k];el.querySelectorAll("[data-scn]").forEach(b=>b.classList.toggle("on",+b.dataset.scn===k));const pw=el.querySelector(".s3-planw");if(pw)pw.innerHTML=planSvg({n:P},PLN);story();relabel();setTimeout(()=>{try{ui.out();busState()}catch(e){}},0)};
+ const relabel=()=>{el.querySelectorAll(".simctl [data-a]").forEach(b=>{if(!b.dataset.orig)b.dataset.orig=b.textContent;let t=b.dataset.orig;if(PLN&&PLN.nm&&el.dataset.view!=="esq")S.nodes.forEach(nd=>{const nm=PLN.nm[nd[0]];if(!nm)return;const def=nd[1].split(" · ")[0];const i=t.toLowerCase().indexOf(def.toLowerCase());if(i>=0)t=t.slice(0,i)+(i?nm.charAt(0).toLowerCase()+nm.slice(1):nm)+t.slice(i+def.length)});b.textContent=t})};
+ el.querySelectorAll("[data-scn]").forEach(b=>b.onclick=()=>scen(+b.dataset.scn));story();relabel();el.querySelectorAll("[data-vw]").forEach(b=>b.addEventListener("click",relabel));const NM=id=>{if(typeof PLN!=="undefined"&&PLN&&PLN.nm&&PLN.nm[id]&&el.dataset.view!=="esq")return PLN.nm[id];const nd=S.nodes.find(x=>x[0]===id);return nd?nd[1].replace(" · "," "):id};
+ const log=el.querySelector(".simlog");const wire=el.querySelector(".s3-wire");const dot=wire.querySelector(".s3-dot");const pkl=wire.querySelector(".s3-pkl");const txi=el.querySelector(".s3-tx");let busy=false;
+ const TAG={tx:"TX",rx:"RX",err:"ERRO",warn:"AVISO",ok:"OK","":"SISTEMA",flt:"AVARIA"};
+ const setNode=(id,v)=>{const g=card(id);if(!g||!v)return;if(v.lv!==undefined){g.style.setProperty("--lv",v.lv);g.classList.toggle("lit",v.lv>0)}if(v.rgb){g.style.setProperty("--rgb",`rgb(${v.rgb.join(",")})`);g.classList.toggle("lit",v.rgb.some(Boolean));g.classList.add("rgb")}
+  if(v.on!==undefined&&v.lv===undefined&&!v.rgb)g.classList.toggle("lit",!!v.on);if(v.st!==undefined){const p2=g.querySelector(".s3-st");if(p2)p2.innerHTML=v.st}};
+ const busState=()=>{const off=B.off.find(k=>F[k]),sc=B.sc.find(k=>F[k]);wire.classList.toggle("off",!!off);wire.classList.toggle("sc",!!sc);
+  el.querySelectorAll(".s3-bus").forEach(bd=>{bd.className="s3-bus "+(bd.classList.contains("s3-bus2")?"s3-bus2 ":"")+(sc?"sc":off?"off":"ok");bd.textContent=sc?(B.scTxt||"Curto-circuito (0 V)"):off?(B.offTxt||"Sem alimentação (0 V)"):"Bus OK"+(B.v?" ("+B.v+")":"")});
+  el.querySelectorAll(".s3-card").forEach(c=>{const ids=Object.entries(FN).filter(([k])=>F[k]).flatMap(([,v])=>v);c.querySelector(".s3-fault").hidden=!ids.includes(c.dataset.n);c.classList.toggle("faulty",ids.includes(c.dataset.n))});
+  const ids2=Object.entries(FN).filter(([k])=>F[k]).flatMap(([,v])=>v);el.querySelectorAll(".s3-pn").forEach(g=>g.classList.toggle("faulty",ids2.includes(g.dataset.n)));const pl=el.querySelector(".s3-plan");if(pl){pl.classList.toggle("off",!!off);pl.classList.toggle("sc",!!sc)}};
+ const cx=id=>{const c=card(id);if(!c)return 0;const r=c.getBoundingClientRect(),w=wire.getBoundingClientRect();return Math.max(6,Math.min(w.width-6,r.left+r.width/2-w.left))};
+ const ui={log:(t,k,dir)=>{const d=document.createElement("p");d.className="sl "+(k||"");const tg=TAG[k||""]||"INFO";d.innerHTML=`<time>[${new Date().toLocaleTimeString("pt-PT")}]</time> <b class="sl-g">[${tg}]</b> ${dir?`<span class="sl-d">${esc(dir)}</span> `:""}<span class="sl-t">${esc(t).replace(/^([✓✗⚠])\s*/,"")}</span>`;log.appendChild(d);while(log.children.length>60)log.firstElementChild.remove();log.scrollTop=log.scrollHeight},
+  flash:(id,k)=>{[card(id),pn(id)].forEach(g=>{if(!g)return;g.classList.remove("ok","bad","rx");void g.getBoundingClientRect();g.classList.add(k);setTimeout(()=>g.classList.remove(k),1600)})},
+  send:(a,b,t,fl)=>new Promise(res=>{const isRx=/^(RX|Resposta|RSP|I-Am|ComplexAck|SimpleAck|COV-Notification|resposta)/i.test(String(t))||(b!=="*"&&S.nodes[0]&&b===S.nodes[0][0]&&a!==b);
+   ui.log(String(t).replace(/^(TX|RX)\s*/,""),isRx?"rx":"tx",NM(a)+" → "+(b==="*"?"todos":NM(b)));
+   const lab=(fl&&fl.short)||String(t).replace(/^(TX|RX)\s*/,"").split(/[ (]/).slice(0,2).join(" ");pkl.textContent=lab.slice(0,18);
    if(fl&&fl.f){const tg=el.querySelector(".simtg");tg.hidden=false;tg.innerHTML=`<span class="tgk">${esc(fl.title||"Trama")}</span>${fl.f.map(x=>`<span class="tgf" style="--c:${x[2]||"#0891b2"}"><small>${esc(x[0])}</small><b>${esc(x[1])}</b></span>`).join("")}`;
-    const val=fl.f.find(x=>x[0]==="Valor");if(val&&/meter|ctl/.test((el.querySelector(`[data-n="${a}"]`)||{}).getAttribute?.("class")||"")){extra[a]={txt:[val[1]]};setNode(a,extra[a])}}
-   const kf=b==="*"?[x0,30,W-30,x0]:[x0,x1];const dur=b==="*"?1200:Math.max(500,Math.abs(x1-x0)*1.9);
-   const ga=el.querySelector(`[data-n="${a}"]`);ga&&ga.classList.add("tx");
-   try{const an=pk.animate(kf.map(c=>({transform:`translate(${c}px,0)`})),{duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"});an.onfinish=()=>{pk.setAttribute("transform","translate(-80,0)");pk.style.transform="";ga&&ga.classList.remove("tx");if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".sb-n").forEach(g=>{if(g!==ga){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()}}catch(e){ga&&ga.classList.remove("tx");res()}}),
-  out:()=>{if(vis){const V=vis(s);Object.entries(V).forEach(([id,v])=>setNode(id,v))}}};
- S.nodes.forEach(nd=>{if(ntype2(nd[1])==="meter")setNode(nd[0],{txt:["— — —"]})});
- ui.out();ui.log("Pronto. Usa a consola para enviar telegramas; ativa uma avaria para ver o sintoma.","");
- el.querySelector(".sl-clr").onclick=()=>{[...log.querySelectorAll(".sl")].forEach(x=>x.remove())};
+    const val=fl.f.find(x=>x[0]==="Valor");if(val&&/meter/.test((card(a)||{dataset:{}}).dataset.t||""))setNode(a,{st:`<b>${esc(val[1])}</b>`,on:1})}
+   const ga=card(a);ga&&ga.classList.add("tx");const gp=pn(a);gp&&gp.classList.add("tx");txi.hidden=false;wire.classList.add("busy");
+   const ppk=el.querySelector(".pl-pk");if(PLN&&ppk&&el.dataset.view==="plan"){const px=id=>(PLN.pos[id]||[0])[0];const xs=Object.values(PLN.pos).map(v=>v[0]);const a0=px(a),b0=b==="*"?null:px(b);const kp=b==="*"?[a0,Math.min(...xs),Math.max(...xs),a0]:[a0,b0];
+    ppk.style.opacity=1;try{ppk.animate(kp.map(c=>({transform:`translate(${c}px,0)`})),{duration:b==="*"?1100:Math.max(500,Math.abs(b0-a0)*1.6),easing:"cubic-bezier(.45,.05,.35,1)"}).onfinish=()=>{ppk.style.opacity=0}}catch(e){ppk.style.opacity=0}}
+   const x0=cx(a),x1=b==="*"?null:cx(b);const W=wire.getBoundingClientRect().width;const kf=b==="*"?[x0,6,W-6,x0]:[x0,x1];const dur=b==="*"?1100:Math.max(500,Math.abs(x1-x0)*1.6);
+   const done=()=>{ga&&ga.classList.remove("tx");gp&&gp.classList.remove("tx");txi.hidden=true;wire.classList.remove("busy");dot.style.transform="";pkl.style.transform="";if(b!=="*")ui.flash(b,"rx");else el.querySelectorAll(".s3-card,.s3-pn").forEach(g=>{if(g!==ga&&g!==gp){g.classList.add("rx");setTimeout(()=>g.classList.remove("rx"),500)}});res()};
+   try{const o={duration:dur,easing:"cubic-bezier(.45,.05,.35,1)"};const fr=kf.map(c=>({transform:`translateX(${c}px)`}));dot.animate(fr,o);const an=pkl.animate(fr,o);an.onfinish=done}catch(e){done()}}),
+  out:()=>{if(vis){Object.entries(vis(s)).forEach(([id,v])=>setNode(id,v))}planUpd()}};
+ S.nodes.forEach(nd=>{const t=ntype2(nd[1]);if(t==="meter")setNode(nd[0],{st:"— — —"})});
+ ui.out();busState();ui.log("Pronto. Usa o painel para enviar telegramas ou simula avarias.","");
+ el.querySelector(".sl-clr").onclick=()=>{log.innerHTML="";ui.log("Registos limpos.","")};
+ el.querySelector(".sl-cp").onclick=()=>{const t=log.innerText;try{navigator.clipboard.writeText(t).then(()=>ui.log("Registos copiados.",""),()=>{})}catch(e){}};
  const ctl=()=>{const c={};el.querySelectorAll(".simctl [data-k]").forEach(i=>c[i.dataset.k]=i.value);return c};
- el.querySelectorAll(".simctl input[type=range]").forEach(r=>r.oninput=()=>{const v=r.parentElement.querySelector("[data-v]");if(v)v.textContent=r.value+"%"});
- el.querySelectorAll("[data-f]").forEach(c=>c.onchange=()=>{F[c.dataset.f]=c.checked;c.closest(".fchip").classList.toggle("on",c.checked);ui.log((c.checked?"Avaria ativada: ":"Avaria removida: ")+c.parentElement.textContent.trim(),c.checked?"warn":"ok")});
+ el.querySelectorAll(".simctl input[type=range]").forEach(r=>{const lab=r.closest(".simf");const v=lab&&lab.querySelector("[data-v]");r.oninput=()=>{if(v)v.textContent=r.value+(r.max==="255"?"":"%")};
+  if(r.dataset.k==="lv"){const q=document.createElement("div");q.className="s3-quick";q.innerHTML=[0,25,50,75,100].map(x=>`<button type="button" data-q="${x}">${x}%</button>`).join("");lab.after(q);q.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{r.value=b.dataset.q;r.oninput()})}
+  else if(lab&&!v){const b=document.createElement("b");b.dataset.v="";b.textContent=r.value;lab.firstChild.after(document.createTextNode(" "),b);r.oninput=()=>b.textContent=r.value}});
+ el.querySelectorAll("[data-f]").forEach(c=>c.onclick=()=>{const k=c.dataset.f;F[k]=!F[k];if(F[k]){if(B.off.includes(k)||B.sc.includes(k))[...B.off,...B.sc].filter(x=>x!==k).forEach(x=>{F[x]=false;const o=el.querySelector(`[data-f="${x}"]`);o&&(o.classList.remove("on"),o.setAttribute("aria-pressed","false"))})}
+  c.classList.toggle("on",F[k]);c.setAttribute("aria-pressed",F[k]);busState();ui.log((F[k]?"Avaria ativada: ":"Avaria resolvida: ")+c.textContent.trim(),F[k]?"flt":"ok")});
+ el.querySelector("[data-frst]").onclick=()=>{Object.keys(F).forEach(k=>F[k]=false);el.querySelectorAll("[data-f]").forEach(c=>{c.classList.remove("on");c.setAttribute("aria-pressed","false")});busState();ui.log("Todas as avarias repostas. Sistema em estado normal.","ok")};
  el.querySelectorAll(".simctl [data-a]").forEach(b=>b.onclick=async()=>{if(busy)return;busy=true;el.classList.add("busy");try{await S.act(b.dataset.a,s,F,ui,ctl())}finally{busy=false;el.classList.remove("busy")}})})}
 /* acrescenta o separador «Simular» a cada protocolo */
 const protoDetailBase=protoDetail;
@@ -1222,5 +1316,5 @@ function index(){return{kb:KB.map(k=>({id:k.id,t:k.t,k:k.k||"",f:k.f||"",calc:k.
  proto:PROTO.map(p=>({n:p.n,uso:p.uso||"",norma:p.norma||"",lim:p.lim||""})),sproto:SPROTO.map(p=>({n:p.n,uso:p.uso||""})),
  lel:Object.entries(LEL).map(([id,v])=>({id,n:v.n})),lels:Object.entries(LEL_S).map(([id,v])=>({id,n:v.n})),
  esq:Object.entries(ESQ2).map(([id,v])=>({id,t:v.t})),ex:EXS.map(e=>({id:e.id,t:e.t||e.n||e.id})),calcs:CALCS.map(c=>({id:c[0],t:c[1]}))}}
-window.TEC={render,panel,index,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
+window.TEC={build:"46",render,panel,index,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
 })();

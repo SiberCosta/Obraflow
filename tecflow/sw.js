@@ -1,7 +1,7 @@
 // TecFlow — guarda a plataforma no aparelho para funcionar sem rede
-const VERSION = "tf44";
+const VERSION = "tf46";
 const SHELL = "tecflow-" + VERSION, LIBS = "tecflow-libs";
-const CORE = ["./", "index.html", "styles.css", "tecnico.js", "tecflow.js", "tfdata.js", "tfdata2.js", "tfapp.js", "tf.css", "manifest.webmanifest", "logo.svg",
+const CORE = ["./", "index.html", "styles.css", "tecnico.js", "tecflow.js", "tfdata.js", "tfdata2.js", "tfdata3.js", "tfapp.js", "tf.css", "manifest.webmanifest", "logo.svg",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 const LIB_HOSTS = ["fonts.googleapis.com", "fonts.gstatic.com"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
@@ -13,7 +13,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(r => {
+    e.respondWith(fetch(req, { cache: "no-cache" }).then(r => {
       if (r.ok) { const cp = r.clone(); caches.open(SHELL).then(c => c.put(req, cp)); }
       return r;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || (req.mode === "navigate" ? caches.match("index.html") : Response.error()))));
