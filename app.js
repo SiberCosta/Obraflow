@@ -2501,7 +2501,7 @@ function wireSettings(W){const sv=$("stSave");if(sv)sv.onclick=async()=>{const r
 let warmDone=false;
 function warmReader(){if(warmDone||!S.canWrite||!navigator.onLine&&!poolP)return;warmDone=true;const f=()=>pool().catch(()=>{warmDone=false});("requestIdleCallback" in window)?requestIdleCallback(f,{timeout:8000}):setTimeout(f,4000)}
 /* aviso se o styles.css publicado não corresponde a esta versão da app (envio incompleto ou cache antiga) */
-const APP_VER="42";
+const APP_VER="43";
 setTimeout(()=>{const v=getComputedStyle(document.documentElement).getPropertyValue("--cp-ver").replace(/["'\s]/g,"");
  if(v!==APP_VER){const b=$("banner");b.hidden=false;b.innerHTML=`<span><b>Atualização incompleta:</b> o ficheiro <b>styles.css</b> publicado é de outra versão${v?" ("+esc(v)+")":""}. Envia para o GitHub os ficheiros index.html, app.js e styles.css da mesma versão e recarrega a página.</span><button class="btn sm" id="hardReload">Recarregar</button>`;
   $("hardReload").onclick=async()=>{try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)));const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.update()))}catch(e){}location.reload()}}},1500);
@@ -3367,6 +3367,8 @@ const tLink=t=>location.origin+location.pathname+`#tarefa=${encodeURIComponent(t
  b.onclick=()=>{S.mode=S.mode==="task"?"nav":"task";S.movingTask=null;render()}})();
 function taskHint(){return S.movingTask?`<b>Colocar/mover:</b> toca no sítio da tarefa/dúvida na planta. <button class="btn sm" id="tmCancel">Cancelar</button>`:`<b>Tarefa / dúvida:</b> toca no ponto da planta onde queres criar uma tarefa ou colocar uma dúvida.`}
 document.addEventListener("click",e=>{if(e.target.id==="tmCancel"){S.movingTask=null;render()}});
+/* v43: no telemóvel a ficha ocupa a planta toda — ao escolher Marcar/Tarefa fecha-se a ficha aberta para se poder tocar na planta */
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("#mMark,#mTask");if(b&&S.sel&&innerWidth<1100)S.sel=null},true);
 (()=>{const m=$("actMenu");if(!m)return;const b=document.createElement("button");b.type="button";b.className="btn";b.id="tkShow";const lab=()=>b.textContent="Gotas na planta: "+TFILT_N[tFilt]+" ▸";lab();
  b.onclick=()=>{tFilt=TFILT[(TFILT.indexOf(tFilt)+1)%TFILT.length];try{localStorage.setItem("of-tasks-f",tFilt)}catch(e){}lab();toast("Gotas na planta: "+TFILT_N[tFilt]);render()};m.appendChild(b)})();
 
@@ -3732,7 +3734,7 @@ renderPage=function(v){renderPageN(v);if(v!=="settings")return;const W=$("pageWr
    ========================================================= */
 PAGE_VIEWS.push("tecnico");
 let tecP=null;
-function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=42";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
+function loadTec(){if(window.TEC)return Promise.resolve();if(!tecP)tecP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="tecnico.js?v=43";s.onload=()=>res();s.onerror=()=>{tecP=null;rej(new Error("não foi possível abrir o módulo Técnico"))};document.head.appendChild(s)});return tecP}
 let tecOpts=null;
 function openTec(o){tecOpts=o||null;go("tecnico")}
 const renderPageTec=renderPage;

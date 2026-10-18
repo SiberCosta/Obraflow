@@ -854,7 +854,7 @@ function kBanc(E){const ex=EXS.find(x=>x.id===BS.ex)||EXS[0];
   <button class="btn sm ${BS.on?"dark":"primary"}" id="bPow">${BS.on?"⏻ Desligar disjuntor":"⏻ Ligar disjuntor e testar"}</button></div>
   <div class="bstage" id="bSt"></div><div class="bctl" id="bCtl"></div><div class="bmsg" id="bMsg"></div></section>
  <p class="mut">Como usar: toca num borne e depois noutro para ligar um fio (a cor sai automática pela função do borne, ou escolhe-a acima). Toca num fio para o retirar. Liga o disjuntor para testar e usa os interruptores no próprio aparelho.</p>`;
- const draw=()=>{const ex2=EXS.find(x=>x.id===BS.ex);$("bSt").innerHTML=bSvg(ex2);const ev=bEval(ex2),ck=bCheck(ex2);const L=bLayout(ex2);const st2=$("bSt");
+ const draw=()=>{if(!$("bSt")||!$("bCtl")||!$("bMsg")){clearInterval(BS.anim);return}const ex2=EXS.find(x=>x.id===BS.ex);$("bSt").innerHTML=bSvg(ex2);const ev=bEval(ex2),ck=bCheck(ex2);const L=bLayout(ex2);const st2=$("bSt");
   st2.querySelectorAll("[data-t]").forEach(g=>{g.onclick=()=>tap(g.dataset.t);g.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();tap(g.dataset.t)}}});
   st2.querySelectorAll("[data-w]").forEach(g=>g.onclick=e=>{e.stopPropagation();if(BS.on){toast("Desliga o disjuntor antes de mexer nos fios.");return}BS.w.splice(+g.dataset.w,1);draw()});
   st2.querySelectorAll("[data-act]").forEach(g=>g.onclick=()=>act(g.dataset.act));st2.querySelectorAll("[data-brk]").forEach(g=>g.onclick=()=>power());

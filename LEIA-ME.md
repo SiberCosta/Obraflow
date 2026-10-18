@@ -376,6 +376,14 @@ No menu lateral há **Técnico (RTIEBT)**. Funciona **sem rede e sem depender de
 
 **Valores e revisão:** os valores seguem as RTIEBT (Portaria 949-A/2006 e 252/2015), a IEC 60364-5-52, a HD 308/HD 21.3 e a E-REDES — a fonte aparece em cada resposta. **Têm de ser confirmados pelo técnico responsável.** Em *Consultar → Tabelas e fontes* a coordenação pode **exportar** as tabelas (JSON), corrigi-las e **importar** a versão revista para a obra, sem mexer no código.
 
+## Testes completos e correções (versão 43)
+
+Foi feito um teste à plataforma toda, do registo ao Técnico, em computador, tablet e telemóvel (mais de 2000 cliques automáticos em todas as páginas, separadores e botões, e 36 baterias de testes).
+
+- **Corrigido — telemóvel/tablet:** depois de marcar um equipamento, a ficha tapava a planta e o toque seguinte em *Marcar* ou *Tarefa / dúvida* caía na ficha. Agora, ao escolher *Marcar* ou *Tarefa / dúvida*, a ficha aberta fecha-se e a planta fica livre para tocar.
+- **Corrigido — Técnico → Bancada:** se saísses da bancada enquanto a animação *Ver solução* ou um botão (sensor, botoneira) ainda estava a correr, a app dava um erro escondido em segundo plano. A animação agora para sozinha.
+- Sem páginas a sair fora do ecrã (sem deslocamento lateral) em nenhuma das 33 vistas, em computador e telemóvel.
+
 ## Limites do plano gratuito (verificado em outubro de 2026)
 
 | Supabase Free | |
