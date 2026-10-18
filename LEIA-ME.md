@@ -383,6 +383,35 @@ Foi feito um teste à plataforma toda, do registo ao Técnico, em computador, ta
 - **Corrigido — telemóvel/tablet:** depois de marcar um equipamento, a ficha tapava a planta e o toque seguinte em *Marcar* ou *Tarefa / dúvida* caía na ficha. Agora, ao escolher *Marcar* ou *Tarefa / dúvida*, a ficha aberta fecha-se e a planta fica livre para tocar.
 - **Corrigido — Técnico → Bancada:** se saísses da bancada enquanto a animação *Ver solução* ou um botão (sensor, botoneira) ainda estava a correr, a app dava um erro escondido em segundo plano. A animação agora para sozinha.
 - Sem páginas a sair fora do ecrã (sem deslocamento lateral) em nenhuma das 33 vistas, em computador e telemóvel.
+- **Corrigido — Técnico → Guia de bolso:** no telemóvel, tabelas largas (ex.: Fator K) alargavam a página; agora deslizam dentro do cartão.
+- **Melhorado — Técnico sem obra aberta:** «Guardar resultado» guarda logo no histórico do aparelho, sem mostrar listas vazias de tarefas e equipamentos.
+
+## TecFlow — plataforma técnica separada, aberta a todos (versão 43)
+
+O TecFlow é uma **plataforma própria** (nome, logótipo e endereço seus), **sem conta** e sem servidor. Está na pasta `tecflow/`; depois de carregares o zip para o GitHub o endereço é **`https://siberdeny19-source.github.io/planta-obra/tecflow/`**. Não há ligação ao TecFlow no ecrã inicial do ObraFlow.
+
+**Quatro áreas**
+- **Automação predial** — KNX, BACnet, Modbus RTU/TCP, DALI, M-Bus (protocolos e simuladores), escolher a rede, tipologias, **comunicação IP** (calculadora de sub-rede, portas), **gateways e BMS** (lista de pontos, modelo CSV) e bancada de ligações.
+- **SADI e segurança contra incêndio** — visão geral, protocolos, ligação do laço, exemplo Siemens, **testador FDUL221**, simulador de laço, avarias e alarmes, **intervenção real e manutenção** (NT 12) e **requisitos em Portugal** (RJ-SCIE, RT-SCIE, NT 12, registo na ANEPC).
+- **Diagnóstico e manutenção** — análise de falhas (sistema → sintoma/código → verificações), leitura de LEDs, medições de referência, calculadoras RTIEBT, interpretar esquemas (com simbologia) e **relatórios** (modelos NT 12, FDnet, bus de campo; PDF).
+- **Biblioteca técnica** — **os meus PDF** (manuais, fichas técnicas, procedimentos e normas guardados no aparelho, funcionam sem rede), fichas de bolso em PDF, normas e referências, guia de bolso, fabricantes e tabelas.
+
+**Para ser útil no dia a dia**
+- **Tema do dia** com histórico dos temas consultados.
+- **Pesquisa** por protocolo, equipamento, código de avaria (ex.: E08, exceção 02) ou fabricante — inclui os teus PDF.
+- **Modo de terreno** (botão «Terreno»): botões grandes e só o essencial.
+- **Treino adaptativo**: mais perguntas nos temas em que erras mais; domínio por tema.
+- **Percursos por nível**: iniciante, técnico de manutenção, diagnóstico avançado.
+- **Biblioteca validada**: tudo tem uma classe — *Oficial do fabricante*, *Norma / regulamento*, *Recomendação técnica* ou *Didático*.
+- **SADI**: 🎓 = aprendizagem (exercícios, simulações); 🛡 = intervenção real (procedimentos autorizados, entidade registada na ANEPC).
+
+**FDUL221** (SADI → Testador FDUL221), com base no manual técnico Siemens: módulo 1 (conhecer o equipamento, toque nas partes), módulo 2 (preparar e executar, com simulador do ecrã e das teclas), módulo 3 (linha aberta, curto, terra, resistência elevada, comunicação; códigos E01–E17; divisão ao meio e «Measure Device»), módulo 4 (avarias simuladas com escolha de passos e explicação).
+
+**Notas**
+- Os dados (histórico, treino, relatórios, PDF) ficam **só no aparelho** de cada pessoa.
+- O PDF é feito pela impressão do navegador: «PDF» → «Guardar como PDF».
+- Instalável como app próprio («Instalar»; no iPhone: Partilhar → Adicionar ao ecrã principal).
+- A pasta `tecflow/` é autónoma: para um endereço só dela, cria um repositório `tecflow`, carrega o conteúdo da pasta e ativa o GitHub Pages.
 
 ## Limites do plano gratuito (verificado em outubro de 2026)
 

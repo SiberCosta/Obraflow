@@ -1581,4 +1581,13 @@ body[data-view=projects] .top .bell{margin-left:auto}
 .eqph{clip-path:inset(0 round 8px)}
 .lg-b{fill:#fff}
 
+/* v43 · tabelas largas do guia (ex.: Fator K) passam a deslizar dentro do cartão em vez de alargar a página no telemóvel */
+.tecbody>*,.tecacc>*,.tecacc details{min-width:0}
+/* v43 · detalhes de protocolos não alargam o cartão no telemóvel */
+.tprotos{grid-template-columns:minmax(0,1fr)}.tprotos>*,.tproto>*,.pdp,.pdtabs{min-width:0;max-width:100%}
+.pdx{grid-template-columns:minmax(0,1fr)}.pdx>*{min-width:0}
+.pdmore{white-space:normal;max-width:100%;height:auto;min-height:32px;text-align:left;line-height:1.3;padding-block:6px}
+.tecchat,.tcmsgs,.tcpair{grid-template-columns:minmax(0,1fr)}.tecchat>*,.tcmsgs>*,.tcpair>*{min-width:0}.tcm{overflow-wrap:anywhere}
+.tcm .btn,.tecres .btn{white-space:normal;max-width:100%;height:auto;min-height:30px;text-align:left;line-height:1.3;padding-block:5px}
+
 :root{--cp-ver:"43"}

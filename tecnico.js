@@ -11,6 +11,8 @@
 (function(){
 "use strict";
 const TEC_VERSION="2026-10";
+/* nome da plataforma: "ObraFlow" dentro da gestão de obra; "TecFlow" na plataforma técnica separada */
+const BRAND=(typeof window!=="undefined"&&window.TEC_BRAND)||"ObraFlow";
 /* ---------------------------------------------------------
    1) TABELAS (fontes indicadas em cada uma)
    --------------------------------------------------------- */
@@ -356,7 +358,7 @@ function render(Wr,opts){root=Wr;try{D=S.meta&&S.meta.tecData&&typeof S.meta.tec
  const ctx=st.ctx?`<div class="tecctx">A trabalhar para <b>${esc(st.ctx.label)}</b> — os resultados podem ser guardados aí. <button class="linkb" id="tcCtxX">Limpar</button></div>`:"";
  Wr.innerHTML=`<div class="crumb"><button type="button" data-go="home">${esc(S.meta.name||"Projeto")}</button><span>›</span><b>Técnico</b></div>
  <section class="techero"><svg class="thwave" viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true"><path class="w1" d="M0 60 Q37.5 0 75 60 T150 60 T225 60 T300 60 T375 60 T450 60 T525 60 T600 60"/><path class="w2" d="M0 60 Q37.5 110 75 60 T150 60 T225 60 T300 60 T375 60 T450 60 T525 60 T600 60"/><path class="w3" d="M0 60 Q50 20 100 60 T200 60 T300 60 T400 60 T500 60 T600 60"/></svg>
-  <div class="thtxt"><span class="thk">ObraFlow · bancada técnica</span><h2>Técnico <em>RTIEBT</em></h2><p>Calcular, consultar e perguntar — tudo neste aparelho, mesmo sem rede.</p>
+  <div class="thtxt"><span class="thk">${BRAND} · bancada técnica</span><h2>Técnico <em>RTIEBT</em></h2><p>Calcular, consultar e perguntar — tudo neste aparelho, mesmo sem rede.</p>
   <div class="thchips"><span class="on">● Sem rede OK</span><span>Tabelas ${TEC_VERSION}</span><span>${hist().length} cálculo${hist().length===1?"":"s"} guardado${hist().length===1?"":"s"}</span></div></div>
   <div class="thsym" aria-hidden="true"><span>Ω</span><span>⏚</span><span>~</span><span>Δ</span></div></section>`+ctx+
   `<nav class="tectabs2">${TABS.map(([k,n])=>`<button data-tt="${k}" class="${st.tab===k?"on":""}">${ic(k==="ia"?"ia":k)}<span>${n}</span></button>`).join("")}</nav><div class="tecbody" id="tecBody"></div>`;
@@ -364,7 +366,7 @@ function render(Wr,opts){root=Wr;try{D=S.meta&&S.meta.tecData&&typeof S.meta.tec
  const cx=$("tcCtxX");if(cx)cx.onclick=()=>{st.ctx=null;render(Wr)};
  Wr.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
  const B=$("tecBody");({inicio:pInicio,calc:pCalc,cons:pCons,ia:pIA})[st.tab](B)}
-const goTec=(tab,sub,extra)=>{st.tab=tab;if(sub){if(tab==="calc")st.sub.calc=sub;else if(tab==="cons")st.sub.cons=sub}if(extra)Object.assign(st,extra);render(root);const pg=$("viewPage");if(pg)pg.scrollTop=0};
+const goTec=(tab,sub,extra)=>{if(window.TEC&&typeof TEC.onGo==="function"&&TEC.onGo(tab,sub,extra)!==false)return;st.tab=tab;if(sub){if(tab==="calc")st.sub.calc=sub;else if(tab==="cons")st.sub.cons=sub}if(extra)Object.assign(st,extra);render(root);const pg=$("viewPage");if(pg)pg.scrollTop=0};
 
 /* ---------- Início ---------- */
 const DEST=[["Queda de tensão","3% iluminação · 5% outros usos","cons","guia","queda"],["Coordenação","IB ≤ In ≤ IZ (fusível gG: In ≤ 0,9 IZ)","cons","guia","coord"],["Diferencial","R × IΔn ≤ 50 V (25 V em locais húmidos)","cons","guia","dr"],
@@ -456,9 +458,11 @@ function cPot(E){const p={modo:"kva",kva:6.9,sis:"mono",P:"",comp:3,...st.pre};
    big=`${n2(k)} kVA<small>mínimo (monofásico)</small>`;lines=[`Habitação com ${c} compartimento${c>1?"s":""}: potência mínima <b>${n2(k)} kVA</b>.`,A>0?`Iluminação e tomadas de uso geral: ${n2(A,0)} m² × 25 VA/m² = <b>${n2(A*25,0)} VA</b>.`:""].filter(Boolean);txt=`Habitação ${c} compart. → mínimo ${n2(k)} kVA`;pre={modo:m,comp:c,A}}
   $("pmR").innerHTML=resBox(ok,big,lines,true,m!=="hab"?gauge(m==="kva"?eredes({kva:num($("mK").value),sis:$("mS").value}).I:(eredes({kva:escalao({P:num($("mP").value)*(num($("mF").value)||1),sis:$("mS").value})||41.4,sis:$("mS").value}).I),null,$("mS").value==="tri"?63:63,"A","corrente"):"");wireRes("Potência E-REDES",txt,"pot",pre,"potencia "+txt)};
  wireSeg(E,form);form()}
-function wireRes(title,txt,c,pre,q){const s=$("tcSave");if(s)s.onclick=()=>saveResult(title,txt,c,pre);const a=$("tcAsk");if(a)a.onclick=()=>{st.tab="ia";render(root);ask(q)}}
+function wireRes(title,txt,c,pre,q){const s=$("tcSave");if(s)s.onclick=()=>saveResult(title,txt,c,pre);const a=$("tcAsk");if(a)a.onclick=()=>{toAsk(q)}}
 /* guardar numa tarefa, num equipamento ou só no histórico */
 function saveResult(title,txt,c,pre){const tasks=S.issues.filter(x=>(x.kind==="tarefa"||x.kind==="duvida")&&x.status!=="resolvida");const its=S.items.filter(i=>i.planId===S.planId);
+ /* sem obra aberta (Técnico público ou aberto fora de um projeto): não há tarefas nem equipamentos — guarda logo no histórico deste aparelho */
+ if(!S.projectId&&!st.ctx){histAdd({t:title,r:txt,c,pre,at:now(),dest:null});toast("Guardado no histórico deste aparelho.");return}
  let d=$("dlgTec");if(!d){d=document.createElement("dialog");d.id="dlgTec";document.body.appendChild(d)}
  const cx=st.ctx;d.innerHTML=`<div class="dlg tdlg"><div class="tdh"><h3>Guardar resultado</h3><button class="btn sm" id="tsX">Fechar</button></div><p class="tecpv"><b>${esc(title)}</b><br>${esc(txt)}</p>
   ${cx?`<button class="btn primary" id="tsCtx">Guardar em ${esc(cx.label)}</button>`:""}
@@ -490,7 +494,7 @@ function kEsq(E){const k=st.sub.esq;const s=ESQ2[k];
   <section class="block"><h2>${s.t}</h2><div class="esqwrap">${s.svg()}</div>
   <div class="tec2"><div><h5>Como ligar</h5><ol>${s.passos.map(p=>`<li>${p}</li>`).join("")}</ol></div><div><h5>Erros comuns</h5><ul class="terr">${s.erros.map(p=>`<li>${p}</li>`).join("")}</ul><p class="mut">${s.mat}</p></div></div>
   <div class="toolrow"><button class="btn sm" id="eAsk">Perguntar sobre este esquema</button></div></section>`;
- E.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{st.sub.esq=b.dataset.e;kEsq(E)});$("eAsk").onclick=()=>{st.tab="ia";render(root);ask(s.t)}}
+ E.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{st.sub.esq=b.dataset.e;kEsq(E)});$("eAsk").onclick=()=>toAsk(s.t)}
 function kAuto(E){const k=st.sub.auto||"tab";
  E.innerHTML=`<div class="tecsub sm">${[["tab","Tabela de protocolos"],["sel","Seleção de redes"],["topo","Tipologias bus"]].map(x=>`<button data-a="${x[0]}" class="${x[0]===k?"on":""}">${x[1]}</button>`).join("")}</div><div id="kaB"></div>`;
  E.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{st.sub.auto=b.dataset.a;kAuto(E)});const B=$("kaB");
@@ -502,7 +506,7 @@ function kAuto(E){const k=st.sub.auto||"tab";
   $("ksR").innerHTML=`<div class="tecres"><div class="trb">${s.r.join(" + ")}</div><p>${s.p}</p>${s.r.map(n=>PROTO.find(p=>p.n===n)).filter(Boolean).map(p=>`<p><b>${p.n}:</b> ${p.lim}</p>`).join("")}</div>`})}
 function kTab(E){const can=S.isCoord||S.isProjAdmin;const custom=!!(S.meta&&S.meta.tecData);
  E.innerHTML=`<section class="block"><h2>Tabelas e fontes</h2><p>Todos os valores usados nas calculadoras e no assistente estão nestas tabelas. Devem ser confirmados pelo técnico responsável e pela edição em vigor das RTIEBT.</p>
-  <p>${custom?"✏️ Esta obra usa <b>tabelas corrigidas</b> pela coordenação.":"A usar as tabelas de base do ObraFlow ("+TEC_VERSION+")."}</p>
+  <p>${custom?"✏️ Esta obra usa <b>tabelas corrigidas</b> pela coordenação.":"A usar as tabelas de base do "+BRAND+" ("+TEC_VERSION+")."}</p>
   <ul class="tfontes">${Object.entries(D.fontes).map(([k,v])=>`<li>${esc(v)}</li>`).join("")}</ul>
   <div class="toolrow"><button class="btn sm" id="tbExp">Exportar tabelas (JSON)</button>${can?`<button class="btn sm" id="tbImp">Importar tabelas corrigidas</button>${custom?`<button class="btn sm danger" id="tbRst">Repor tabelas de base</button>`:""}`:""}</div></section>
   <section class="block"><h2>Correntes admissíveis — cobre, 30 °C</h2>${izTable("pvc")}${izTable("xlpe")}<p class="mut">${F("iec52")}</p></section>
@@ -579,7 +583,9 @@ function pIA(B){B.innerHTML=`<div class="tecchat"><div class="tcmsgs" id="tcMsgs
   <p class="mut tcdisc">As respostas são de apoio didático: confirma sempre com o projeto, o técnico responsável e a edição em vigor das RTIEBT.</p></div>`;
  st.chat.forEach(m=>appendMsg(m,false));
  B.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>ask(b.dataset.q));$("tcF").onsubmit=e=>{e.preventDefault();const q=$("tcQ").value.trim();if(q){ask(q);$("tcQ").value=""}}}
-function ask(q){if(st.tab!=="ia"||!$("tcMsgs")){st.tab="ia";render(root)}const r=interpret(q);const m={q,r,at:now()};st.chat.push(m);st.chat=st.chat.slice(-30);appendMsg(m,true)}
+/* abrir o assistente com uma pergunta (no TecFlow muda para a página do assistente) */
+function toAsk(q){if(window.TEC&&typeof TEC.onGo==="function"&&TEC.onGo("ia",null,{q})!==false)return;st.tab="ia";render(root);ask(q)}
+function ask(q){if(!$("tcMsgs")&&window.TEC&&typeof TEC.onGo==="function"&&TEC.onGo("ia",null,{q})!==false)return;if(!$("tcMsgs")){st.tab="ia";render(root)}const r=interpret(q);const m={q,r,at:now()};st.chat.push(m);st.chat=st.chat.slice(-30);appendMsg(m,true)}
 function appendMsg(m,scroll){const box=$("tcMsgs");if(!box)return;const d=document.createElement("div");d.className="tcpair";
  d.innerHTML=`<div class="tcm me"><p>${esc(m.q)}</p></div><div class="tcm bot"><span class="tbav">${ic("ia")}</span>${m.r.html}${m.r.src.length?`<p class="tcsrc">Fonte: ${[...new Set(m.r.src)].map(esc).join(" · ")}</p>`:""}<div class="toolrow">${m.r.acts.map((a,i)=>`<button class="btn sm" data-act="${i}">${a[0]}</button>`).join("")}<button class="btn sm" data-sv="1">Guardar resposta</button></div></div>`;
  box.appendChild(d);d.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{const a=m.r.acts[+b.dataset.act];if(a[1]==="calc"){st.pre=a[3]||{};goTec("calc",a[2])}else{const ex=a[3]||{};if(ex.esq)st.sub.esq=ex.esq;if(ex.auto)st.sub.auto=ex.auto;if(ex.segSub)st.sub.seg=ex.segSub;goTec("cons",a[2],ex.guia?{guia:ex.guia}:null)}});
@@ -645,7 +651,7 @@ kEsq=function(E){const k=st.sub.esq;const s=ESQ2[k];const S0=ESQS[k];
  const stopAuto=()=>{if(auto){clearInterval(auto);auto=null;const b=E.querySelector('[data-ea="sim"]');if(b)b.textContent="▶ Demonstração automática"}};
  E.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{if(b.dataset.ea!=="sim"){stopAuto();act(b.dataset.ea);return}
   if(auto){stopAuto();return}b.textContent="■ Parar demonstração";const seq=(ESQ_ACTS[k]||[]).map(a=>a[1]).filter(x=>x!=="reset");let i=0;auto=setInterval(()=>{if(!document.body.contains(b)){stopAuto();return}act(seq[i++%seq.length])},1800)});
- E.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{stopAuto();st.sub.esq=b.dataset.e;kEsq(E)});$("eAsk").onclick=()=>{stopAuto();st.tab="ia";render(root);ask(s.t)};draw()};
+ E.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{stopAuto();st.sub.esq=b.dataset.e;kEsq(E)});$("eAsk").onclick=()=>{stopAuto();toAsk(s.t)};draw()};
 
 /* ---------- simuladores de protocolos ---------- */
 const crc16=b=>{let c=0xFFFF;for(const x of b){c^=x;for(let i=0;i<8;i++)c=c&1?(c>>1)^0xA001:c>>1}return[c&255,c>>8]};
@@ -1168,5 +1174,13 @@ KB.push(
  {id:"sadi_proto",t:"SADI — protocolos de laço (Apollo, Hochiki, FDnet, LSN…)",k:"sadi incendio protocolo protocolos apollo xp95 discovery soteria hochiki esp fdnet siemens bosch lsn notifier enderecavel convencional laco",go:["cons","seg","proto"]}
 );
 
-window.TEC={render,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
+/* painéis soltos (usados pelo TecFlow, que organiza tudo por áreas) */
+function panel(name,E,o){o=o||{};try{D=S.meta&&S.meta.tecData&&typeof S.meta.tecData==="object"?deepMerge(BASE,S.meta.tecData):BASE}catch(e){D=BASE}
+ root=E;if(name==="ia")st.tab="ia";if(o.sub){if(name==="calc")st.sub.calc=o.sub;else st.sub[name]=o.sub}if(o.guia)st.guia=o.guia;if(o.pre)st.pre=o.pre;
+ const f={guia:kGuia,banc:kBanc,esq:kEsq,auto:kAuto,seg:kSeg,tab:kTab,calc:pCalc,ia:pIA}[name];if(!f)return false;f(E);if(o.q)setTimeout(()=>ask(o.q),50);return true}
+function index(){return{kb:KB.map(k=>({id:k.id,t:k.t,k:k.k||"",f:k.f||"",calc:k.calc||""})),
+ proto:PROTO.map(p=>({n:p.n,uso:p.uso||"",norma:p.norma||"",lim:p.lim||""})),sproto:SPROTO.map(p=>({n:p.n,uso:p.uso||""})),
+ lel:Object.entries(LEL).map(([id,v])=>({id,n:v.n})),lels:Object.entries(LEL_S).map(([id,v])=>({id,n:v.n})),
+ esq:Object.entries(ESQ2).map(([id,v])=>({id,t:v.t})),ex:EXS.map(e=>({id:e.id,t:e.t||e.n||e.id})),calcs:CALCS.map(c=>({id:c[0],t:c[1]}))}}
+window.TEC={render,panel,index,ask:q=>{ask(q)},open:o=>render(root,o),interpret,calc:{queda,protecao,tubo,eredes,izDe,escalao,habMin},data:()=>D,version:TEC_VERSION};
 })();

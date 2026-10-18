@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TecFlow — bancada técnica</title>
+<meta name="description" content="Calculadoras RTIEBT (queda de tensão, secções, proteções, tubos, potência E-REDES), guia de bolso, esquemas, protocolos de automação e SADI. Grátis, sem conta e funciona sem rede.">
+<meta name="theme-color" content="#0f1b2d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TecFlow">
+<meta property="og:title" content="TecFlow — bancada técnica">
+<meta property="og:description" content="Calculadoras, guia de bolso, esquemas, automação e SADI — grátis e sem conta.">
+<meta property="og:image" content="icons/icon-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="styles.css?v=43">
+<link rel="stylesheet" href="tf.css?v=43">
+<style>
+:root{--tf-navy:#0f1b2d;--tf-cyan:#22c3ee;--tf-amber:#f5b52e}
+html:has(body.tfapp),body.tfapp{height:auto;overflow:visible}
+body.tfapp{min-height:100vh;display:block;padding:0;background:var(--bg)}
+.tfbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;height:60px;padding:0 max(16px,env(safe-area-inset-left)) 0 max(16px,env(safe-area-inset-left));background:var(--tf-navy);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.06)}
+.tfbrand{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;min-width:0}
+.tfbrand img{width:34px;height:34px;flex:none;display:block}
+.tfword{font:800 20px/1 var(--f-body);letter-spacing:-.02em;white-space:nowrap}
+.tfword em{font-style:normal;color:var(--tf-cyan)}
+.tftag{font:600 12px var(--f-body);color:#9fb3c8;white-space:nowrap;padding-left:12px;border-left:1px solid rgba(255,255,255,.14)}
+.tfsp{flex:1}
+.tfbtn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:9px;font:600 13px var(--f-body);white-space:nowrap;cursor:pointer;border:1px solid rgba(255,255,255,.18);background:transparent;color:#fff}
+.tfbtn:hover{background:rgba(255,255,255,.08)}
+.tfbtn.pri{background:var(--tf-cyan);border-color:var(--tf-cyan);color:var(--tf-navy)}
+.tfbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tfaviso{display:flex;gap:10px;align-items:flex-start;padding:10px 16px;background:#e8f7fc;color:#0f2a3a;border-bottom:1px solid #bfe6f3;font-size:13px;line-height:1.45}
+.tfaviso b{white-space:nowrap}
+.tfaviso button{margin-left:auto;flex:none;border:0;background:transparent;font-size:18px;line-height:1;cursor:pointer;color:inherit;padding:2px 6px}
+body.tfapp main.page{overflow:visible;height:auto;padding-block:20px}
+body.tfapp #pageWrap .crumb{display:none}
+.tfbrand img{border-radius:9px;box-shadow:0 0 0 1px rgba(34,195,238,.35)}
+.tffoot{max-width:1320px;margin:10px auto 0;padding:18px 16px calc(28px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;justify-content:space-between;color:var(--mut,#6b736f);font-size:12.5px;border-top:1px solid var(--line)}
+.tffoot b{color:var(--ink)}
+@media (prefers-color-scheme:dark){.tfaviso{background:#0f2a3a;color:#d9f2fb;border-color:#174257}}
+@media (max-width:720px){.tftag{display:none}}
+@media (max-width:520px){
+ .tfbar{height:56px;gap:8px}
+ .tfbtn .lbl{display:none}
+ .tfbtn{padding:0 10px}
+ .tfword{font-size:18px}
+ .tfaviso{padding:9px 12px;font-size:12.5px}
+}
+@media print{.tfbar,.tfaviso button{display:none}}
+</style>
+</head>
+<body class="tfapp">
+<header class="tfbar">
+  <a class="tfbrand" href="#/" title="TecFlow — início"><img src="logo.svg" alt="" width="34" height="34"><span class="tfword">Tec<em>Flow</em></span></a>
+  <form class="tfsearch" id="tfQf" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="tfQ" placeholder="Pesquisar protocolo, equipamento, código ou fabricante" autocomplete="off" enterkeyhint="search" aria-label="Pesquisar"></form>
+  <a class="tfbtn tfsq" href="#/pesq" aria-label="Pesquisar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></a>
+  <button type="button" class="tfbtn" id="tfFieldB" aria-pressed="false" title="Modo de terreno: botões grandes, só o essencial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16l-2-7a6 6 0 0 0-12 0z"/><path d="M12 5V3M3 18h18"/></svg><span class="lbl">Terreno</span></button>
+  <button type="button" class="tfbtn" id="tfInstall" hidden title="Instalar o TecFlow como app neste aparelho"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span class="lbl">Instalar</span></button>
+  <button type="button" class="tfbtn pri" id="tfShare" aria-label="Partilhar" title="Partilhar o TecFlow"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg><span class="lbl">Partilhar</span></button>
+</header>
+<nav class="tfnav" aria-label="Áreas"><a href="#/" data-r="">Início</a><a href="#/auto" data-r="auto">Automação predial</a><a href="#/sadi" data-r="sadi">SADI e incêndio</a><a href="#/diag" data-r="diag">Diagnóstico e manutenção</a><a href="#/bib" data-r="bib">Biblioteca técnica</a><a href="#/treino" data-r="treino">Treino</a><a href="#/ia" data-r="ia">Assistente</a></nav>
+<div class="tfaviso" id="tfAviso" role="note"><b>ⓘ Aviso:</b><span>Apoio técnico com base nas RTIEBT, na NT 12 (ANEPC), nas normas dos protocolos e nos manuais dos fabricantes. <b>Não substitui</b> o projeto, o técnico responsável nem as normas em vigor — confirma sempre os valores.</span><button type="button" id="tfAvisoX" aria-label="Fechar aviso" title="Fechar aviso">×</button></div>
+<main class="page" id="viewPage">
+<div class="wrap" id="pageWrap"><div class="empty" style="padding:40px;text-align:center">A abrir o TecFlow…</div></div>
+</main>
+<a class="tffab" href="#/ia" aria-label="Perguntar ao assistente" title="Perguntar ao assistente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4"/><path d="M12 14.5v.01"/></svg><span>Perguntar</span></a>
+<footer class="tffoot"><span><b>TecFlow</b> — grátis, sem conta e sem rede depois da primeira visita. Os dados que introduzes ficam só neste aparelho.</span><span>versão 43</span></footer>
+<script src="tecflow.js?v=43"></script>
+<script src="tecnico.js?v=43"></script>
+<script src="tfdata.js?v=43"></script>
+<script src="tfapp.js?v=43"></script>
+
+</body>
+</html>
